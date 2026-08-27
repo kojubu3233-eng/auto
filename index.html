@@ -6,6 +6,9 @@
     <title>스마트 발주 시스템 Pro v10.0 (홈 대시보드)</title>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- [신규] 구글시트 웹앱 URL 기본값. Apps Script를 재배포해 주소가 바뀌면
+         이 config.js 파일만 GitHub에서 고치면 됩니다 (index.html 본문은 건드릴 필요 없음). -->
+    <script src="config.js"></script>
     <style>
         * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
         body { background-color: #f8fafc; color: #1e293b; padding: 15px; font-size: 13px; }
@@ -111,12 +114,17 @@
 
     <details class="panel" style="margin-bottom:10px; padding:10px 15px; background:#f8fafc;">
         <summary style="cursor:pointer; font-weight:bold; color:#334155; font-size:13px;">⚙️ 구글시트 연동 설정 <span id="gsheetStatus" style="font-size:11px; font-weight:normal; color:#64748b; margin-left:6px;">미설정</span></summary>
+        <div style="font-size:11px; color:#64748b; margin-top:8px;">💡 아래 URL은 코드에 기본값이 이미 들어있어서 보통은 손댈 필요가 없습니다. 회사에서 Apps Script를 재배포해서 주소가 바뀐 경우에만, 여기서 새 URL을 입력하면 이 브라우저에 저장돼서 다음부터 계속 그 값을 씁니다.</div>
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px;">
-            <label style="font-weight:bold; color:#166534; font-size:12px; white-space:nowrap;">🔗 웹앱 URL:</label>
+            <label style="font-weight:bold; color:#166534; font-size:12px; white-space:nowrap; width:190px;">🔗 예정량/확정량 웹앱 URL: <span id="gsheetStatus2" style="font-weight:normal; color:#64748b;"></span></label>
             <input type="text" id="gsheetWebAppUrl" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetUrl()">
         </div>
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap;" title="비워두면 전체 탭에서 자동 검색">📦 재고수불대장 시트명(선택):</label>
+            <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap; width:190px;">📦 재고수불대장 웹앱 URL: <span id="gsheetLedgerStatus" style="font-weight:normal; color:#64748b;"></span></label>
+            <input type="text" id="gsheetLedgerUrl" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetLedgerUrl()">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap;" title="비워두면 전체 탭에서 자동 검색">📋 재고수불대장 시트명(선택):</label>
             <input type="text" id="gsheetLedgerSheet" placeholder="비워두면 전체 탭 자동 검색" value="" style="width:260px; font-size:12px;" onchange="saveGSheetSheetNames()">
         </div>
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
@@ -490,11 +498,17 @@
                 loadFromDB('unitMemory', function(loadedUnit) { if (loadedUnit) unitMemory = loadedUnit; });
                 loadFromDB('holidayMap', function(v) { if (v) window.holidayMap = v; });
                 loadFromDB('holidayYears', function(v) { if (v) window.__holidayYearsLoaded = new Set(v); });
+                // [신규] 저장된 값이 없으면 config.js의 기본 URL을 자동으로 채운다.
+                // 즉 새 직원/새 브라우저에서 처음 열어도 URL을 입력할 필요가 없다.
                 loadFromDB('gsheetWebAppUrl', function(loadedUrl) {
-                    if (loadedUrl) {
-                        document.getElementById('gsheetWebAppUrl').value = loadedUrl;
-                        document.getElementById('gsheetStatus').innerText = '✅ 설정됨';
+                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.HISTORY_WEBAPP_URL) || '';
+                    const finalUrl = loadedUrl || defaultUrl;
+                    if (finalUrl) {
+                        document.getElementById('gsheetWebAppUrl').value = finalUrl;
+                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
+                        document.getElementById('gsheetStatus').innerText = label;
                         document.getElementById('gsheetStatus').style.color = '#16a34a';
+                        document.getElementById('gsheetStatus2').innerText = '(' + label + ')';
                         const ty = new Date().getFullYear();
                         syncHolidays([ty - 1, ty, ty + 1]).then(() => {
                             calculateMultiRows();
@@ -502,6 +516,16 @@
                         });
                         // [신규] 품명/부대 자동완성이 처음부터 바로 뜨도록 부대·품목 정보도 접속 시 자동 동기화
                         syncUnitProductInfo();
+                    }
+                });
+                loadFromDB('gsheetLedgerUrl', function(loadedUrl) {
+                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.LEDGER_WEBAPP_URL) || '';
+                    const finalUrl = loadedUrl || defaultUrl;
+                    if (finalUrl) {
+                        document.getElementById('gsheetLedgerUrl').value = finalUrl;
+                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
+                        document.getElementById('gsheetLedgerStatus').innerText = '(' + label + ')';
+                        document.getElementById('gsheetLedgerStatus').style.color = '#16a34a';
                     }
                 });
                 loadFromDB('gsheetLedgerSheet', function(v) { document.getElementById('gsheetLedgerSheet').value = v || ''; });
@@ -952,8 +976,18 @@
             const url = document.getElementById('gsheetWebAppUrl').value.trim();
             saveToDB('gsheetWebAppUrl', url, function() {
                 const status = document.getElementById('gsheetStatus');
-                if(url) { status.innerText = '✅ 설정됨'; status.style.color = '#16a34a'; }
+                if(url) { status.innerText = '✅ 설정됨(직접 입력)'; status.style.color = '#16a34a'; }
                 else { status.innerText = '미설정'; status.style.color = '#64748b'; }
+            });
+        }
+
+        // [신규] 재고수불대장 웹앱 URL 저장 (예정량/확정량 URL과 별도)
+        function saveGSheetLedgerUrl() {
+            const url = document.getElementById('gsheetLedgerUrl').value.trim();
+            saveToDB('gsheetLedgerUrl', url, function() {
+                const status = document.getElementById('gsheetLedgerStatus');
+                if(url) { status.innerText = '(✅ 설정됨(직접 입력))'; status.style.color = '#16a34a'; }
+                else { status.innerText = ''; status.style.color = '#64748b'; }
             });
         }
 
@@ -964,14 +998,27 @@
             saveToDB('gsheetLedgerSheet', ledger);
         }
 
+        // 예정량/확정량(부대별정보·품목정보·공휴일캐시·데이터·DB_Master) 웹앱 URL
         function getGSheetUrl() {
             const url = document.getElementById('gsheetWebAppUrl').value.trim();
-            if(!url) { alert("먼저 상단에 구글시트 웹앱(Apps Script) URL을 입력해주세요. 배포 방법은 안내 문서를 참고하세요."); return null; }
+            if(!url) { alert("먼저 상단 '⚙️ 구글시트 연동 설정'에서 예정량/확정량 웹앱 URL을 입력해주세요."); return null; }
             return url;
         }
 
         function getGSheetUrlSilent() {
             const url = document.getElementById('gsheetWebAppUrl').value.trim();
+            return url || null;
+        }
+
+        // [신규] 재고수불대장 전용 웹앱 URL
+        function getLedgerUrl() {
+            const url = document.getElementById('gsheetLedgerUrl').value.trim();
+            if(!url) { alert("먼저 상단 '⚙️ 구글시트 연동 설정'에서 재고수불대장 웹앱 URL을 입력해주세요."); return null; }
+            return url;
+        }
+
+        function getLedgerUrlSilent() {
+            const url = document.getElementById('gsheetLedgerUrl').value.trim();
             return url || null;
         }
 
@@ -1267,8 +1314,9 @@
             return 'standard';
         }
 
-        async function loadInventoryStatus() {
-            const url = getGSheetUrl(); if(!url) return;
+        async function loadInventoryStatus(alertIfMissing = true) {
+            const url = alertIfMissing ? getLedgerUrl() : getLedgerUrlSilent();
+            if(!url) return;
             const statusEl = document.getElementById('inventoryStatusMsg');
             statusEl.innerText = '⏳ 불러오는 중...'; statusEl.style.color = '#64748b';
             let rawText = '';
@@ -1518,19 +1566,25 @@
         // silentRemote=false 이면 원격 재조회 없이 이미 메모리에 있는 dbData만으로 다시 그린다.
         async function refreshHomeTab(silentRemote = true) {
             const statusEl = document.getElementById('homeStatusMsg');
-            if (!getGSheetUrlSilent()) {
+            const hasMain = !!getGSheetUrlSilent();
+            const hasLedger = !!getLedgerUrlSilent();
+            if (!hasMain && !hasLedger) {
                 if (statusEl) { statusEl.innerText = '⚠️ 상단 "구글시트 연동 설정"에서 웹앱 URL을 먼저 입력해주세요.'; statusEl.style.color = '#b45309'; }
                 renderHomeDeliveryTable();
                 return;
             }
             if (silentRemote) {
                 if (statusEl) { statusEl.innerText = '⏳ 구글시트에서 불러오는 중...'; statusEl.style.color = '#64748b'; }
-                try {
-                    await loadFromGoogleSheetSilent();
-                    await loadInventoryStatus();
-                    if (statusEl) { statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준으로 갱신됨`; statusEl.style.color = '#16a34a'; }
-                } catch (err) {
-                    if (statusEl) { statusEl.innerText = '❌ 불러오기 실패: ' + err.message; statusEl.style.color = '#ef4444'; }
+                const errors = [];
+                if (hasMain) {
+                    try { await loadFromGoogleSheetSilent(); } catch (err) { errors.push('예정량/확정량: ' + err.message); }
+                }
+                if (hasLedger) {
+                    try { await loadInventoryStatus(false); } catch (err) { errors.push('재고수불대장: ' + err.message); }
+                }
+                if (statusEl) {
+                    if (errors.length === 0) { statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준으로 갱신됨`; statusEl.style.color = '#16a34a'; }
+                    else { statusEl.innerText = '⚠️ ' + errors.join(' / '); statusEl.style.color = '#ef4444'; }
                 }
             }
             populateHomeFilterOptions();
@@ -1900,7 +1954,7 @@
         }
 
         async function saveGridToInventoryLedger() {
-            const url = getGSheetUrl(); if(!url) return;
+            const url = getLedgerUrl(); if(!url) return;
             await ensureUnitProductInfoLoaded();
             const ledgerSheetHint = document.getElementById('gsheetLedgerSheet').value.trim();
             const dateBasis = getDateBasis();
