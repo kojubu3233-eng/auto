@@ -124,6 +124,14 @@
             <input type="text" id="gsheetLedgerUrl" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetLedgerUrl()">
         </div>
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <label style="font-weight:bold; color:#a16207; font-size:12px; white-space:nowrap; width:190px;" title="비워두면 예정량/확정량 URL로 대신 전송됩니다(단, 그 경우 별도 코드 수정이 필요). 확정량저장_전용_새프로젝트.gs를 새 프로젝트로 배포한 URL을 넣으세요.">✏️ 확정량 저장 전용 URL(선택): <span id="gsheetConfirmStatus" style="font-weight:normal; color:#64748b;"></span></label>
+            <input type="text" id="gsheetConfirmUrl" placeholder="비워두면 예정량/확정량 URL 사용" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetConfirmUrl()">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap; width:190px;" title="거래명세서_OCR_전용.gs를 새 프로젝트로 배포한 URL을 넣으세요.">📸 거래명세서 OCR 전용 URL(선택): <span id="gsheetOcrStatus" style="font-weight:normal; color:#64748b;"></span></label>
+            <input type="text" id="gsheetOcrUrl" placeholder="거래명세서 자동인식 기능을 쓰려면 필요" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetOcrUrl()">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
             <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap;" title="비워두면 전체 탭에서 자동 검색">📋 재고수불대장 시트명(선택):</label>
             <input type="text" id="gsheetLedgerSheet" placeholder="비워두면 전체 탭 자동 검색" value="" style="width:260px; font-size:12px;" onchange="saveGSheetSheetNames()">
         </div>
@@ -189,6 +197,47 @@
         <div class="panel">
             <h2 style="font-size:15px; color:#dc2626; margin-bottom:10px;">🚨 납품기한 경과</h2>
             <div id="homeExpiryPast" class="mobile-cards"><div style="color:#94a3b8; font-size:12px;">새로고침을 눌러 불러오세요.</div></div>
+        </div>
+
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h2 style="font-size:15px; color:#1e3a8a;">📅 보관일수 및 경과일수 (요약)</h2>
+                <span style="font-size:11px; color:#64748b;">상세는 '재고 상세' 탭</span>
+            </div>
+            <div id="homeAgingBucketBoxes" class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));"></div>
+            <div id="homeAgingBucketDetail" style="margin-top:12px; display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <b id="homeAgingBucketDetailTitle" style="font-size:13px; color:#334155;"></b>
+                    <button class="btn btn-gray" style="padding:4px 10px; font-size:11px;" onclick="document.getElementById('homeAgingBucketDetail').style.display='none';">닫기 ✕</button>
+                </div>
+                <div class="table-wrapper" style="max-height:280px;">
+                    <table class="responsive-table" id="homeAgingBucketDetailTable">
+                        <thead><tr><th>품명</th><th>재고</th><th>입고일</th><th>경과일수</th></tr></thead>
+                        <tbody id="homeAgingBucketDetailBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h2 style="font-size:15px; color:#7c3aed;">📸 거래명세서 업로드 (자동 재고 반영)</h2>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:10px;">물류팀에서 받은 거래명세서 사진을 올리면 AI가 품명·수량을 읽어냅니다. 읽은 내용은 아래에서 확인/수정한 뒤 "재고에 반영"을 눌러야 실제로 저장됩니다(자동으로 바로 반영되지 않음).</div>
+            <input type="file" id="deliverySlipInput" accept="image/*" capture="environment" onchange="handleDeliverySlipUpload(event)">
+            <div id="deliverySlipStatus" style="font-size:12px; color:#64748b; margin-top:8px;"></div>
+            <div id="deliverySlipReviewWrap" style="display:none; margin-top:12px;">
+                <div class="table-wrapper" style="max-height:320px;">
+                    <table id="deliverySlipReviewTable">
+                        <thead><tr><th>품명</th><th>수량</th><th>단위</th><th>업체</th><th></th></tr></thead>
+                        <tbody id="deliverySlipReviewBody"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-gray" onclick="addDeliverySlipRow()">+ 행 추가</button>
+                    <button class="btn btn-success" onclick="applyDeliverySlipToLedger()">✅ 재고수불대장에 반영</button>
+                </div>
+            </div>
         </div>
     </div>
     <!-- /tabContentHome -->
@@ -274,6 +323,7 @@
                             <th style="width:8%; background:#f0fdf4; color:#16a34a;">★ 권장(팩)</th>
                             <th style="width:7%; background:#fff7ed; color:#ea580c;">최대(팩)</th>
                             <th style="width:8%; background:#ede9fe; color:#6d28d9;" title="구글시트에 저장할 때 이 셋 중 어느 값을 '예정량'으로 보낼지 선택합니다. 기본은 권장입니다.">저장기준</th>
+                            <th style="width:8%; background:#fdf2f8; color:#be185d;" title="비워두면 저장기준 값 그대로 사용됩니다. 케이스 단위 반올림 등으로 실제 발주량을 다르게 넣고 싶을 때만 입력하세요.">업체발주량(직접입력)</th>
                         </tr>
                     </thead>
                     <tbody id="excelGridBody"></tbody>
@@ -349,23 +399,49 @@
                     <button class="btn btn-primary" onclick="loadInventoryStatus()">🔄 재고 새로고침</button>
                 </div>
             </div>
-            <div style="margin-bottom:10px;">
-                <input type="text" id="inventorySearch" placeholder="품명 검색..." onkeyup="filterInventoryTable()" style="width:260px;">
+            <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap;">
+                <input type="text" id="inventorySearch" placeholder="품명 검색..." onkeyup="filterInventoryTable()" style="width:220px;">
+                <select id="inventoryStorageFilter" onchange="filterInventoryTable()">
+                    <option value="ALL">보관방법 전체</option>
+                    <option value="냉동">냉동</option>
+                    <option value="냉장">냉장</option>
+                    <option value="상온">상온</option>
+                </select>
             </div>
             <div class="table-wrapper">
-                <table id="inventoryStatusTable">
+                <table class="responsive-table" id="inventoryStatusTable">
                     <thead>
                         <tr>
-                            <th>제품</th>
-                            <th>분류(탭)</th>
-                            <th>업체</th>
-                            <th>현재 재고</th>
-                            <th>입고예정(미반영)</th>
-                            <th>최근 기록일</th>
+                            <th>카테고리</th>
+                            <th>품명</th>
+                            <th>보관방법</th>
+                            <th>입고일</th>
+                            <th>재고</th>
+                            <th>소비기한</th>
+                            <th>납품기한</th>
+                            <th>잔여일</th>
                         </tr>
                     </thead>
-                    <tbody id="inventoryStatusBody"><tr><td colspan="6">우측 상단 '재고 새로고침'을 눌러 불러오세요.</td></tr></tbody>
+                    <tbody id="inventoryStatusBody"><tr><td colspan="8">우측 상단 '재고 새로고침'을 눌러 불러오세요.</td></tr></tbody>
                 </table>
+            </div>
+            <div style="font-size:11px; color:#94a3b8; margin-top:6px;">💡 보관방법·소비기한은 "품목정보" 시트에 '보관방법', '유효일수' 컬럼을 추가하시면 자동으로 채워집니다. (없으면 '-' 표시)</div>
+        </div>
+
+        <div class="panel">
+            <h2 style="font-size: 15px; color:#1e3a8a; margin-bottom: 10px;">📅 보관일수 및 경과일수</h2>
+            <div id="agingBucketBoxes" class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));"></div>
+            <div id="agingBucketDetail" style="margin-top:12px; display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <b id="agingBucketDetailTitle" style="font-size:13px; color:#334155;"></b>
+                    <button class="btn btn-gray" style="padding:4px 10px; font-size:11px;" onclick="document.getElementById('agingBucketDetail').style.display='none';">닫기 ✕</button>
+                </div>
+                <div class="table-wrapper" style="max-height:320px;">
+                    <table class="responsive-table" id="agingBucketDetailTable">
+                        <thead><tr><th>품명</th><th>재고</th><th>입고일</th><th>경과일수</th></tr></thead>
+                        <tbody id="agingBucketDetailBody"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -526,6 +602,28 @@
                         const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
                         document.getElementById('gsheetLedgerStatus').innerText = '(' + label + ')';
                         document.getElementById('gsheetLedgerStatus').style.color = '#16a34a';
+                    }
+                });
+                // [신규] 확정량 저장 전용 URL (비워두면 예정량/확정량 URL로 대체 전송)
+                loadFromDB('gsheetConfirmUrl', function(loadedUrl) {
+                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.CONFIRM_WEBAPP_URL) || '';
+                    const finalUrl = loadedUrl || defaultUrl;
+                    if (finalUrl) {
+                        document.getElementById('gsheetConfirmUrl').value = finalUrl;
+                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
+                        document.getElementById('gsheetConfirmStatus').innerText = '(' + label + ')';
+                        document.getElementById('gsheetConfirmStatus').style.color = '#16a34a';
+                    }
+                });
+                // [신규] 거래명세서 OCR 전용 URL
+                loadFromDB('gsheetOcrUrl', function(loadedUrl) {
+                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.OCR_WEBAPP_URL) || '';
+                    const finalUrl = loadedUrl || defaultUrl;
+                    if (finalUrl) {
+                        document.getElementById('gsheetOcrUrl').value = finalUrl;
+                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
+                        document.getElementById('gsheetOcrStatus').innerText = '(' + label + ')';
+                        document.getElementById('gsheetOcrStatus').style.color = '#16a34a';
                     }
                 });
                 loadFromDB('gsheetLedgerSheet', function(v) { document.getElementById('gsheetLedgerSheet').value = v || ''; });
@@ -712,6 +810,7 @@
                             <option value="max">최대</option>
                         </select>
                     </td>
+                    <td style="background:#fdf2f8;"><input type="number" class="grid-order-qty" placeholder="비워두면 저장기준값"></td>
                 `;
                 tbody.appendChild(tr);
             }
@@ -1022,6 +1121,39 @@
             return url || null;
         }
 
+        // [신규] 확정량 저장 전용 URL 저장
+        function saveGSheetConfirmUrl() {
+            const url = document.getElementById('gsheetConfirmUrl').value.trim();
+            saveToDB('gsheetConfirmUrl', url, function() {
+                const status = document.getElementById('gsheetConfirmStatus');
+                if(url) { status.innerText = '(✅ 설정됨(직접 입력))'; status.style.color = '#16a34a'; }
+                else { status.innerText = ''; status.style.color = '#64748b'; }
+            });
+        }
+
+        // 확정량 저장 전용 URL이 있으면 그걸, 없으면 예정량/확정량 URL로 대체 전송(그 경우 기존 스크립트에 updateConfirmed 분기가 필요함)
+        function getConfirmUrl() {
+            const dedicated = document.getElementById('gsheetConfirmUrl').value.trim();
+            if (dedicated) return dedicated;
+            return getGSheetUrl();
+        }
+
+        // [신규] 거래명세서 OCR 전용 URL
+        function saveGSheetOcrUrl() {
+            const url = document.getElementById('gsheetOcrUrl').value.trim();
+            saveToDB('gsheetOcrUrl', url, function() {
+                const status = document.getElementById('gsheetOcrStatus');
+                if(url) { status.innerText = '(✅ 설정됨(직접 입력))'; status.style.color = '#16a34a'; }
+                else { status.innerText = ''; status.style.color = '#64748b'; }
+            });
+        }
+
+        function getOcrUrl() {
+            const url = document.getElementById('gsheetOcrUrl').value.trim();
+            if(!url) { alert("먼저 상단 '⚙️ 구글시트 연동 설정'에서 '거래명세서 OCR 전용 URL'을 입력해주세요. (안내드린 거래명세서_OCR_전용.gs를 배포한 뒤 그 URL을 넣으시면 됩니다)"); return null; }
+            return url;
+        }
+
         async function syncHolidays(years, force = false) {
             const url = getGSheetUrlSilent(); if (!url) return { ok: false, errors: [] };
             const yearStrs = [...new Set(years.map(String))];
@@ -1138,6 +1270,31 @@
                 (uJson.units || []).forEach(u => { unitMap[u.name] = { deliveryDays: u.deliveryDays, headcount: u.headcount }; });
                 const productMap = {};
                 (pJson.products || []).forEach(p => { productMap[p.name] = { category: p.category, pack: p.pack }; });
+
+                // [신규] 품목정보 시트를 범용 read 액션으로 한 번 더 읽어서 '보관방법'/'유효일수' 컬럼이
+                // 있으면 자동으로 merge한다 (Apps Script의 getProductInfo 커스텀 액션은 안 건드림).
+                try {
+                    const rawRes = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=read&sheet=' + encodeURIComponent('품목정보'));
+                    const rawJson = JSON.parse(await rawRes.text());
+                    const rawRows = extractRowsArray(rawJson);
+                    if (rawRows && rawRows.length > 1) {
+                        const rHeaders = rawRows[0].map(h => String(h).replace(/\s/g, ''));
+                        const cName = rHeaders.findIndex(h => h.includes('제품명') || h.includes('품명'));
+                        const cStorage = rHeaders.findIndex(h => h.includes('보관방법') || h.includes('보관'));
+                        const cShelf = rHeaders.findIndex(h => h.includes('유효일수') || h.includes('보관일수') || h.includes('소비기한'));
+                        if (cName !== -1 && (cStorage !== -1 || cShelf !== -1)) {
+                            for (let i = 1; i < rawRows.length; i++) {
+                                const row = rawRows[i]; if (!row || !row[cName]) continue;
+                                const nm = String(row[cName]).trim();
+                                if (!productMap[nm]) productMap[nm] = {};
+                                if (cStorage !== -1 && row[cStorage]) productMap[nm].storageMethod = String(row[cStorage]).trim();
+                                if (cShelf !== -1 && row[cShelf] !== '' && row[cShelf] !== undefined && !isNaN(parseFloat(row[cShelf]))) {
+                                    productMap[nm].shelfLifeDays = parseFloat(row[cShelf]);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) { /* 보관방법/유효일수는 선택 정보라 실패해도 조용히 무시 */ }
 
                 window.unitInfoMap = unitMap;
                 window.productInfoMap = productMap;
@@ -1386,7 +1543,7 @@
                     const outDate = r[4], stockVal = r[9];
 
                     const key = sheetName + '|' + product;
-                    if (!productMap[key]) { productMap[key] = { name: product, category: sheetName, company: '', stock: null, pendingIn: 0, lastDate: '' }; order.push(key); }
+                    if (!productMap[key]) { productMap[key] = { name: product, category: sheetName, company: '', stock: null, pendingIn: 0, lastDate: '', lastInDate: '' }; order.push(key); }
                     const p = productMap[key];
                     if (company) p.company = company;
                     const stockNum = Number(stockVal);
@@ -1396,14 +1553,23 @@
                     if (inQty && (stockVal === '' || stockVal === null || stockVal === undefined)) {
                         p.pendingIn += Number(inQty) || 0;
                     }
+                    if (inDate) p.lastInDate = String(inDate); // [신규] 실제 입고일(경과일수 계산용, 출고일과 구분)
                     const latestDate = outDate || inDate;
                     if (latestDate) p.lastDate = String(latestDate);
                 }
             });
 
+            // [신규] 납품기한임박/경과 목록을 품명 기준으로 조회할 수 있게 맵으로 만들어둔다 (재고현황 표의 '납품기한' 컬럼용)
+            const expiryByName = {};
+            expiryUpcomingList.forEach(e => { if (e.name && !expiryByName[e.name]) expiryByName[e.name] = { deadline: e.deadline, source: 'upcoming' }; });
+            expiryPastList.forEach(e => { if (e.name && !expiryByName[e.name]) expiryByName[e.name] = { deadline: e.expiry, source: 'past' }; });
+            window.__expiryByName = expiryByName;
+
             window.__inventoryProductMap = productMap;
             window.__inventoryOrder = order;
             filterInventoryTable();
+            renderAgingBuckets('agingBucketBoxes', 'agingBucketDetail', 'agingBucketDetailTitle', 'agingBucketDetailBody');
+            renderAgingBuckets('homeAgingBucketBoxes', 'homeAgingBucketDetail', 'homeAgingBucketDetailTitle', 'homeAgingBucketDetailBody');
 
             window.__selfSeasonedList = selfSeasonedList;
             window.__expiryUpcomingList = expiryUpcomingList;
@@ -1529,33 +1695,128 @@
             </tr>`).join('');
         }
 
-        function filterInventoryTable() {
+        // [신규] 날짜 계산 헬퍼
+        function daysFromToday(dateStr) {
+            if (!dateStr) return null;
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return null;
+            const today = new Date(); today.setHours(0,0,0,0);
+            const dd = new Date(d); dd.setHours(0,0,0,0);
+            return Math.round((dd - today) / 86400000);
+        }
+        function addDaysIso(dateStr, days) {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return null;
+            d.setDate(d.getDate() + Math.round(days));
+            return d.toISOString().split('T')[0];
+        }
+
+        // [신규] 재고현황 표 + 보관일수 대시보드가 공유하는 원본 레코드 계산
+        // 카테고리/품명/보관방법/입고일/재고/소비기한/납품기한/잔여일/경과일수
+        function computeInventoryDashboardRecords() {
             const order = window.__inventoryOrder || [];
             const productMap = window.__inventoryProductMap || {};
+            const expiryByName = window.__expiryByName || {};
+            const infoMap = window.productInfoMap || {};
+            return order.map(key => {
+                const p = productMap[key];
+                const info = infoMap[p.name] || {};
+                const storageMethod = info.storageMethod || '-';
+                const lastInDate = p.lastInDate || '';
+                let expiryDate = '';
+                if (info.shelfLifeDays && lastInDate) {
+                    expiryDate = addDaysIso(lastInDate, info.shelfLifeDays) || '';
+                }
+                const expiryInfo = expiryByName[p.name];
+                const deliveryDeadline = expiryInfo ? expiryInfo.deadline : '';
+                let remainingDays = null;
+                if (deliveryDeadline) remainingDays = daysFromToday(deliveryDeadline);
+                else if (expiryDate) remainingDays = daysFromToday(expiryDate);
+                const rawAging = lastInDate ? daysFromToday(lastInDate) : null;
+                const agingDays = rawAging === null ? null : -rawAging; // 오늘-입고일 (양수=며칠 지남)
+                return {
+                    key, name: p.name, category: p.category, storageMethod,
+                    lastInDate, stock: p.stock, stockUnavailable: !!p.stockUnavailable,
+                    expiryDate, deliveryDeadline, remainingDays, agingDays
+                };
+            });
+        }
+
+        function filterInventoryTable() {
             const kw = (document.getElementById('inventorySearch').value || '').trim().toLowerCase();
+            const storageEl = document.getElementById('inventoryStorageFilter');
+            const storageFilter = storageEl ? storageEl.value : 'ALL';
             const tbody = document.getElementById('inventoryStatusBody');
 
-            const filtered = order.filter(key => {
-                const p = productMap[key];
-                return !kw || p.name.toLowerCase().includes(kw) || p.category.toLowerCase().includes(kw);
-            });
-            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="6">표시할 품목이 없습니다.</td></tr>'; return; }
+            const records = computeInventoryDashboardRecords();
+            window.__inventoryRecords = records;
 
-            tbody.innerHTML = filtered.map(key => {
-                const p = productMap[key];
-                const stockTxt = p.stockUnavailable
-                    ? '<span style="color:#94a3b8;">재고 미관리(납품이력만)</span>'
-                    : (p.stock === null ? '<span style="color:#94a3b8;">기록없음</span>' : p.stock.toLocaleString());
-                const stockColor = (!p.stockUnavailable && p.stock !== null && p.stock <= 0) ? '#ef4444' : '#16a34a';
+            const filtered = records.filter(r => {
+                const passKw = !kw || r.name.toLowerCase().includes(kw) || r.category.toLowerCase().includes(kw);
+                const passStorage = storageFilter === 'ALL' || r.storageMethod === storageFilter;
+                return passKw && passStorage;
+            });
+            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="8">표시할 품목이 없습니다.</td></tr>'; return; }
+
+            tbody.innerHTML = filtered.map(r => {
+                const stockTxt = r.stockUnavailable
+                    ? '<span style="color:#94a3b8;">재고 미관리</span>'
+                    : (r.stock === null ? '<span style="color:#94a3b8;">기록없음</span>' : r.stock.toLocaleString());
+                const stockColor = (!r.stockUnavailable && r.stock !== null && r.stock <= 0) ? '#ef4444' : '#16a34a';
+                const remainTxt = r.remainingDays === null ? '-'
+                    : (r.remainingDays < 0 ? `<span style="color:#dc2626; font-weight:bold;">경과 ${Math.abs(r.remainingDays)}일</span>` : `${r.remainingDays}일`);
                 return `<tr>
-                    <td style="text-align:left; font-weight:600;">${p.name}</td>
-                    <td style="color:#64748b;">${p.category}</td>
-                    <td>${p.company || '-'}</td>
-                    <td style="font-weight:bold; color:${stockColor};">${stockTxt}</td>
-                    <td style="color:#7c3aed;">${p.pendingIn > 0 ? '+' + p.pendingIn.toLocaleString() : '-'}</td>
-                    <td style="color:#64748b; font-size:11px;">${p.lastDate || '-'}</td>
+                    <td data-label="카테고리" style="color:#64748b;">${r.category}</td>
+                    <td data-label="품명" style="text-align:left; font-weight:600;">${r.name}</td>
+                    <td data-label="보관방법">${r.storageMethod}</td>
+                    <td data-label="입고일">${r.lastInDate || '-'}</td>
+                    <td data-label="재고" style="font-weight:bold; color:${stockColor};">${stockTxt}</td>
+                    <td data-label="소비기한">${r.expiryDate || '-'}</td>
+                    <td data-label="납품기한" style="color:#ea580c;">${r.deliveryDeadline || '-'}</td>
+                    <td data-label="잔여일">${remainTxt}</td>
                 </tr>`;
             }).join('');
+        }
+
+        // [신규] 보관일수/경과일수 버킷 대시보드 (재고 상세 탭 + 홈 탭 요약이 함께 씀)
+        const AGING_BUCKETS = [
+            { key: '1-3',  label: '1~3일',    min: 1,  max: 3,        bg: '#f0f9ff', text: '#0284c7' },
+            { key: '4-5',  label: '4~5일',    min: 4,  max: 5,        bg: '#f0fdf4', text: '#16a34a' },
+            { key: '6-7',  label: '6~7일',    min: 6,  max: 7,        bg: '#fff7ed', text: '#ea580c' },
+            { key: '8-15', label: '8~15일',   min: 8,  max: 15,       bg: '#fef2f2', text: '#dc2626' },
+            { key: '16-30',label: '16~30일',  min: 16, max: 30,       bg: '#fef2f2', text: '#dc2626' },
+            { key: '31+',  label: '31일 초과', min: 31, max: Infinity, bg: '#fef2f2', text: '#dc2626' }
+        ];
+
+        function renderAgingBuckets(boxesId, detailWrapId, detailTitleId, detailBodyId) {
+            const boxesEl = document.getElementById(boxesId);
+            if (!boxesEl) return;
+            const records = window.__inventoryRecords || computeInventoryDashboardRecords();
+            boxesEl.innerHTML = AGING_BUCKETS.map(b => {
+                const count = records.filter(r => r.agingDays !== null && r.agingDays >= b.min && r.agingDays <= b.max).length;
+                return `<div class="card" style="cursor:pointer; border-left-color:${b.text}; background:${b.bg};" onclick="showAgingBucketDetail('${b.key}','${detailWrapId}','${detailTitleId}','${detailBodyId}')">
+                    <h3 style="color:${b.text};">${b.label}</h3>
+                    <div class="value" style="color:${b.text};">${count}건</div>
+                </div>`;
+            }).join('');
+        }
+
+        function showAgingBucketDetail(bucketKey, detailWrapId, detailTitleId, detailBodyId) {
+            const b = AGING_BUCKETS.find(x => x.key === bucketKey);
+            if (!b) return;
+            const records = window.__inventoryRecords || computeInventoryDashboardRecords();
+            const items = records.filter(r => r.agingDays !== null && r.agingDays >= b.min && r.agingDays <= b.max)
+                .sort((a, c) => (c.agingDays || 0) - (a.agingDays || 0));
+            document.getElementById(detailTitleId).innerText = `${b.label} 경과 재고 (${items.length}건)`;
+            document.getElementById(detailBodyId).innerHTML = items.length === 0
+                ? '<tr><td colspan="4" style="color:#94a3b8;">해당 항목이 없습니다.</td></tr>'
+                : items.map(r => `<tr>
+                    <td data-label="품명" style="text-align:left; font-weight:600;">${r.name}</td>
+                    <td data-label="재고">${r.stock === null ? '-' : r.stock.toLocaleString()}</td>
+                    <td data-label="입고일">${r.lastInDate || '-'}</td>
+                    <td data-label="경과일수">${r.agingDays}일</td>
+                </tr>`).join('');
+            document.getElementById(detailWrapId).style.display = '';
         }
 
         // ============================================================
@@ -1765,7 +2026,7 @@
         // [신규] 홈 탭에서 직접 입력한 확정량을 구글시트 '데이터' 탭에 반영.
         // ※ 이 기능이 동작하려면 Apps Script 웹앱에 action=updateConfirmed 처리가 추가돼 있어야 합니다.
         async function saveHomeConfirmedQuantities() {
-            const url = getGSheetUrl(); if (!url) return;
+            const url = getConfirmUrl(); if (!url) return;
             const rows = window.__homeTableRows || [];
             const inputs = document.querySelectorAll('.home-conf-input[data-dirty="1"]');
             if (inputs.length === 0) { alert('변경된 확정량이 없습니다. 칸에 값을 입력한 뒤 다시 눌러주세요.'); return; }
@@ -1975,6 +2236,8 @@
                 let qty = basis === 'min' ? tr.dataset.minVal : basis === 'max' ? tr.dataset.maxVal : tr.dataset.recVal;
                 if (qty === undefined) { calculateMultiRows(); qty = basis === 'min' ? tr.dataset.minVal : basis === 'max' ? tr.dataset.maxVal : tr.dataset.recVal; }
                 qty = Number(qty) || 0;
+                const orderQtyOverride = tr.querySelector('.grid-order-qty') ? tr.querySelector('.grid-order-qty').value.trim() : '';
+                if (orderQtyOverride !== '' && !isNaN(parseFloat(orderQtyOverride))) qty = parseFloat(orderQtyOverride);
                 if (qty <= 0) continue;
 
                 const deliveryDateForCalc = dateBasis === 'delivery'
@@ -2032,6 +2295,143 @@
                 if (window.__inventoryLoadedOnce) loadInventoryStatus();
             } catch(err) {
                 alert("재고수불대장 등록에 실패했습니다: " + err.message);
+            }
+        }
+
+        // ============================================================
+        // [신규] 거래명세서 사진 업로드 → Gemini OCR로 품명/수량 추출 → 검토/수정 → 재고수불대장 반영
+        // (OCR은 반드시 사람이 확인 후에만 실제로 저장됩니다 — 자동으로 바로 쓰지 않음)
+        // ============================================================
+        function resizeImageToBase64(file, maxDim, quality) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        let w = img.width, h = img.height;
+                        if (w > maxDim || h > maxDim) {
+                            if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+                            else { w = Math.round(w * maxDim / h); h = maxDim; }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                        resolve(dataUrl.split(',')[1]);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleDeliverySlipUpload(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const url = getOcrUrl(); if (!url) { event.target.value = ''; return; }
+            const statusEl = document.getElementById('deliverySlipStatus');
+            statusEl.innerText = '⏳ 이미지 분석 중... (몇 초 걸릴 수 있어요)'; statusEl.style.color = '#64748b';
+            document.getElementById('deliverySlipReviewWrap').style.display = 'none';
+            try {
+                const base64 = await resizeImageToBase64(file, 1600, 0.85);
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+                    body: JSON.stringify({ action: 'extractDeliverySlip', imageBase64: base64, mimeType: 'image/jpeg' })
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const result = await res.json();
+                if (result.error) throw new Error(result.error);
+                const items = Array.isArray(result.items) ? result.items : [];
+                if (items.length === 0) {
+                    statusEl.innerText = '⚠️ 인식된 품목이 없습니다. 더 밝고 또렷하게 찍어서 다시 시도해보세요.';
+                    statusEl.style.color = '#b45309';
+                    return;
+                }
+                renderDeliverySlipReview(items);
+                statusEl.innerText = `✅ ${items.length}건 인식됨. 아래에서 확인/수정 후 반영해주세요.`;
+                statusEl.style.color = '#16a34a';
+            } catch (err) {
+                statusEl.innerText = '❌ 인식 실패: ' + err.message;
+                statusEl.style.color = '#ef4444';
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        function renderDeliverySlipReview(items) {
+            window.__deliverySlipItems = items.map(it => ({
+                name: it.name || '', qty: (it.qty !== undefined && it.qty !== null) ? it.qty : '', unit: it.unit || '', company: it.company || ''
+            }));
+            renderDeliverySlipReviewTable();
+            document.getElementById('deliverySlipReviewWrap').style.display = '';
+        }
+
+        function renderDeliverySlipReviewTable() {
+            const items = window.__deliverySlipItems || [];
+            const tbody = document.getElementById('deliverySlipReviewBody');
+            tbody.innerHTML = items.map((it, idx) => `<tr>
+                <td><input type="text" value="${String(it.name || '').replace(/"/g,'&quot;')}" oninput="updateDeliverySlipItem(${idx}, 'name', this.value)" style="width:100%; padding:4px;"></td>
+                <td><input type="number" value="${it.qty !== '' ? it.qty : ''}" oninput="updateDeliverySlipItem(${idx}, 'qty', this.value)" style="width:80px; padding:4px;"></td>
+                <td><input type="text" value="${String(it.unit || '').replace(/"/g,'&quot;')}" oninput="updateDeliverySlipItem(${idx}, 'unit', this.value)" style="width:60px; padding:4px;"></td>
+                <td><input type="text" value="${String(it.company || '').replace(/"/g,'&quot;')}" oninput="updateDeliverySlipItem(${idx}, 'company', this.value)" style="width:100px; padding:4px;"></td>
+                <td><button class="btn btn-danger" style="padding:4px 8px; font-size:11px;" onclick="removeDeliverySlipRow(${idx})">삭제</button></td>
+            </tr>`).join('');
+        }
+
+        function updateDeliverySlipItem(idx, field, value) {
+            if (!window.__deliverySlipItems || !window.__deliverySlipItems[idx]) return;
+            window.__deliverySlipItems[idx][field] = value;
+        }
+
+        function addDeliverySlipRow() {
+            if (!window.__deliverySlipItems) window.__deliverySlipItems = [];
+            window.__deliverySlipItems.push({ name: '', qty: '', unit: '', company: '' });
+            renderDeliverySlipReviewTable();
+            document.getElementById('deliverySlipReviewWrap').style.display = '';
+        }
+
+        function removeDeliverySlipRow(idx) {
+            window.__deliverySlipItems.splice(idx, 1);
+            renderDeliverySlipReviewTable();
+        }
+
+        async function applyDeliverySlipToLedger() {
+            const url = getLedgerUrl(); if (!url) return;
+            const items = (window.__deliverySlipItems || []).filter(it => String(it.name || '').trim() && parseFloat(it.qty) > 0);
+            if (items.length === 0) { alert('반영할 항목이 없습니다. 품명과 수량(0보다 큰 값)을 확인해주세요.'); return; }
+            const today = new Date().toISOString().split('T')[0];
+            const ledgerSheetHint = document.getElementById('gsheetLedgerSheet').value.trim();
+            const rowsToSend = items.map(it => ({ name: String(it.name).trim(), date: today, deliveryDate: '', qty: parseFloat(it.qty), unit: '' }));
+
+            if (!confirm(`거래명세서에서 확인한 ${rowsToSend.length}건을 재고수불대장에 입고로 등록할까요?\n(오늘 날짜 기준으로 입고일/수량에 기록됩니다)`)) return;
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+                    body: JSON.stringify({ action: 'insertInventoryOrder', sheet: ledgerSheetHint, rows: rowsToSend })
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const result = await res.json();
+                if (result.error) throw new Error(result.error);
+
+                const resultItems = result.results || [];
+                const okItems = resultItems.filter(r => r.ok);
+                const failed = resultItems.filter(r => !r.ok);
+                let msg = `✅ ${okItems.length}건 재고수불대장에 반영 완료!`;
+                if (failed.length > 0) {
+                    msg += `\n\n❌ 실패: ${failed.length}건\n- ` + failed.map(r => `${r.name || '(품명없음)'}: ${r.reason}`).join('\n- ');
+                }
+                alert(msg);
+                document.getElementById('deliverySlipReviewWrap').style.display = 'none';
+                document.getElementById('deliverySlipStatus').innerText = '';
+                window.__deliverySlipItems = [];
+                if (window.__inventoryLoadedOnce) loadInventoryStatus();
+                refreshHomeTab(false);
+            } catch (err) {
+                alert('재고수불대장 반영에 실패했습니다: ' + err.message);
             }
         }
 
