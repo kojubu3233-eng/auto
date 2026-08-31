@@ -17,5 +17,10 @@ window.APP_CONFIG = {
   // 별도 Apps Script 프로젝트로 배포한 뒤 그 URL을 여기 넣으면 홈 탭 "확정량 저장"이 바로 동작합니다.
   // 비워두면(따옴표 안 아무것도 없으면) 위쪽 HISTORY_WEBAPP_URL로 대신 전송되는데,
   // 그 경우 기존 Apps Script에 updateConfirmed 분기를 직접 추가해야 동작합니다.
-  CONFIRM_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbztWhg9G3OjM_kwg4CXSzPVZ-CKQy6kaZWVBHiuqXV8-9jvmxCpSYmNYsFUb9qoLp4RAA/exec"
+  CONFIRM_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbztWhg9G3OjM_kwg4CXSzPVZ-CKQy6kaZWVBHiuqXV8-9jvmxCpSYmNYsFUb9qoLp4RAA/exec",
+
+  // [선택] 거래명세서 사진 자동인식(OCR) 전용 웹앱 URL. "거래명세서_OCR_전용.gs"를
+  // 별도 Apps Script 프로젝트로 배포한 뒤 그 URL을 여기 넣으면 홈 탭 "거래명세서 업로드"가 바로 동작합니다.
+  // 비워두면 홈 탭에서 사진 업로드 시 "URL을 입력해주세요" 알림이 뜹니다.
+  OCR_WEBAPP_URL: ""
 };
