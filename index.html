@@ -145,7 +145,8 @@
     <!-- [신규 v10] 탭 3개: 홈(기본) / 예정량·확정량 입력 / 재고 상세 -->
     <div class="tab-bar">
         <button class="tab-btn active" id="tabBtnHome" onclick="switchTab('home')">🏠 홈</button>
-        <button class="tab-btn" id="tabBtnPredict" onclick="switchTab('predict')">🔮 예정량/확정량 입력</button>
+        <button class="tab-btn" id="tabBtnPredict" onclick="switchTab('predict')">📝 예정량 입력</button>
+        <button class="tab-btn" id="tabBtnConfirm" onclick="switchTab('confirm')">✅ 확정량 입력</button>
         <button class="tab-btn" id="tabBtnInventory" onclick="switchTab('inventory')">📦 재고 상세</button>
     </div>
 
@@ -158,39 +159,10 @@
     <div id="tabContentHome">
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                <h2 style="font-size:15px; color:#1e3a8a;">📋 당월 납품계획</h2>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-success" onclick="saveHomeConfirmedQuantities()" title="아래 표의 '확정량' 칸에 입력/수정한 값을 구글시트 '데이터' 탭에 반영합니다">💾 확정량 저장</button>
-                    <button class="btn btn-primary" onclick="refreshHomeTab()">🔄 새로고침</button>
-                </div>
+                <h2 style="font-size:15px; color:#ea580c;">⏰ 납품기한임박</h2>
+                <button class="btn btn-primary" onclick="refreshHomeTab()">🔄 새로고침</button>
             </div>
-            <div id="homeStatusMsg" style="font-size:12px; color:#64748b; margin-bottom:8px;">새로고침을 눌러 구글시트 데이터를 불러오세요.</div>
-            <div style="font-size:11px; color:#a16207; background:#fef9c3; border:1px solid #fde68a; border-radius:6px; padding:6px 10px; margin-bottom:8px;">✏️ '확정량' 칸에 직접 입력 후 우측 상단 "💾 확정량 저장"을 누르면 구글시트에 반영됩니다. 값은 <b>kg 기준</b>으로 입력해주세요(품목정보에 포장단위가 등록돼 있으면 개수도 자동 환산되어 함께 저장됩니다).</div>
-            <div class="controls-row">
-                <input type="month" id="homeMonth" onchange="renderHomeDeliveryTable()">
-                <select id="homeDateBasis" onchange="renderHomeDeliveryTable()">
-                    <option value="del">납품일 기준</option>
-                    <option value="meal">급식일 기준</option>
-                </select>
-                <select id="homeFilterCat" onchange="renderHomeDeliveryTable()"><option value="ALL">구분 전체</option></select>
-                <select id="homeFilterUnit" onchange="renderHomeDeliveryTable()"><option value="ALL">부대 전체</option></select>
-                <input type="text" id="homeFilterName" placeholder="품명 검색..." onkeyup="renderHomeDeliveryTable()" style="flex:1; min-width:120px;">
-            </div>
-            <div class="table-wrapper" style="max-height:520px;">
-                <table class="responsive-table" id="homeDeliveryTable">
-                    <thead>
-                        <tr>
-                            <th>납품일</th><th>급식일</th><th>구분</th><th>품명</th><th>부대</th>
-                            <th>예정량(kg)</th><th>확정량(kg) ✏️</th><th>오차율</th><th>매출계획</th><th>매출</th>
-                        </tr>
-                    </thead>
-                    <tbody id="homeDeliveryBody"><tr><td colspan="10">새로고침을 눌러 불러오세요.</td></tr></tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="panel">
-            <h2 style="font-size:15px; color:#ea580c; margin-bottom:10px;">⏰ 납품기한임박</h2>
+            <div id="homeStatusMsg" style="font-size:12px; color:#64748b; margin-bottom:8px;">새로고침을 눌러 불러오세요.</div>
             <div id="homeExpiryUpcoming" class="mobile-cards"><div style="color:#94a3b8; font-size:12px;">새로고침을 눌러 불러오세요.</div></div>
         </div>
 
@@ -390,6 +362,50 @@
     </div>
     </div><!-- /tabContentPredict -->
 
+    <!-- ============================================================ -->
+    <!-- [신규] 확정량 입력 탭: 예정량 입력 탭에서 저장한 계획을 목록으로 보여주고,
+         확정량(개)/확정량(kg)을 직접 입력해서 구글시트에 반영한다. -->
+    <!-- ============================================================ -->
+    <div id="tabContentConfirm" style="display:none;">
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                <h2 style="font-size:15px; color:#1e3a8a;">✅ 확정량 입력</h2>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-success" onclick="saveConfirmedQuantities()" title="아래 표의 '확정량' 칸에 입력/수정한 값을 구글시트 '데이터' 탭에 반영합니다">💾 확정량 저장</button>
+                    <button class="btn btn-primary" onclick="refreshConfirmTab()">🔄 새로고침</button>
+                </div>
+            </div>
+            <div id="confirmStatusMsg" style="font-size:12px; color:#64748b; margin-bottom:8px;">새로고침을 눌러 구글시트 데이터를 불러오세요.</div>
+            <div style="font-size:11px; color:#a16207; background:#fef9c3; border:1px solid #fde68a; border-radius:6px; padding:6px 10px; margin-bottom:8px;">✏️ 확정량(개) 또는 확정량(kg) 둘 중 하나만 입력하면, 품목정보에 포장단위가 등록돼 있는 경우 나머지 하나가 자동 계산됩니다.</div>
+            <div class="controls-row">
+                <input type="month" id="confirmMonth" onchange="renderConfirmTable()">
+                <select id="confirmDateBasis" onchange="renderConfirmTable()">
+                    <option value="del">납품일 기준</option>
+                    <option value="meal">급식일 기준</option>
+                </select>
+                <select id="confirmFilterCat" onchange="renderConfirmTable()"><option value="ALL">구분 전체</option></select>
+                <select id="confirmFilterUnit" onchange="renderConfirmTable()"><option value="ALL">부대 전체</option></select>
+                <input type="text" id="confirmFilterName" placeholder="품명 검색..." onkeyup="renderConfirmTable()" style="flex:1; min-width:120px;">
+            </div>
+            <div class="table-wrapper" style="max-height:560px;">
+                <table class="responsive-table" id="confirmTable">
+                    <thead>
+                        <tr>
+                            <th>납품일</th><th>급식일</th><th>구분</th><th>품명</th>
+                            <th>예정량(개)</th><th>예정량(kg)</th>
+                            <th>확정량(개) ✏️</th><th>확정량(kg) ✏️</th>
+                            <th>매출계획</th><th>매출</th>
+                            <th>납품요구</th><th>검사검수</th><th>대금청구</th>
+                            <th>오차율</th>
+                        </tr>
+                    </thead>
+                    <tbody id="confirmTableBody"><tr><td colspan="14">새로고침을 눌러 불러오세요.</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- /tabContentConfirm -->
+
     <div id="tabContentInventory" style="display:none;">
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
@@ -557,9 +573,9 @@
             ySel.value = thisYear;
             for (let m = 1; m <= 12; m++) mSel.add(new Option(m + '월', m));
             mSel.value = now.getMonth() + 1;
-            // 홈 탭 월 선택기본값 = 이번 달
-            const hm = document.getElementById('homeMonth');
-            if (hm) hm.value = `${thisYear}-${String(now.getMonth()+1).padStart(2,'0')}`;
+            // 확정량 입력 탭 월 선택 기본값 = 이번 달
+            const cm = document.getElementById('confirmMonth');
+            if (cm) cm.value = `${thisYear}-${String(now.getMonth()+1).padStart(2,'0')}`;
         }
 
         window.onload = function() {
@@ -1449,10 +1465,16 @@
         function switchTab(name) {
             document.getElementById('tabContentHome').style.display = (name === 'home') ? '' : 'none';
             document.getElementById('tabContentPredict').style.display = (name === 'predict') ? '' : 'none';
+            document.getElementById('tabContentConfirm').style.display = (name === 'confirm') ? '' : 'none';
             document.getElementById('tabContentInventory').style.display = (name === 'inventory') ? '' : 'none';
             document.getElementById('tabBtnHome').classList.toggle('active', name === 'home');
             document.getElementById('tabBtnPredict').classList.toggle('active', name === 'predict');
+            document.getElementById('tabBtnConfirm').classList.toggle('active', name === 'confirm');
             document.getElementById('tabBtnInventory').classList.toggle('active', name === 'inventory');
+            if (name === 'confirm' && !window.__confirmTabLoadedOnce) {
+                window.__confirmTabLoadedOnce = true;
+                refreshConfirmTab();
+            }
             if (name === 'inventory' && !window.__inventoryLoadedOnce) {
                 window.__inventoryLoadedOnce = true;
                 loadInventoryStatus();
@@ -1463,7 +1485,12 @@
         const SELF_SEASONED_SHEETS = ['자사양념육'];
         const EXPIRY_UPCOMING_SHEETS = ['납품기한임박'];
         const EXPIRY_PAST_SHEETS = ['납품기한 경과'];
+        // [신규] 표준 10컬럼(업체/제품/입고일/수량...) 구조가 아닌, 참고용 목록/일정표 성격의 탭.
+        // 이걸 표준 탭처럼 읽으면 날짜 아닌 텍스트가 날짜 칸에 들어가 경과일수가 수십만일로 튀는 등
+        // 재고현황 표가 깨지므로 아예 건너뛴다.
+        const SKIP_SHEETS = ['설명절 업체일정', '음료시장조사', '훈제닭다리(1.02kg)'];
         function getSheetKindClient(sheetName) {
+            if (SKIP_SHEETS.indexOf(sheetName) !== -1) return 'skip';
             if (EXPIRY_UPCOMING_SHEETS.indexOf(sheetName) !== -1) return 'expiryUpcoming';
             if (EXPIRY_PAST_SHEETS.indexOf(sheetName) !== -1) return 'expiryPast';
             if (SELF_SEASONED_SHEETS.indexOf(sheetName) !== -1) return 'selfSeasoned';
@@ -1508,6 +1535,7 @@
                 const rows = sheetsObj[sheetName] || [];
                 const kind = getSheetKindClient(sheetName);
 
+                if (kind === 'skip') return; // [신규] 표준 구조가 아닌 참고용 탭은 건너뜀
                 if (kind === 'selfSeasoned') { selfSeasonedList = selfSeasonedList.concat(parseSelfSeasonedSheet(rows)); return; }
                 if (kind === 'expiryUpcoming') { expiryUpcomingList = expiryUpcomingList.concat(parseExpiryUpcomingSheet(rows)); return; }
                 if (kind === 'expiryPast') { expiryPastList = expiryPastList.concat(parseExpiryPastSheet(rows)); return; }
@@ -1695,9 +1723,12 @@
             </tr>`).join('');
         }
 
-        // [신규] 날짜 계산 헬퍼
+        // [신규] 날짜 계산 헬퍼 (yyyy-MM-dd 형태가 아니면 무시 — 엉뚱한 텍스트가 날짜로 오인되는 것 방지)
+        function isValidIsoDateLike(dateStr) {
+            return typeof dateStr === 'string' && /^\d{4}-\d{1,2}-\d{1,2}/.test(dateStr.trim());
+        }
         function daysFromToday(dateStr) {
-            if (!dateStr) return null;
+            if (!isValidIsoDateLike(dateStr)) return null;
             const d = new Date(dateStr);
             if (isNaN(d.getTime())) return null;
             const today = new Date(); today.setHours(0,0,0,0);
@@ -1705,6 +1736,7 @@
             return Math.round((dd - today) / 86400000);
         }
         function addDaysIso(dateStr, days) {
+            if (!isValidIsoDateLike(dateStr)) return null;
             const d = new Date(dateStr);
             if (isNaN(d.getTime())) return null;
             d.setDate(d.getDate() + Math.round(days));
@@ -1831,7 +1863,6 @@
             const hasLedger = !!getLedgerUrlSilent();
             if (!hasMain && !hasLedger) {
                 if (statusEl) { statusEl.innerText = '⚠️ 상단 "구글시트 연동 설정"에서 웹앱 URL을 먼저 입력해주세요.'; statusEl.style.color = '#b45309'; }
-                renderHomeDeliveryTable();
                 return;
             }
             if (silentRemote) {
@@ -1848,8 +1879,6 @@
                     else { statusEl.innerText = '⚠️ ' + errors.join(' / '); statusEl.style.color = '#ef4444'; }
                 }
             }
-            populateHomeFilterOptions();
-            renderHomeDeliveryTable();
             renderHomeExpiryCards();
         }
 
@@ -1863,6 +1892,30 @@
             const rowsArr = extractRowsArray(json);
             if (!rowsArr) throw new Error('데이터 형식을 인식하지 못했습니다.');
             ingestRowsSilent(rowsArr);
+        }
+
+        // [신규] '데이터' 시트 헤더에서 확정량 입력 탭에 필요한 추가 컬럼(예정량/확정량 개·kg 각각,
+        // 납품요구/검사검수/대금청구)을 찾는다. 컬럼이 없으면 그냥 빈 값으로 처리되므로
+        // 시트에 컬럼을 새로 추가해도, 없애도 안전하다.
+        function buildExtraColumnMap_(headers) {
+            return {
+                planEa: headers.findIndex(h => h.includes('예정') && h.includes('개')),
+                planKg: headers.findIndex(h => h.includes('예정') && h.toLowerCase().includes('kg')),
+                confEa: headers.findIndex(h => h.includes('확정') && h.includes('개')),
+                confKg: headers.findIndex(h => h.includes('확정') && h.toLowerCase().includes('kg')),
+                reqDate: headers.findIndex(h => h.includes('납품요구')),
+                inspectDate: headers.findIndex(h => h.includes('검사검수')),
+                paymentDate: headers.findIndex(h => h.includes('대금청구'))
+            };
+        }
+        function readExtraColumns_(row, extraMap) {
+            const num = (idx) => (idx !== -1 && row[idx] !== undefined && row[idx] !== '' && !isNaN(parseFloat(String(row[idx]).replace(/,/g,'')))) ? parseFloat(String(row[idx]).replace(/,/g,'')) : null;
+            const dt = (idx) => (idx !== -1 && row[idx] !== undefined && row[idx] !== '') ? parseExcelDate(row[idx]) : '';
+            return {
+                planEa: num(extraMap.planEa), planKg: num(extraMap.planKg),
+                confEa: num(extraMap.confEa), confKg: num(extraMap.confKg),
+                reqDate: dt(extraMap.reqDate), inspectDate: dt(extraMap.inspectDate), paymentDate: dt(extraMap.paymentDate)
+            };
         }
 
         // ingestRows()와 같지만 alert 없이 조용히 반영(홈 자동새로고침용)
@@ -1889,6 +1942,7 @@
                 planSales: headers.findIndex(h => h.includes('예정매출')),
                 confSales: headers.findIndex(h => h.includes('확정매출'))
             };
+            const extraMap = buildExtraColumnMap_(headers);
             const existingKeys = new Set(dbData.map(d => `${d.delDate}|${d.mealDate}|${d.unit}|${d.name}|${d.plan}|${d.conf}`));
             const newList = [];
             for(let i = hIdx + 1; i < json.length; i++) {
@@ -1926,6 +1980,7 @@
                 const priceVal = map.price !== -1 && row[map.price] !== undefined && row[map.price] !== '' ? parseFloat(String(row[map.price]).replace(/,/g,'')) : null;
                 const planSalesVal = map.planSales !== -1 && row[map.planSales] !== undefined && row[map.planSales] !== '' ? parseFloat(String(row[map.planSales]).replace(/,/g,'')) : null;
                 const confSalesVal = map.confSales !== -1 && row[map.confSales] !== undefined && row[map.confSales] !== '' ? parseFloat(String(row[map.confSales]).replace(/,/g,'')) : null;
+                const extra = readExtraColumns_(row, extraMap);
 
                 newList.push({
                     id: key,
@@ -1934,6 +1989,8 @@
                     dayCategory: dayCat, delDayCategory: delDayCat, holidayName: holidayNameVal,
                     name: nameVal, cat: catVal, unit: unitVal,
                     plan: p, conf: c,
+                    planEa: extra.planEa, planKg: extra.planKg, confEa: extra.confEa, confKg: extra.confKg,
+                    reqDate: extra.reqDate, inspectDate: extra.inspectDate, paymentDate: extra.paymentDate,
                     price: (priceVal !== null && !isNaN(priceVal)) ? priceVal : null,
                     planSales: (planSalesVal !== null && !isNaN(planSalesVal)) ? planSalesVal : null,
                     confSales: (confSalesVal !== null && !isNaN(confSalesVal)) ? confSalesVal : null,
@@ -1948,7 +2005,30 @@
             }
         }
 
-        function populateHomeFilterOptions() {
+        // ============================================================
+        // [신규] 확정량 입력 탭
+        // ============================================================
+        async function refreshConfirmTab(silentRemote = true) {
+            const statusEl = document.getElementById('confirmStatusMsg');
+            if (!getGSheetUrlSilent()) {
+                if (statusEl) { statusEl.innerText = '⚠️ 상단 "구글시트 연동 설정"에서 웹앱 URL을 먼저 입력해주세요.'; statusEl.style.color = '#b45309'; }
+                renderConfirmTable();
+                return;
+            }
+            if (silentRemote) {
+                if (statusEl) { statusEl.innerText = '⏳ 구글시트에서 불러오는 중...'; statusEl.style.color = '#64748b'; }
+                try {
+                    await loadFromGoogleSheetSilent();
+                    if (statusEl) { statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준으로 갱신됨`; statusEl.style.color = '#16a34a'; }
+                } catch (err) {
+                    if (statusEl) { statusEl.innerText = '❌ 불러오기 실패: ' + err.message; statusEl.style.color = '#ef4444'; }
+                }
+            }
+            populateConfirmFilterOptions();
+            renderConfirmTable();
+        }
+
+        function populateConfirmFilterOptions() {
             const cats = [...new Set(dbData.map(d => d.cat))].sort();
             const units = [...new Set(dbData.map(d => d.unit))].sort();
             const fillSel = (id, arr, label) => {
@@ -1958,21 +2038,20 @@
                 arr.forEach(v => el.add(new Option(v, v)));
                 if ([...el.options].some(o => o.value === cur)) el.value = cur;
             };
-            fillSel('homeFilterCat', cats, '구분');
-            fillSel('homeFilterUnit', units, '부대');
+            fillSel('confirmFilterCat', cats, '구분');
+            fillSel('confirmFilterUnit', units, '부대');
         }
 
-        // [신규] 당월 납품계획 표 렌더링 — 엑셀 출고계획 형식(납품일/구분/품명/부대/예정/확정/매출)
-        function renderHomeDeliveryTable() {
-            const tbody = document.getElementById('homeDeliveryBody');
+        function renderConfirmTable() {
+            const tbody = document.getElementById('confirmTableBody');
             if (!tbody) return;
-            if (dbData.length === 0) { tbody.innerHTML = '<tr><td colspan="10">새로고침을 눌러 불러오세요.</td></tr>'; return; }
+            if (dbData.length === 0) { tbody.innerHTML = '<tr><td colspan="14">새로고침을 눌러 불러오세요.</td></tr>'; return; }
 
-            const monthVal = document.getElementById('homeMonth').value; // 'yyyy-mm'
-            const basis = document.getElementById('homeDateBasis').value; // 'del' | 'meal'
-            const cat = document.getElementById('homeFilterCat').value;
-            const unit = document.getElementById('homeFilterUnit').value;
-            const nameKw = (document.getElementById('homeFilterName').value || '').trim().toLowerCase();
+            const monthVal = document.getElementById('confirmMonth').value; // 'yyyy-mm'
+            const basis = document.getElementById('confirmDateBasis').value; // 'del' | 'meal'
+            const cat = document.getElementById('confirmFilterCat').value;
+            const unit = document.getElementById('confirmFilterUnit').value;
+            const nameKw = (document.getElementById('confirmFilterName').value || '').trim().toLowerCase();
 
             let filtered = dbData.filter(d => {
                 const dateField = basis === 'meal' ? d.mealDate : d.delDate;
@@ -1989,59 +2068,95 @@
                 return String(da).localeCompare(String(db_));
             });
 
-            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="10">해당 조건의 납품계획이 없습니다.</td></tr>'; window.__homeTableRows = []; return; }
+            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="14">해당 조건의 납품계획이 없습니다.</td></tr>'; window.__confirmTableRows = []; return; }
 
             const shown = filtered.slice(0, 500);
-            window.__homeTableRows = shown; // [신규] 확정량 입력칸이 참조할 원본 레코드 배열(인덱스로 매칭)
+            window.__confirmTableRows = shown;
+
+            const numTxt = (v) => (v === null || v === undefined) ? '<span style="color:#94a3b8;">-</span>' : Math.round(v).toLocaleString();
 
             tbody.innerHTML = shown.map((d, idx) => {
                 const rateTxt = d.rate === null ? '<span style="color:#94a3b8;">-</span>' : `${d.rate>0?'+':''}${Math.round(d.rate)}%`;
                 const rateColor = d.rate === null ? '#94a3b8' : (d.rate>0?'#ea580c':'#2563eb');
-                const planTxt = d.plan === null ? '<span style="color:#94a3b8;">-</span>' : Math.round(d.plan).toLocaleString();
                 const planSalesTxt = d.planSales !== null && d.planSales !== undefined ? Math.round(d.planSales).toLocaleString() : '-';
                 const confSalesTxt = d.confSales !== null && d.confSales !== undefined ? Math.round(d.confSales).toLocaleString() : '-';
-                const confVal = (d.conf !== null && d.conf !== undefined) ? d.conf : '';
+                const confEaVal = (d.confEa !== null && d.confEa !== undefined) ? d.confEa : '';
+                const confKgVal = (d.confKg !== null && d.confKg !== undefined) ? d.confKg : '';
                 return `<tr>
                     <td data-label="납품일">${d.delDate || '-'}</td>
                     <td data-label="급식일">${d.mealDate || '-'}</td>
                     <td data-label="구분">${d.cat || '-'}</td>
                     <td data-label="품명" style="font-weight:600;">${d.name}</td>
-                    <td data-label="부대">${d.unit || '-'}</td>
-                    <td data-label="예정량(kg)">${planTxt}</td>
-                    <td data-label="확정량(kg)"><input type="number" step="any" class="home-conf-input" data-idx="${idx}" value="${confVal}" placeholder="미확정" style="width:82px; padding:4px; text-align:right; border:1px solid #cbd5e1; border-radius:4px;" onchange="markHomeConfDirty(this)"></td>
-                    <td data-label="오차율" style="font-weight:bold; color:${rateColor};">${rateTxt}</td>
+                    <td data-label="예정량(개)">${numTxt(d.planEa)}</td>
+                    <td data-label="예정량(kg)">${numTxt(d.planKg)}</td>
+                    <td data-label="확정량(개)"><input type="number" step="any" class="confirm-ea-input" data-idx="${idx}" value="${confEaVal}" placeholder="-" style="width:72px; padding:4px; text-align:right; border:1px solid #cbd5e1; border-radius:4px;" onchange="handleConfirmEaChange(this)"></td>
+                    <td data-label="확정량(kg)"><input type="number" step="any" class="confirm-kg-input" data-idx="${idx}" value="${confKgVal}" placeholder="-" style="width:72px; padding:4px; text-align:right; border:1px solid #cbd5e1; border-radius:4px;" onchange="handleConfirmKgChange(this)"></td>
                     <td data-label="매출계획">${planSalesTxt}</td>
                     <td data-label="매출">${confSalesTxt}</td>
+                    <td data-label="납품요구">${d.reqDate || '-'}</td>
+                    <td data-label="검사검수">${d.inspectDate || '-'}</td>
+                    <td data-label="대금청구">${d.paymentDate || '-'}</td>
+                    <td data-label="오차율" style="font-weight:bold; color:${rateColor};">${rateTxt}</td>
                 </tr>`;
-            }).join('') + (filtered.length > 500 ? `<tr><td colspan="10" style="color:#94a3b8;">…외 ${(filtered.length-500).toLocaleString()}건 더 있음 (필터로 좁혀보세요)</td></tr>` : '');
+            }).join('') + (filtered.length > 500 ? `<tr><td colspan="14" style="color:#94a3b8;">…외 ${(filtered.length-500).toLocaleString()}건 더 있음 (필터로 좁혀보세요)</td></tr>` : '');
         }
 
-        // [신규] 확정량 칸을 수정하면 시각적으로 "변경됨" 표시(저장 전까지)
-        function markHomeConfDirty(inputEl) {
+        // [신규] 확정량(개) 입력 → pack 정보로 확정량(kg) 자동 계산해서 같은 행에 채움
+        function handleConfirmEaChange(inputEl) {
+            markConfirmDirty(inputEl);
+            const idx = Number(inputEl.dataset.idx);
+            const rec = (window.__confirmTableRows || [])[idx];
+            if (!rec) return;
+            const raw = inputEl.value.trim();
+            const val = raw === '' ? null : parseFloat(raw);
+            const packInfo = window.productInfoMap && window.productInfoMap[rec.name];
+            const kgInput = inputEl.closest('tr').querySelector('.confirm-kg-input');
+            if (val !== null && !isNaN(val) && packInfo && packInfo.pack && kgInput.dataset.dirty !== '1') {
+                kgInput.value = Math.round(val * packInfo.pack * 100) / 100;
+            }
+        }
+        // [신규] 확정량(kg) 입력 → pack 정보로 확정량(개) 자동 계산해서 같은 행에 채움
+        function handleConfirmKgChange(inputEl) {
+            markConfirmDirty(inputEl);
+            const idx = Number(inputEl.dataset.idx);
+            const rec = (window.__confirmTableRows || [])[idx];
+            if (!rec) return;
+            const raw = inputEl.value.trim();
+            const val = raw === '' ? null : parseFloat(raw);
+            const packInfo = window.productInfoMap && window.productInfoMap[rec.name];
+            const eaInput = inputEl.closest('tr').querySelector('.confirm-ea-input');
+            if (val !== null && !isNaN(val) && packInfo && packInfo.pack && eaInput.dataset.dirty !== '1') {
+                eaInput.value = Math.round(val / packInfo.pack);
+            }
+        }
+
+        function markConfirmDirty(inputEl) {
             inputEl.style.background = '#fef9c3';
             inputEl.style.borderColor = '#f59e0b';
             inputEl.dataset.dirty = '1';
         }
 
-        // [신규] 홈 탭에서 직접 입력한 확정량을 구글시트 '데이터' 탭에 반영.
+        // [신규] 확정량 입력 탭에서 직접 입력한 확정량(개/kg)을 구글시트 '데이터' 탭에 반영.
         // ※ 이 기능이 동작하려면 Apps Script 웹앱에 action=updateConfirmed 처리가 추가돼 있어야 합니다.
-        async function saveHomeConfirmedQuantities() {
+        async function saveConfirmedQuantities() {
             const url = getConfirmUrl(); if (!url) return;
-            const rows = window.__homeTableRows || [];
-            const inputs = document.querySelectorAll('.home-conf-input[data-dirty="1"]');
-            if (inputs.length === 0) { alert('변경된 확정량이 없습니다. 칸에 값을 입력한 뒤 다시 눌러주세요.'); return; }
+            const rows = window.__confirmTableRows || [];
+            const dirtyRowIndices = new Set();
+            document.querySelectorAll('.confirm-ea-input[data-dirty="1"], .confirm-kg-input[data-dirty="1"]').forEach(inp => dirtyRowIndices.add(Number(inp.dataset.idx)));
+            if (dirtyRowIndices.size === 0) { alert('변경된 확정량이 없습니다. 칸에 값을 입력한 뒤 다시 눌러주세요.'); return; }
 
             const updates = [];
-            inputs.forEach(inp => {
-                const idx = Number(inp.dataset.idx);
+            dirtyRowIndices.forEach(idx => {
                 const rec = rows[idx];
                 if (!rec) return;
-                const raw = inp.value.trim();
-                const newVal = raw === '' ? null : parseFloat(raw);
-                if (raw !== '' && isNaN(newVal)) return;
-                const packInfo = window.productInfoMap && window.productInfoMap[rec.name];
-                const confEa = (newVal !== null && packInfo && packInfo.pack) ? Math.round(newVal / packInfo.pack) : '';
-                updates.push({ rec, inp, delDate: rec.delDate, mealDate: rec.mealDate, unit: rec.unit, name: rec.name, confQtyKg: newVal === null ? '' : newVal, confQty: confEa });
+                const tr = document.querySelector(`.confirm-ea-input[data-idx="${idx}"]`).closest('tr');
+                const eaInput = tr.querySelector('.confirm-ea-input');
+                const kgInput = tr.querySelector('.confirm-kg-input');
+                const eaRaw = eaInput.value.trim();
+                const kgRaw = kgInput.value.trim();
+                const confEa = eaRaw === '' ? '' : parseFloat(eaRaw);
+                const confKg = kgRaw === '' ? '' : parseFloat(kgRaw);
+                updates.push({ rec, eaInput, kgInput, delDate: rec.delDate, mealDate: rec.mealDate, unit: rec.unit, name: rec.name, confQty: confEa, confQtyKg: confKg });
             });
             if (updates.length === 0) { alert('반영할 값이 없습니다.'); return; }
             if (!confirm(`${updates.length}건의 확정량을 구글시트 '${HISTORY_SHEET_NAME}' 탭에 반영할까요?`)) return;
@@ -2061,11 +2176,15 @@
                 if (result.error) throw new Error(result.error);
 
                 updates.forEach(u => {
-                    u.rec.conf = (u.confQtyKg === '' ? null : u.confQtyKg);
+                    u.rec.confEa = (u.confQty === '' ? null : u.confQty);
+                    u.rec.confKg = (u.confQtyKg === '' ? null : u.confQtyKg);
+                    // 계산엔진이 쓰는 kg 기준 conf 필드도 함께 갱신 (안전재고/오차율 계산 일관성 유지)
+                    if (u.rec.confKg !== null) u.rec.conf = u.rec.confKg;
                     u.rec.rate = (u.rec.plan !== null && u.rec.plan !== 0 && u.rec.conf !== null) ? ((u.rec.conf - u.rec.plan) / u.rec.plan) * 100 : null;
-                    u.inp.style.background = ''; u.inp.style.borderColor = '#cbd5e1'; delete u.inp.dataset.dirty;
+                    u.eaInput.style.background = ''; u.eaInput.style.borderColor = '#cbd5e1'; delete u.eaInput.dataset.dirty;
+                    u.kgInput.style.background = ''; u.kgInput.style.borderColor = '#cbd5e1'; delete u.kgInput.dataset.dirty;
                 });
-                saveToDB('dbData', dbData, function() { renderHomeDeliveryTable(); updateDashboard(); });
+                saveToDB('dbData', dbData, function() { renderConfirmTable(); updateDashboard(); });
 
                 const notMatched = (result.results || []).filter(r => !r.updated);
                 let msg = `✅ 확정량 ${updates.length}건 저장 완료!`;
