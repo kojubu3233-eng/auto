@@ -99,6 +99,14 @@
 
         .grid-select-col { width: 26px; }
         select#gridYear, select#gridMonth { font-weight: bold; }
+
+        /* [신규] 확정량 입력 탭 - 구분/부대 다중선택 드롭다운 */
+        .ms-wrap { position: relative; display: inline-block; }
+        .ms-btn { border: 1px solid #cbd5e1; background: #fff; padding: 8px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap; color: #1e293b; }
+        .ms-btn:hover { background: #f8fafc; }
+        .ms-panel { position: absolute; z-index: 60; top: 100%; left: 0; margin-top: 2px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.12); max-height: 240px; overflow-y: auto; min-width: 170px; padding: 4px 0; }
+        .ms-panel label { display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+        .ms-panel label:hover { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -379,27 +387,32 @@
             <div style="font-size:11px; color:#a16207; background:#fef9c3; border:1px solid #fde68a; border-radius:6px; padding:6px 10px; margin-bottom:8px;">✏️ 확정량(개) 또는 확정량(kg) 둘 중 하나만 입력하면, 품목정보에 포장단위가 등록돼 있는 경우 나머지 하나가 자동 계산됩니다.</div>
             <div class="controls-row">
                 <input type="month" id="confirmMonth" onchange="renderConfirmTable()">
-                <select id="confirmDateBasis" onchange="renderConfirmTable()">
-                    <option value="del">납품일 기준</option>
-                    <option value="meal">급식일 기준</option>
-                </select>
-                <select id="confirmFilterCat" onchange="renderConfirmTable()"><option value="ALL">구분 전체</option></select>
-                <select id="confirmFilterUnit" onchange="renderConfirmTable()"><option value="ALL">부대 전체</option></select>
+                <input type="date" id="confirmFilterDelDate" onchange="renderConfirmTable()" title="특정 납품일만 보기(선택, 비워두면 월 전체)">
+                <div class="ms-wrap" id="confirmCatWrap">
+                    <button type="button" class="ms-btn" onclick="toggleMs('confirmCatPanel')">구분 전체 ▾</button>
+                    <div class="ms-panel" id="confirmCatPanel" style="display:none;"></div>
+                </div>
+                <div class="ms-wrap" id="confirmUnitWrap">
+                    <button type="button" class="ms-btn" onclick="toggleMs('confirmUnitPanel')">부대 전체 ▾</button>
+                    <div class="ms-panel" id="confirmUnitPanel" style="display:none;"></div>
+                </div>
                 <input type="text" id="confirmFilterName" placeholder="품명 검색..." onkeyup="renderConfirmTable()" style="flex:1; min-width:120px;">
             </div>
             <div class="table-wrapper" style="max-height:560px;">
                 <table class="responsive-table" id="confirmTable">
                     <thead>
                         <tr>
-                            <th>납품일</th><th>급식일</th><th>구분</th><th>품명</th>
+                            <th>납품일</th><th>구분</th><th>품명</th>
                             <th>예정량(개)</th><th>예정량(kg)</th>
+                            <th>급식일</th>
                             <th>확정량(개) ✏️</th><th>확정량(kg) ✏️</th>
+                            <th>부대</th>
                             <th>매출계획</th><th>매출</th>
                             <th>납품요구</th><th>검사검수</th><th>대금청구</th>
                             <th>오차율</th>
                         </tr>
                     </thead>
-                    <tbody id="confirmTableBody"><tr><td colspan="14">새로고침을 눌러 불러오세요.</td></tr></tbody>
+                    <tbody id="confirmTableBody"><tr><td colspan="15">새로고침을 눌러 불러오세요.</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -2028,47 +2041,81 @@
             renderConfirmTable();
         }
 
+        // [신규] 구분/부대 다중선택 드롭다운
+        window.__confirmCatSelected = new Set(); // 비어있으면 "전체"
+        window.__confirmUnitSelected = new Set();
+
+        function toggleMs(panelId) {
+            document.querySelectorAll('.ms-panel').forEach(p => { if (p.id !== panelId) p.style.display = 'none'; });
+            const panel = document.getElementById(panelId);
+            if (panel) panel.style.display = (panel.style.display === 'none') ? '' : 'none';
+        }
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.ms-wrap')) {
+                document.querySelectorAll('.ms-panel').forEach(p => p.style.display = 'none');
+            }
+        });
+
+        function renderMsPanel(panelId, wrapId, options, selectedSet, label) {
+            const panel = document.getElementById(panelId);
+            if (!panel) return;
+            panel.innerHTML = options.map(opt => `
+                <label><input type="checkbox" value="${String(opt).replace(/"/g,'&quot;')}" ${selectedSet.has(opt) ? 'checked' : ''} onchange="onMsCheck('${panelId}','${wrapId}')"> ${opt}</label>
+            `).join('');
+            updateMsButtonLabel(wrapId, label, selectedSet, options.length);
+        }
+
+        function onMsCheck(panelId, wrapId) {
+            const panel = document.getElementById(panelId);
+            const selectedSet = wrapId === 'confirmCatWrap' ? window.__confirmCatSelected : window.__confirmUnitSelected;
+            const label = wrapId === 'confirmCatWrap' ? '구분' : '부대';
+            selectedSet.clear();
+            panel.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => selectedSet.add(chk.value));
+            const totalOptions = panel.querySelectorAll('input[type="checkbox"]').length;
+            updateMsButtonLabel(wrapId, label, selectedSet, totalOptions);
+            renderConfirmTable();
+        }
+
+        function updateMsButtonLabel(wrapId, label, selectedSet, totalCount) {
+            const btn = document.querySelector('#' + wrapId + ' .ms-btn');
+            if (!btn) return;
+            if (selectedSet.size === 0 || selectedSet.size === totalCount) btn.innerText = label + ' 전체 ▾';
+            else btn.innerText = `${label} ${selectedSet.size}개 선택 ▾`;
+        }
+
         function populateConfirmFilterOptions() {
             const cats = [...new Set(dbData.map(d => d.cat))].sort();
             const units = [...new Set(dbData.map(d => d.unit))].sort();
-            const fillSel = (id, arr, label) => {
-                const el = document.getElementById(id);
-                const cur = el.value;
-                el.innerHTML = `<option value="ALL">${label} 전체</option>`;
-                arr.forEach(v => el.add(new Option(v, v)));
-                if ([...el.options].some(o => o.value === cur)) el.value = cur;
-            };
-            fillSel('confirmFilterCat', cats, '구분');
-            fillSel('confirmFilterUnit', units, '부대');
+            // 데이터가 갱신되며 목록에서 사라진 선택값은 정리
+            window.__confirmCatSelected.forEach(v => { if (!cats.includes(v)) window.__confirmCatSelected.delete(v); });
+            window.__confirmUnitSelected.forEach(v => { if (!units.includes(v)) window.__confirmUnitSelected.delete(v); });
+            renderMsPanel('confirmCatPanel', 'confirmCatWrap', cats, window.__confirmCatSelected, '구분');
+            renderMsPanel('confirmUnitPanel', 'confirmUnitWrap', units, window.__confirmUnitSelected, '부대');
         }
 
         function renderConfirmTable() {
             const tbody = document.getElementById('confirmTableBody');
             if (!tbody) return;
-            if (dbData.length === 0) { tbody.innerHTML = '<tr><td colspan="14">새로고침을 눌러 불러오세요.</td></tr>'; return; }
+            if (dbData.length === 0) { tbody.innerHTML = '<tr><td colspan="15">새로고침을 눌러 불러오세요.</td></tr>'; return; }
 
             const monthVal = document.getElementById('confirmMonth').value; // 'yyyy-mm'
-            const basis = document.getElementById('confirmDateBasis').value; // 'del' | 'meal'
-            const cat = document.getElementById('confirmFilterCat').value;
-            const unit = document.getElementById('confirmFilterUnit').value;
+            const delDateVal = document.getElementById('confirmFilterDelDate').value; // 'yyyy-mm-dd' (선택)
+            const catSet = window.__confirmCatSelected;
+            const unitSet = window.__confirmUnitSelected;
             const nameKw = (document.getElementById('confirmFilterName').value || '').trim().toLowerCase();
 
             let filtered = dbData.filter(d => {
-                const dateField = basis === 'meal' ? d.mealDate : d.delDate;
-                const passMonth = !monthVal || (dateField && String(dateField).startsWith(monthVal));
-                const passCat = cat === 'ALL' || d.cat === cat;
-                const passUnit = unit === 'ALL' || d.unit === unit;
+                const passMonth = !monthVal || (d.delDate && String(d.delDate).startsWith(monthVal));
+                const passDelDate = !delDateVal || d.delDate === delDateVal;
+                const passCat = catSet.size === 0 || catSet.has(d.cat);
+                const passUnit = unitSet.size === 0 || unitSet.has(d.unit);
                 const passName = !nameKw || (d.name || '').toLowerCase().includes(nameKw);
-                return passMonth && passCat && passUnit && passName;
+                return passMonth && passDelDate && passCat && passUnit && passName;
             });
 
-            filtered.sort((a, b) => {
-                const da = basis === 'meal' ? a.mealDate : a.delDate;
-                const db_ = basis === 'meal' ? b.mealDate : b.delDate;
-                return String(da).localeCompare(String(db_));
-            });
+            filtered.sort((a, b) => String(a.delDate).localeCompare(String(b.delDate)));
 
-            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="14">해당 조건의 납품계획이 없습니다.</td></tr>'; window.__confirmTableRows = []; return; }
+            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="15">해당 조건의 납품계획이 없습니다.</td></tr>'; window.__confirmTableRows = []; return; }
 
             const shown = filtered.slice(0, 500);
             window.__confirmTableRows = shown;
@@ -2084,13 +2131,14 @@
                 const confKgVal = (d.confKg !== null && d.confKg !== undefined) ? d.confKg : '';
                 return `<tr>
                     <td data-label="납품일">${d.delDate || '-'}</td>
-                    <td data-label="급식일">${d.mealDate || '-'}</td>
                     <td data-label="구분">${d.cat || '-'}</td>
                     <td data-label="품명" style="font-weight:600;">${d.name}</td>
                     <td data-label="예정량(개)">${numTxt(d.planEa)}</td>
                     <td data-label="예정량(kg)">${numTxt(d.planKg)}</td>
+                    <td data-label="급식일">${d.mealDate || '-'}</td>
                     <td data-label="확정량(개)"><input type="number" step="any" class="confirm-ea-input" data-idx="${idx}" value="${confEaVal}" placeholder="-" style="width:72px; padding:4px; text-align:right; border:1px solid #cbd5e1; border-radius:4px;" onchange="handleConfirmEaChange(this)"></td>
                     <td data-label="확정량(kg)"><input type="number" step="any" class="confirm-kg-input" data-idx="${idx}" value="${confKgVal}" placeholder="-" style="width:72px; padding:4px; text-align:right; border:1px solid #cbd5e1; border-radius:4px;" onchange="handleConfirmKgChange(this)"></td>
+                    <td data-label="부대">${d.unit || '-'}</td>
                     <td data-label="매출계획">${planSalesTxt}</td>
                     <td data-label="매출">${confSalesTxt}</td>
                     <td data-label="납품요구">${d.reqDate || '-'}</td>
@@ -2098,7 +2146,7 @@
                     <td data-label="대금청구">${d.paymentDate || '-'}</td>
                     <td data-label="오차율" style="font-weight:bold; color:${rateColor};">${rateTxt}</td>
                 </tr>`;
-            }).join('') + (filtered.length > 500 ? `<tr><td colspan="14" style="color:#94a3b8;">…외 ${(filtered.length-500).toLocaleString()}건 더 있음 (필터로 좁혀보세요)</td></tr>` : '');
+            }).join('') + (filtered.length > 500 ? `<tr><td colspan="15" style="color:#94a3b8;">…외 ${(filtered.length-500).toLocaleString()}건 더 있음 (필터로 좁혀보세요)</td></tr>` : '');
         }
 
         // [신규] 확정량(개) 입력 → pack 정보로 확정량(kg) 자동 계산해서 같은 행에 채움
