@@ -198,27 +198,6 @@
                 </div>
             </div>
         </div>
-
-        <div class="panel">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <h2 style="font-size:15px; color:#7c3aed;">📸 거래명세서 업로드 (자동 재고 반영)</h2>
-            </div>
-            <div style="font-size:11px; color:#64748b; margin-bottom:10px;">물류팀에서 받은 거래명세서 사진을 올리면 AI가 품명·수량을 읽어냅니다. 읽은 내용은 아래에서 확인/수정한 뒤 "재고에 반영"을 눌러야 실제로 저장됩니다(자동으로 바로 반영되지 않음).</div>
-            <input type="file" id="deliverySlipInput" accept="image/*" capture="environment" onchange="handleDeliverySlipUpload(event)">
-            <div id="deliverySlipStatus" style="font-size:12px; color:#64748b; margin-top:8px;"></div>
-            <div id="deliverySlipReviewWrap" style="display:none; margin-top:12px;">
-                <div class="table-wrapper" style="max-height:320px;">
-                    <table id="deliverySlipReviewTable">
-                        <thead><tr><th>품명</th><th>수량</th><th>단위</th><th>업체</th><th></th></tr></thead>
-                        <tbody id="deliverySlipReviewBody"></tbody>
-                    </table>
-                </div>
-                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                    <button class="btn btn-gray" onclick="addDeliverySlipRow()">+ 행 추가</button>
-                    <button class="btn btn-success" onclick="applyDeliverySlipToLedger()">✅ 재고수불대장에 반영</button>
-                </div>
-            </div>
-        </div>
     </div>
     <!-- /tabContentHome -->
 
@@ -401,18 +380,9 @@
             <div class="table-wrapper" style="max-height:560px;">
                 <table class="responsive-table" id="confirmTable">
                     <thead>
-                        <tr>
-                            <th>납품일</th><th>구분</th><th>품명</th>
-                            <th>예정량(개)</th><th>예정량(kg)</th>
-                            <th>급식일</th>
-                            <th>확정량(개) ✏️</th><th>확정량(kg) ✏️</th>
-                            <th>부대</th>
-                            <th>매출계획</th><th>매출</th>
-                            <th>납품요구</th><th>검사검수</th><th>대금청구</th>
-                            <th>오차율</th>
-                        </tr>
+                        <tr id="confirmTableHeaderRow"></tr>
                     </thead>
-                    <tbody id="confirmTableBody"><tr><td colspan="15">새로고침을 눌러 불러오세요.</td></tr></tbody>
+                    <tbody id="confirmTableBody"><tr><td colspan="17">새로고침을 눌러 불러오세요.</td></tr></tbody>
                 </table>
             </div>
         </div>
@@ -420,6 +390,27 @@
     <!-- /tabContentConfirm -->
 
     <div id="tabContentInventory" style="display:none;">
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <h2 style="font-size:15px; color:#7c3aed;">📸 거래명세서 업로드 (자동 재고 반영)</h2>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:10px;">물류팀에서 받은 거래명세서 사진을 올리면 AI가 품명·수량을 읽어냅니다. 읽은 내용은 아래에서 확인/수정한 뒤 "재고에 반영"을 눌러야 실제로 저장됩니다(자동으로 바로 반영되지 않음).</div>
+            <input type="file" id="deliverySlipInput" accept="image/*" capture="environment" onchange="handleDeliverySlipUpload(event)">
+            <div id="deliverySlipStatus" style="font-size:12px; color:#64748b; margin-top:8px;"></div>
+            <div id="deliverySlipReviewWrap" style="display:none; margin-top:12px;">
+                <div class="table-wrapper" style="max-height:320px;">
+                    <table id="deliverySlipReviewTable">
+                        <thead><tr><th>품명</th><th>수량</th><th>단위</th><th>업체</th><th></th></tr></thead>
+                        <tbody id="deliverySlipReviewBody"></tbody>
+                    </table>
+                </div>
+                <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-gray" onclick="addDeliverySlipRow()">+ 행 추가</button>
+                    <button class="btn btn-success" onclick="applyDeliverySlipToLedger()">✅ 재고수불대장에 반영</button>
+                </div>
+            </div>
+        </div>
+
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
                 <h2 style="font-size: 15px; color:#1e3a8a;">📦 재고 현황 (재고수불대장 실시간 조회)</h2>
@@ -1916,7 +1907,8 @@
                 planKg: headers.findIndex(h => h.includes('예정') && h.toLowerCase().includes('kg')),
                 confEa: headers.findIndex(h => h.includes('확정') && h.includes('개')),
                 confKg: headers.findIndex(h => h.includes('확정') && h.toLowerCase().includes('kg')),
-                reqDate: headers.findIndex(h => h.includes('납품요구')),
+                unitType: headers.findIndex(h => h.includes('단위')),
+                reqDate: headers.findIndex(h => h.includes('나라장터') || h.includes('납품요구')),
                 inspectDate: headers.findIndex(h => h.includes('검사검수')),
                 paymentDate: headers.findIndex(h => h.includes('대금청구'))
             };
@@ -1924,9 +1916,11 @@
         function readExtraColumns_(row, extraMap) {
             const num = (idx) => (idx !== -1 && row[idx] !== undefined && row[idx] !== '' && !isNaN(parseFloat(String(row[idx]).replace(/,/g,'')))) ? parseFloat(String(row[idx]).replace(/,/g,'')) : null;
             const dt = (idx) => (idx !== -1 && row[idx] !== undefined && row[idx] !== '') ? parseExcelDate(row[idx]) : '';
+            const txt = (idx) => (idx !== -1 && row[idx] !== undefined && row[idx] !== '') ? String(row[idx]).trim() : '';
             return {
                 planEa: num(extraMap.planEa), planKg: num(extraMap.planKg),
                 confEa: num(extraMap.confEa), confKg: num(extraMap.confKg),
+                unitType: txt(extraMap.unitType),
                 reqDate: dt(extraMap.reqDate), inspectDate: dt(extraMap.inspectDate), paymentDate: dt(extraMap.paymentDate)
             };
         }
@@ -2003,6 +1997,7 @@
                     name: nameVal, cat: catVal, unit: unitVal,
                     plan: p, conf: c,
                     planEa: extra.planEa, planKg: extra.planKg, confEa: extra.confEa, confKg: extra.confKg,
+                    unitType: extra.unitType,
                     reqDate: extra.reqDate, inspectDate: extra.inspectDate, paymentDate: extra.paymentDate,
                     price: (priceVal !== null && !isNaN(priceVal)) ? priceVal : null,
                     planSales: (planSalesVal !== null && !isNaN(planSalesVal)) ? planSalesVal : null,
@@ -2093,10 +2088,51 @@
             renderMsPanel('confirmUnitPanel', 'confirmUnitWrap', units, window.__confirmUnitSelected, '부대');
         }
 
+        // [신규] 확정량 입력 표 컬럼 정의 (헤더 클릭 정렬용). key는 dbData 레코드 필드명과 매칭.
+        const CONFIRM_COLUMNS = [
+            { key: 'delDate',    label: '납품일' },
+            { key: 'cat',        label: '구분' },
+            { key: 'name',       label: '품명' },
+            { key: 'unitType',   label: '단위' },
+            { key: 'planEa',     label: '예정량(개)' },
+            { key: 'planKg',     label: '예정량(kg)' },
+            { key: 'confEa',     label: '확정량(개) ✏️', noSort: true },
+            { key: 'confKg',     label: '확정량(kg) ✏️', noSort: true },
+            { key: 'mealDate',   label: '급식일' },
+            { key: 'unit',       label: '부대' },
+            { key: 'price',      label: '판매단가' },
+            { key: 'planSales',  label: '매출계획' },
+            { key: 'confSales',  label: '매출' },
+            { key: 'reqDate',    label: '나라장터' },
+            { key: 'inspectDate',label: '검사검수' },
+            { key: 'paymentDate',label: '대금청구' },
+            { key: 'rate',       label: '오차율' }
+        ];
+        window.__confirmSortField = 'delDate';
+        window.__confirmSortDir = 1; // 1=오름차순, -1=내림차순
+
+        function renderConfirmTableHeader() {
+            const headerRow = document.getElementById('confirmTableHeaderRow');
+            if (!headerRow) return;
+            headerRow.innerHTML = CONFIRM_COLUMNS.map(col => {
+                if (col.noSort) return `<th>${col.label}</th>`;
+                const arrow = window.__confirmSortField === col.key ? (window.__confirmSortDir === 1 ? ' ▲' : ' ▼') : '';
+                return `<th style="cursor:pointer; user-select:none;" onclick="sortConfirmBy('${col.key}')" title="클릭하면 이 컬럼 기준으로 정렬됩니다">${col.label}${arrow}</th>`;
+            }).join('');
+        }
+
+        function sortConfirmBy(field) {
+            if (window.__confirmSortField === field) window.__confirmSortDir *= -1;
+            else { window.__confirmSortField = field; window.__confirmSortDir = 1; }
+            renderConfirmTable();
+        }
+
         function renderConfirmTable() {
+            renderConfirmTableHeader();
             const tbody = document.getElementById('confirmTableBody');
             if (!tbody) return;
-            if (dbData.length === 0) { tbody.innerHTML = '<tr><td colspan="15">새로고침을 눌러 불러오세요.</td></tr>'; return; }
+            const COLSPAN = CONFIRM_COLUMNS.length;
+            if (dbData.length === 0) { tbody.innerHTML = `<tr><td colspan="${COLSPAN}">새로고침을 눌러 불러오세요.</td></tr>`; return; }
 
             const monthVal = document.getElementById('confirmMonth').value; // 'yyyy-mm'
             const delDateVal = document.getElementById('confirmFilterDelDate').value; // 'yyyy-mm-dd' (선택)
@@ -2113,9 +2149,16 @@
                 return passMonth && passDelDate && passCat && passUnit && passName;
             });
 
-            filtered.sort((a, b) => String(a.delDate).localeCompare(String(b.delDate)));
+            const sf = window.__confirmSortField, sd = window.__confirmSortDir;
+            filtered.sort((a, b) => {
+                let va = a[sf], vb = b[sf];
+                if (va === null || va === undefined) va = '';
+                if (vb === null || vb === undefined) vb = '';
+                if (typeof va === 'number' || typeof vb === 'number') return (Number(va) - Number(vb)) * sd;
+                return String(va).localeCompare(String(vb)) * sd;
+            });
 
-            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="15">해당 조건의 납품계획이 없습니다.</td></tr>'; window.__confirmTableRows = []; return; }
+            if (filtered.length === 0) { tbody.innerHTML = `<tr><td colspan="${COLSPAN}">해당 조건의 납품계획이 없습니다.</td></tr>`; window.__confirmTableRows = []; return; }
 
             const shown = filtered.slice(0, 500);
             window.__confirmTableRows = shown;
@@ -2125,6 +2168,7 @@
             tbody.innerHTML = shown.map((d, idx) => {
                 const rateTxt = d.rate === null ? '<span style="color:#94a3b8;">-</span>' : `${d.rate>0?'+':''}${Math.round(d.rate)}%`;
                 const rateColor = d.rate === null ? '#94a3b8' : (d.rate>0?'#ea580c':'#2563eb');
+                const priceTxt = (d.price !== null && d.price !== undefined) ? Math.round(d.price).toLocaleString() : '-';
                 const planSalesTxt = d.planSales !== null && d.planSales !== undefined ? Math.round(d.planSales).toLocaleString() : '-';
                 const confSalesTxt = d.confSales !== null && d.confSales !== undefined ? Math.round(d.confSales).toLocaleString() : '-';
                 const confEaVal = (d.confEa !== null && d.confEa !== undefined) ? d.confEa : '';
@@ -2133,20 +2177,22 @@
                     <td data-label="납품일">${d.delDate || '-'}</td>
                     <td data-label="구분">${d.cat || '-'}</td>
                     <td data-label="품명" style="font-weight:600;">${d.name}</td>
+                    <td data-label="단위">${d.unitType || '-'}</td>
                     <td data-label="예정량(개)">${numTxt(d.planEa)}</td>
                     <td data-label="예정량(kg)">${numTxt(d.planKg)}</td>
-                    <td data-label="급식일">${d.mealDate || '-'}</td>
                     <td data-label="확정량(개)"><input type="number" step="any" class="confirm-ea-input" data-idx="${idx}" value="${confEaVal}" placeholder="-" style="width:72px; padding:4px; text-align:right; border:1px solid #cbd5e1; border-radius:4px;" onchange="handleConfirmEaChange(this)"></td>
                     <td data-label="확정량(kg)"><input type="number" step="any" class="confirm-kg-input" data-idx="${idx}" value="${confKgVal}" placeholder="-" style="width:72px; padding:4px; text-align:right; border:1px solid #cbd5e1; border-radius:4px;" onchange="handleConfirmKgChange(this)"></td>
+                    <td data-label="급식일">${d.mealDate || '-'}</td>
                     <td data-label="부대">${d.unit || '-'}</td>
+                    <td data-label="판매단가">${priceTxt}</td>
                     <td data-label="매출계획">${planSalesTxt}</td>
                     <td data-label="매출">${confSalesTxt}</td>
-                    <td data-label="납품요구">${d.reqDate || '-'}</td>
+                    <td data-label="나라장터">${d.reqDate || '-'}</td>
                     <td data-label="검사검수">${d.inspectDate || '-'}</td>
                     <td data-label="대금청구">${d.paymentDate || '-'}</td>
                     <td data-label="오차율" style="font-weight:bold; color:${rateColor};">${rateTxt}</td>
                 </tr>`;
-            }).join('') + (filtered.length > 500 ? `<tr><td colspan="15" style="color:#94a3b8;">…외 ${(filtered.length-500).toLocaleString()}건 더 있음 (필터로 좁혀보세요)</td></tr>` : '');
+            }).join('') + (filtered.length > 500 ? `<tr><td colspan="${COLSPAN}" style="color:#94a3b8;">…외 ${(filtered.length-500).toLocaleString()}건 더 있음 (필터로 좁혀보세요)</td></tr>` : '');
         }
 
         // [신규] 확정량(개) 입력 → pack 정보로 확정량(kg) 자동 계산해서 같은 행에 채움
