@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스마트 발주 시스템 Pro v10.0 (홈 대시보드)</title>
+    <title>자동화시스템</title>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- [신규] 구글시트 웹앱 URL 기본값. Apps Script를 재배포해 주소가 바뀌면
@@ -112,7 +112,7 @@
 <body>
 
     <div class="panel header">
-        <h1 style="font-size: 18px;">🗄️ 스마트 발주 시스템 Pro v10.0</h1>
+        <h1 style="font-size: 18px;">🗄️ 자동화시스템</h1>
     </div>
 
 
@@ -331,8 +331,11 @@
             <div id="confirmStatusMsg" style="font-size:12px; color:#64748b; margin-bottom:8px;">새로고침을 눌러 구글시트 데이터를 불러오세요.</div>
             <div style="font-size:11px; color:#a16207; background:#fef9c3; border:1px solid #fde68a; border-radius:6px; padding:6px 10px; margin-bottom:8px;">✏️ 확정량(개) 또는 확정량(kg) 둘 중 하나만 입력하면, 품목정보에 포장단위가 등록돼 있는 경우 나머지 하나가 자동 계산됩니다.</div>
             <div class="controls-row">
-                <input type="month" id="confirmMonth" onchange="renderConfirmTable()">
-                <input type="date" id="confirmFilterDelDate" onchange="renderConfirmTable()" title="특정 납품일만 보기(선택, 비워두면 월 전체)">
+                <input type="month" id="confirmMonth" onchange="onConfirmMonthChange()">
+                <div class="ms-wrap" id="confirmDelDateWrap">
+                    <button type="button" class="ms-btn" onclick="toggleMs('confirmDelDatePanel')">납품일 전체 ▾</button>
+                    <div class="ms-panel" id="confirmDelDatePanel" style="display:none;"></div>
+                </div>
                 <div class="ms-wrap" id="confirmCatWrap">
                     <button type="button" class="ms-btn" onclick="toggleMs('confirmCatPanel')">구분 전체 ▾</button>
                     <div class="ms-panel" id="confirmCatPanel" style="display:none;"></div>
@@ -1809,13 +1812,25 @@
         // loadFromGoogleSheet()와 동일 로직이지만 alert 없이 조용히 처리(홈 자동새로고침용)
         async function loadFromGoogleSheetSilent() {
             const url = getGSheetUrlSilent(); if (!url) return;
-            const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=read&sheet=' + encodeURIComponent(HISTORY_SHEET_NAME));
-            const rawText = await res.text();
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const json = JSON.parse(rawText);
-            const rowsArr = extractRowsArray(json);
-            if (!rowsArr) throw new Error('데이터 형식을 인식하지 못했습니다.');
-            ingestRowsSilent(rowsArr);
+            // [수정] '데이터'(확정 완료된 과거 실적) + 'DB_Master'(예정량 입력 탭에서 방금 저장한
+            // 아직 미확정/미이관 최신 건) 둘 다 읽어서 합친다. 이렇게 해야 당월처럼 아직
+            // '데이터' 탭으로 옮겨지지 않은 최신 계획도 확정량 입력 탭에서 바로 보인다.
+            const sheetsToRead = [HISTORY_SHEET_NAME, WRITE_SHEET_NAME];
+            const errors = [];
+            for (const sheetName of sheetsToRead) {
+                try {
+                    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=read&sheet=' + encodeURIComponent(sheetName));
+                    const rawText = await res.text();
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const json = JSON.parse(rawText);
+                    const rowsArr = extractRowsArray(json);
+                    if (!rowsArr) throw new Error('데이터 형식을 인식하지 못했습니다.');
+                    ingestRowsSilent(rowsArr);
+                } catch (err) {
+                    errors.push(`${sheetName}: ${err.message}`);
+                }
+            }
+            if (errors.length === sheetsToRead.length) throw new Error(errors.join(' / '));
         }
 
         // [신규] '데이터' 시트 헤더에서 확정량 입력 탭에 필요한 추가 컬럼(예정량/확정량 개·kg 각각,
@@ -1967,6 +1982,13 @@
         // [신규] 구분/부대 다중선택 드롭다운
         window.__confirmCatSelected = new Set(); // 비어있으면 "전체"
         window.__confirmUnitSelected = new Set();
+        window.__confirmDelDateSelected = new Set();
+        // [신규] 다중선택 필터 wrapId → {선택집합, 라벨} 매핑 (새 필터 추가할 때 여기만 늘리면 됨)
+        const MS_FILTER_REGISTRY = {
+            confirmCatWrap:     { getSet: () => window.__confirmCatSelected,     label: '구분' },
+            confirmUnitWrap:    { getSet: () => window.__confirmUnitSelected,    label: '부대' },
+            confirmDelDateWrap: { getSet: () => window.__confirmDelDateSelected, label: '납품일' }
+        };
 
         function toggleMs(panelId) {
             document.querySelectorAll('.ms-panel').forEach(p => { if (p.id !== panelId) p.style.display = 'none'; });
@@ -1990,12 +2012,13 @@
 
         function onMsCheck(panelId, wrapId) {
             const panel = document.getElementById(panelId);
-            const selectedSet = wrapId === 'confirmCatWrap' ? window.__confirmCatSelected : window.__confirmUnitSelected;
-            const label = wrapId === 'confirmCatWrap' ? '구분' : '부대';
+            const reg = MS_FILTER_REGISTRY[wrapId];
+            if (!reg) return;
+            const selectedSet = reg.getSet();
             selectedSet.clear();
             panel.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => selectedSet.add(chk.value));
             const totalOptions = panel.querySelectorAll('input[type="checkbox"]').length;
-            updateMsButtonLabel(wrapId, label, selectedSet, totalOptions);
+            updateMsButtonLabel(wrapId, reg.label, selectedSet, totalOptions);
             renderConfirmTable();
         }
 
@@ -2006,6 +2029,12 @@
             else btn.innerText = `${label} ${selectedSet.size}개 선택 ▾`;
         }
 
+        // [신규] 월 선택이 바뀌면 납품일 다중선택 목록도 그 달 날짜들로 다시 채운다
+        function onConfirmMonthChange() {
+            populateConfirmFilterOptions();
+            renderConfirmTable();
+        }
+
         function populateConfirmFilterOptions() {
             const cats = [...new Set(dbData.map(d => d.cat))].sort();
             const units = [...new Set(dbData.map(d => d.unit))].sort();
@@ -2014,6 +2043,13 @@
             window.__confirmUnitSelected.forEach(v => { if (!units.includes(v)) window.__confirmUnitSelected.delete(v); });
             renderMsPanel('confirmCatPanel', 'confirmCatWrap', cats, window.__confirmCatSelected, '구분');
             renderMsPanel('confirmUnitPanel', 'confirmUnitWrap', units, window.__confirmUnitSelected, '부대');
+
+            // 납품일 목록: 선택된 월(있으면)로 좁혀서, 없으면 전체 dbData 기준으로 채운다
+            const monthVal = document.getElementById('confirmMonth') ? document.getElementById('confirmMonth').value : '';
+            const dateSource = monthVal ? dbData.filter(d => d.delDate && String(d.delDate).startsWith(monthVal)) : dbData;
+            const delDates = [...new Set(dateSource.map(d => d.delDate).filter(Boolean))].sort();
+            window.__confirmDelDateSelected.forEach(v => { if (!delDates.includes(v)) window.__confirmDelDateSelected.delete(v); });
+            renderMsPanel('confirmDelDatePanel', 'confirmDelDateWrap', delDates, window.__confirmDelDateSelected, '납품일');
         }
 
         // [신규] 확정량 입력 표 컬럼 정의 (헤더 클릭 정렬용). key는 dbData 레코드 필드명과 매칭.
@@ -2063,14 +2099,14 @@
             if (dbData.length === 0) { tbody.innerHTML = `<tr><td colspan="${COLSPAN}">새로고침을 눌러 불러오세요.</td></tr>`; return; }
 
             const monthVal = document.getElementById('confirmMonth').value; // 'yyyy-mm'
-            const delDateVal = document.getElementById('confirmFilterDelDate').value; // 'yyyy-mm-dd' (선택)
+            const delDateSet = window.__confirmDelDateSelected;
             const catSet = window.__confirmCatSelected;
             const unitSet = window.__confirmUnitSelected;
             const nameKw = (document.getElementById('confirmFilterName').value || '').trim().toLowerCase();
 
             let filtered = dbData.filter(d => {
                 const passMonth = !monthVal || (d.delDate && String(d.delDate).startsWith(monthVal));
-                const passDelDate = !delDateVal || d.delDate === delDateVal;
+                const passDelDate = delDateSet.size === 0 || delDateSet.has(d.delDate);
                 const passCat = catSet.size === 0 || catSet.has(d.cat);
                 const passUnit = unitSet.size === 0 || unitSet.has(d.unit);
                 const passName = !nameKw || (d.name || '').toLowerCase().includes(nameKw);
