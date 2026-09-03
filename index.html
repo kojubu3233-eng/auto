@@ -113,42 +113,8 @@
 
     <div class="panel header">
         <h1 style="font-size: 18px;">🗄️ 스마트 발주 시스템 Pro v10.0</h1>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="btn btn-gray" onclick="renormalizeExistingUnits()" title="기존에 누적된 데이터에도 부대명 정규화(공백/슬래시 통일 등)를 소급 적용합니다">🔧 부대명 재정규화</button>
-            <button class="btn btn-gray" style="background:#7c3aed;" onclick="reclassifyExistingHolidays()" title="공공데이터포털 특일정보 API로 조회한 실제 공휴일을 기존 누적 데이터에도 소급 적용합니다. 평일(토요일 포함)/일요일/공휴일 3가지로 정확히 재분류됩니다.">🗓️ 휴일 재분류(공휴일 API)</button>
-            <button class="btn btn-danger" onclick="clearData()">전체 데이터 초기화</button>
-        </div>
     </div>
 
-    <details class="panel" style="margin-bottom:10px; padding:10px 15px; background:#f8fafc;">
-        <summary style="cursor:pointer; font-weight:bold; color:#334155; font-size:13px;">⚙️ 구글시트 연동 설정 <span id="gsheetStatus" style="font-size:11px; font-weight:normal; color:#64748b; margin-left:6px;">미설정</span></summary>
-        <div style="font-size:11px; color:#64748b; margin-top:8px;">💡 아래 URL은 코드에 기본값이 이미 들어있어서 보통은 손댈 필요가 없습니다. 회사에서 Apps Script를 재배포해서 주소가 바뀐 경우에만, 여기서 새 URL을 입력하면 이 브라우저에 저장돼서 다음부터 계속 그 값을 씁니다.</div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px;">
-            <label style="font-weight:bold; color:#166534; font-size:12px; white-space:nowrap; width:190px;">🔗 예정량/확정량 웹앱 URL: <span id="gsheetStatus2" style="font-weight:normal; color:#64748b;"></span></label>
-            <input type="text" id="gsheetWebAppUrl" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetUrl()">
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap; width:190px;">📦 재고수불대장 웹앱 URL: <span id="gsheetLedgerStatus" style="font-weight:normal; color:#64748b;"></span></label>
-            <input type="text" id="gsheetLedgerUrl" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetLedgerUrl()">
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <label style="font-weight:bold; color:#a16207; font-size:12px; white-space:nowrap; width:190px;" title="비워두면 예정량/확정량 URL로 대신 전송됩니다(단, 그 경우 별도 코드 수정이 필요). 확정량저장_전용_새프로젝트.gs를 새 프로젝트로 배포한 URL을 넣으세요.">✏️ 확정량 저장 전용 URL(선택): <span id="gsheetConfirmStatus" style="font-weight:normal; color:#64748b;"></span></label>
-            <input type="text" id="gsheetConfirmUrl" placeholder="비워두면 예정량/확정량 URL 사용" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetConfirmUrl()">
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap; width:190px;" title="거래명세서_OCR_전용.gs를 새 프로젝트로 배포한 URL을 넣으세요.">📸 거래명세서 OCR 전용 URL(선택): <span id="gsheetOcrStatus" style="font-weight:normal; color:#64748b;"></span></label>
-            <input type="text" id="gsheetOcrUrl" placeholder="거래명세서 자동인식 기능을 쓰려면 필요" style="flex:1; min-width:280px; font-size:12px;" onchange="saveGSheetOcrUrl()">
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <label style="font-weight:bold; color:#7c3aed; font-size:12px; white-space:nowrap;" title="비워두면 전체 탭에서 자동 검색">📋 재고수불대장 시트명(선택):</label>
-            <input type="text" id="gsheetLedgerSheet" placeholder="비워두면 전체 탭 자동 검색" value="" style="width:260px; font-size:12px;" onchange="saveGSheetSheetNames()">
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
-            <button class="btn btn-gray" style="background:#0369a1; font-size:12px; padding:6px 10px;" onclick="syncUnitProductInfo()">🔄 부대·품목 정보 동기화</button>
-            <span id="unitProductSyncStatus" style="font-size:11px; color:#64748b;">미동기화</span>
-        </div>
-        <div style="font-size:11px; color:#64748b; margin-top:8px;">🚫 이상치 제외: "데이터" 시트 A열(고유ID)에 <b>제외</b>라고 입력해두면 그 행은 통계에서 자동 제외됩니다. (또는 아래 원본 로그에서 직접 체크)</div>
-    </details>
 
     <!-- [신규 v10] 탭 3개: 홈(기본) / 예정량·확정량 입력 / 재고 상세 -->
     <div class="tab-bar">
@@ -582,6 +548,10 @@
             if (cm) cm.value = `${thisYear}-${String(now.getMonth()+1).padStart(2,'0')}`;
         }
 
+        // [신규] 구글시트 웹앱 URL들을 더 이상 화면의 입력칸에서 읽지 않고, 이 전역 객체에서 바로 읽는다.
+        // config.js의 기본값을 쓰다가, 브라우저에 저장된 값(예: 예전에 직접 넣어둔 값)이 있으면 그걸 우선한다.
+        window.APP_URLS = { history: '', ledger: '', confirm: '', ocr: '', ledgerSheetHint: '' };
+
         window.onload = function() {
             initYearMonthSelectors();
             for(let i=0; i<10; i++) addGridRow(true);
@@ -594,17 +564,10 @@
                 loadFromDB('unitMemory', function(loadedUnit) { if (loadedUnit) unitMemory = loadedUnit; });
                 loadFromDB('holidayMap', function(v) { if (v) window.holidayMap = v; });
                 loadFromDB('holidayYears', function(v) { if (v) window.__holidayYearsLoaded = new Set(v); });
-                // [신규] 저장된 값이 없으면 config.js의 기본 URL을 자동으로 채운다.
-                // 즉 새 직원/새 브라우저에서 처음 열어도 URL을 입력할 필요가 없다.
+
                 loadFromDB('gsheetWebAppUrl', function(loadedUrl) {
-                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.HISTORY_WEBAPP_URL) || '';
-                    const finalUrl = loadedUrl || defaultUrl;
-                    if (finalUrl) {
-                        document.getElementById('gsheetWebAppUrl').value = finalUrl;
-                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
-                        document.getElementById('gsheetStatus').innerText = label;
-                        document.getElementById('gsheetStatus').style.color = '#16a34a';
-                        document.getElementById('gsheetStatus2').innerText = '(' + label + ')';
+                    window.APP_URLS.history = loadedUrl || (window.APP_CONFIG && window.APP_CONFIG.HISTORY_WEBAPP_URL) || '';
+                    if (window.APP_URLS.history) {
                         const ty = new Date().getFullYear();
                         syncHolidays([ty - 1, ty, ty + 1]).then(() => {
                             calculateMultiRows();
@@ -615,38 +578,15 @@
                     }
                 });
                 loadFromDB('gsheetLedgerUrl', function(loadedUrl) {
-                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.LEDGER_WEBAPP_URL) || '';
-                    const finalUrl = loadedUrl || defaultUrl;
-                    if (finalUrl) {
-                        document.getElementById('gsheetLedgerUrl').value = finalUrl;
-                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
-                        document.getElementById('gsheetLedgerStatus').innerText = '(' + label + ')';
-                        document.getElementById('gsheetLedgerStatus').style.color = '#16a34a';
-                    }
+                    window.APP_URLS.ledger = loadedUrl || (window.APP_CONFIG && window.APP_CONFIG.LEDGER_WEBAPP_URL) || '';
                 });
-                // [신규] 확정량 저장 전용 URL (비워두면 예정량/확정량 URL로 대체 전송)
                 loadFromDB('gsheetConfirmUrl', function(loadedUrl) {
-                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.CONFIRM_WEBAPP_URL) || '';
-                    const finalUrl = loadedUrl || defaultUrl;
-                    if (finalUrl) {
-                        document.getElementById('gsheetConfirmUrl').value = finalUrl;
-                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
-                        document.getElementById('gsheetConfirmStatus').innerText = '(' + label + ')';
-                        document.getElementById('gsheetConfirmStatus').style.color = '#16a34a';
-                    }
+                    window.APP_URLS.confirm = loadedUrl || (window.APP_CONFIG && window.APP_CONFIG.CONFIRM_WEBAPP_URL) || '';
                 });
-                // [신규] 거래명세서 OCR 전용 URL
                 loadFromDB('gsheetOcrUrl', function(loadedUrl) {
-                    const defaultUrl = (window.APP_CONFIG && window.APP_CONFIG.OCR_WEBAPP_URL) || '';
-                    const finalUrl = loadedUrl || defaultUrl;
-                    if (finalUrl) {
-                        document.getElementById('gsheetOcrUrl').value = finalUrl;
-                        const label = loadedUrl ? '✅ 저장된 값 사용중' : '✅ 기본값 자동 적용됨';
-                        document.getElementById('gsheetOcrStatus').innerText = '(' + label + ')';
-                        document.getElementById('gsheetOcrStatus').style.color = '#16a34a';
-                    }
+                    window.APP_URLS.ocr = loadedUrl || (window.APP_CONFIG && window.APP_CONFIG.OCR_WEBAPP_URL) || '';
                 });
-                loadFromDB('gsheetLedgerSheet', function(v) { document.getElementById('gsheetLedgerSheet').value = v || ''; });
+                loadFromDB('gsheetLedgerSheet', function(v) { window.APP_URLS.ledgerSheetHint = v || ''; });
                 loadFromDB('unitInfoMap', function(v) { if (v) { window.unitInfoMap = v; updateSyncStatusLabel(); } });
                 loadFromDB('productInfoMap', function(v) { if (v) { window.productInfoMap = v; } });
             });
@@ -1091,86 +1031,66 @@
             });
         }
 
-        function saveGSheetUrl() {
-            const url = document.getElementById('gsheetWebAppUrl').value.trim();
-            saveToDB('gsheetWebAppUrl', url, function() {
-                const status = document.getElementById('gsheetStatus');
-                if(url) { status.innerText = '✅ 설정됨(직접 입력)'; status.style.color = '#16a34a'; }
-                else { status.innerText = '미설정'; status.style.color = '#64748b'; }
-            });
+        // save* 함수들은 프로그램적으로 URL을 바꿔야 할 때를 대비해 남겨둠(현재는 UI에서 호출 안 됨)
+        function saveGSheetUrl(url) {
+            window.APP_URLS.history = url || '';
+            saveToDB('gsheetWebAppUrl', window.APP_URLS.history);
         }
-
-        // [신규] 재고수불대장 웹앱 URL 저장 (예정량/확정량 URL과 별도)
-        function saveGSheetLedgerUrl() {
-            const url = document.getElementById('gsheetLedgerUrl').value.trim();
-            saveToDB('gsheetLedgerUrl', url, function() {
-                const status = document.getElementById('gsheetLedgerStatus');
-                if(url) { status.innerText = '(✅ 설정됨(직접 입력))'; status.style.color = '#16a34a'; }
-                else { status.innerText = ''; status.style.color = '#64748b'; }
-            });
+        function saveGSheetLedgerUrl(url) {
+            window.APP_URLS.ledger = url || '';
+            saveToDB('gsheetLedgerUrl', window.APP_URLS.ledger);
         }
 
         const HISTORY_SHEET_NAME = '데이터';
         const WRITE_SHEET_NAME = 'DB_Master';
-        function saveGSheetSheetNames() {
-            const ledger = document.getElementById('gsheetLedgerSheet').value.trim();
-            saveToDB('gsheetLedgerSheet', ledger);
+        function saveGSheetSheetNames(sheetName) {
+            window.APP_URLS.ledgerSheetHint = sheetName || '';
+            saveToDB('gsheetLedgerSheet', window.APP_URLS.ledgerSheetHint);
         }
 
         // 예정량/확정량(부대별정보·품목정보·공휴일캐시·데이터·DB_Master) 웹앱 URL
         function getGSheetUrl() {
-            const url = document.getElementById('gsheetWebAppUrl').value.trim();
-            if(!url) { alert("먼저 상단 '⚙️ 구글시트 연동 설정'에서 예정량/확정량 웹앱 URL을 입력해주세요."); return null; }
+            const url = window.APP_URLS.history;
+            if(!url) { alert("예정량/확정량 웹앱 URL이 설정되어 있지 않습니다. config.js를 확인해주세요."); return null; }
             return url;
         }
 
         function getGSheetUrlSilent() {
-            const url = document.getElementById('gsheetWebAppUrl').value.trim();
-            return url || null;
+            return window.APP_URLS.history || null;
         }
 
         // [신규] 재고수불대장 전용 웹앱 URL
         function getLedgerUrl() {
-            const url = document.getElementById('gsheetLedgerUrl').value.trim();
-            if(!url) { alert("먼저 상단 '⚙️ 구글시트 연동 설정'에서 재고수불대장 웹앱 URL을 입력해주세요."); return null; }
+            const url = window.APP_URLS.ledger;
+            if(!url) { alert("재고수불대장 웹앱 URL이 설정되어 있지 않습니다. config.js를 확인해주세요."); return null; }
             return url;
         }
 
         function getLedgerUrlSilent() {
-            const url = document.getElementById('gsheetLedgerUrl').value.trim();
-            return url || null;
+            return window.APP_URLS.ledger || null;
         }
 
         // [신규] 확정량 저장 전용 URL 저장
-        function saveGSheetConfirmUrl() {
-            const url = document.getElementById('gsheetConfirmUrl').value.trim();
-            saveToDB('gsheetConfirmUrl', url, function() {
-                const status = document.getElementById('gsheetConfirmStatus');
-                if(url) { status.innerText = '(✅ 설정됨(직접 입력))'; status.style.color = '#16a34a'; }
-                else { status.innerText = ''; status.style.color = '#64748b'; }
-            });
+        function saveGSheetConfirmUrl(url) {
+            window.APP_URLS.confirm = url || '';
+            saveToDB('gsheetConfirmUrl', window.APP_URLS.confirm);
         }
 
         // 확정량 저장 전용 URL이 있으면 그걸, 없으면 예정량/확정량 URL로 대체 전송(그 경우 기존 스크립트에 updateConfirmed 분기가 필요함)
         function getConfirmUrl() {
-            const dedicated = document.getElementById('gsheetConfirmUrl').value.trim();
-            if (dedicated) return dedicated;
+            if (window.APP_URLS.confirm) return window.APP_URLS.confirm;
             return getGSheetUrl();
         }
 
         // [신규] 거래명세서 OCR 전용 URL
-        function saveGSheetOcrUrl() {
-            const url = document.getElementById('gsheetOcrUrl').value.trim();
-            saveToDB('gsheetOcrUrl', url, function() {
-                const status = document.getElementById('gsheetOcrStatus');
-                if(url) { status.innerText = '(✅ 설정됨(직접 입력))'; status.style.color = '#16a34a'; }
-                else { status.innerText = ''; status.style.color = '#64748b'; }
-            });
+        function saveGSheetOcrUrl(url) {
+            window.APP_URLS.ocr = url || '';
+            saveToDB('gsheetOcrUrl', window.APP_URLS.ocr);
         }
 
         function getOcrUrl() {
-            const url = document.getElementById('gsheetOcrUrl').value.trim();
-            if(!url) { alert("먼저 상단 '⚙️ 구글시트 연동 설정'에서 '거래명세서 OCR 전용 URL'을 입력해주세요. (안내드린 거래명세서_OCR_전용.gs를 배포한 뒤 그 URL을 넣으시면 됩니다)"); return null; }
+            const url = window.APP_URLS.ocr;
+            if(!url) { alert("거래명세서 OCR 전용 URL이 설정되어 있지 않습니다. config.js에 OCR_WEBAPP_URL을 채워주세요."); return null; }
             return url;
         }
 
@@ -1267,6 +1187,7 @@
             const el = document.getElementById('unitProductSyncStatus');
             const uCount = Object.keys(window.unitInfoMap || {}).length;
             const pCount = Object.keys(window.productInfoMap || {}).length;
+            if (!el) return; // 설정 패널이 화면에 없어도(항상 자동연동) 문제없이 통과
             if (uCount === 0 && pCount === 0) { el.innerText = '미동기화 — "자동화시스템"의 부대별정보/품목정보 시트를 불러옵니다'; el.style.color = '#64748b'; return; }
             el.innerText = `✅ 부대 ${uCount}건, 품목 ${pCount}건 동기화됨`;
             el.style.color = '#16a34a';
@@ -1274,8 +1195,8 @@
 
         async function syncUnitProductInfo() {
             const url = getGSheetUrl(); if (!url) return;
-            const statusEl = document.getElementById('unitProductSyncStatus');
-            statusEl.innerText = '⏳ 동기화 중...'; statusEl.style.color = '#64748b';
+            const statusEl = document.getElementById('unitProductSyncStatus'); // 없어도(null) 안전하게 동작
+            if (statusEl) { statusEl.innerText = '⏳ 동기화 중...'; statusEl.style.color = '#64748b'; }
             try {
                 const [uRes, pRes] = await Promise.all([
                     fetch(url + (url.includes('?') ? '&' : '?') + 'action=getUnitInfo'),
@@ -1322,8 +1243,7 @@
                 saveToDB('productInfoMap', productMap);
                 updateSyncStatusLabel();
             } catch (err) {
-                statusEl.innerText = '❌ 동기화 실패: ' + err.message;
-                statusEl.style.color = '#ef4444';
+                if (statusEl) { statusEl.innerText = '❌ 동기화 실패: ' + err.message; statusEl.style.color = '#ef4444'; }
             }
         }
 
@@ -1866,7 +1786,7 @@
             const hasMain = !!getGSheetUrlSilent();
             const hasLedger = !!getLedgerUrlSilent();
             if (!hasMain && !hasLedger) {
-                if (statusEl) { statusEl.innerText = '⚠️ 상단 "구글시트 연동 설정"에서 웹앱 URL을 먼저 입력해주세요.'; statusEl.style.color = '#b45309'; }
+                if (statusEl) { statusEl.innerText = '⚠️ 웹앱 URL이 설정되어 있지 않습니다. config.js를 확인해주세요.'; statusEl.style.color = '#b45309'; }
                 return;
             }
             if (silentRemote) {
@@ -2019,7 +1939,7 @@
         async function refreshConfirmTab(silentRemote = true) {
             const statusEl = document.getElementById('confirmStatusMsg');
             if (!getGSheetUrlSilent()) {
-                if (statusEl) { statusEl.innerText = '⚠️ 상단 "구글시트 연동 설정"에서 웹앱 URL을 먼저 입력해주세요.'; statusEl.style.color = '#b45309'; }
+                if (statusEl) { statusEl.innerText = '⚠️ 웹앱 URL이 설정되어 있지 않습니다. config.js를 확인해주세요.'; statusEl.style.color = '#b45309'; }
                 renderConfirmTable();
                 return;
             }
@@ -2027,13 +1947,21 @@
                 if (statusEl) { statusEl.innerText = '⏳ 구글시트에서 불러오는 중...'; statusEl.style.color = '#64748b'; }
                 try {
                     await loadFromGoogleSheetSilent();
-                    if (statusEl) { statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준으로 갱신됨`; statusEl.style.color = '#16a34a'; }
+                    if (statusEl) { statusEl.innerText = buildLoadedDataSummary_(); statusEl.style.color = '#16a34a'; }
                 } catch (err) {
                     if (statusEl) { statusEl.innerText = '❌ 불러오기 실패: ' + err.message; statusEl.style.color = '#ef4444'; }
                 }
             }
             populateConfirmFilterOptions();
             renderConfirmTable();
+        }
+
+        // [신규] 진단용 — 지금 dbData에 실제로 몇 건이, 어떤 납품일 범위로 로드돼 있는지 보여준다.
+        // 특정 월 데이터가 안 보일 때 "애초에 안 불러와진 건지" vs "필터에 걸려 안 보이는 건지" 바로 구분 가능.
+        function buildLoadedDataSummary_() {
+            const validDates = dbData.map(d => d.delDate).filter(v => v && /^\d{4}-\d{2}-\d{2}/.test(v)).sort();
+            const range = validDates.length > 0 ? `${validDates[0]} ~ ${validDates[validDates.length - 1]}` : '날짜 정보 없음';
+            return `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준 갱신됨 — 누적 ${dbData.length.toLocaleString()}건 로드됨 (납품일 범위: ${range})`;
         }
 
         // [신규] 구분/부대 다중선택 드롭다운
@@ -2430,7 +2358,7 @@
         async function saveGridToInventoryLedger() {
             const url = getLedgerUrl(); if(!url) return;
             await ensureUnitProductInfoLoaded();
-            const ledgerSheetHint = document.getElementById('gsheetLedgerSheet').value.trim();
+            const ledgerSheetHint = window.APP_URLS.ledgerSheetHint;
             const dateBasis = getDateBasis();
             const mode = document.querySelector('input[name="calcMode"]:checked').value;
             const leadDays = parseInt(document.getElementById('ledgerLeadDays').value, 10) || 0;
@@ -2615,7 +2543,7 @@
             const items = (window.__deliverySlipItems || []).filter(it => String(it.name || '').trim() && parseFloat(it.qty) > 0);
             if (items.length === 0) { alert('반영할 항목이 없습니다. 품명과 수량(0보다 큰 값)을 확인해주세요.'); return; }
             const today = new Date().toISOString().split('T')[0];
-            const ledgerSheetHint = document.getElementById('gsheetLedgerSheet').value.trim();
+            const ledgerSheetHint = window.APP_URLS.ledgerSheetHint;
             const rowsToSend = items.map(it => ({ name: String(it.name).trim(), date: today, deliveryDate: '', qty: parseFloat(it.qty), unit: '' }));
 
             if (!confirm(`거래명세서에서 확인한 ${rowsToSend.length}건을 재고수불대장에 입고로 등록할까요?\n(오늘 날짜 기준으로 입고일/수량에 기록됩니다)`)) return;
@@ -2741,7 +2669,7 @@
                     const iso = toIsoDate(dateStr);
                     rowBadge.title = (rowDayCategory === 'HOLI' && iso && window.holidayMap[iso]) ? window.holidayMap[iso] : '';
                     const gridYear = dateStr.slice(0,4);
-                    if (document.getElementById('gsheetWebAppUrl').value.trim() && !window.__holidayYearsLoaded.has(gridYear) && !window.__holidayYearsFailed.has(gridYear)) {
+                    if (window.APP_URLS.history && !window.__holidayYearsLoaded.has(gridYear) && !window.__holidayYearsFailed.has(gridYear)) {
                         syncHolidays([gridYear]).then(result => {
                             if (result.ok) calculateMultiRows();
                             else window.__holidayYearsFailed.add(gridYear);
