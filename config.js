@@ -22,5 +22,5 @@ window.APP_CONFIG = {
   // [선택] 거래명세서 사진 자동인식(OCR) 전용 웹앱 URL. "거래명세서_OCR_전용.gs"를
   // 별도 Apps Script 프로젝트로 배포한 뒤 그 URL을 여기 넣으면 홈 탭 "거래명세서 업로드"가 바로 동작합니다.
   // 비워두면 홈 탭에서 사진 업로드 시 "URL을 입력해주세요" 알림이 뜹니다.
-  OCR_WEBAPP_URL: ""
+  OCR_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbwF_ZqRdaRjpkpkkJOby33mAoQ1v4PsjHCd8s2j_Njy_hQWq_NjpHnQrsIKqLxqlq9z/exec"
 };
