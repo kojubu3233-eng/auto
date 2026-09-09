@@ -1885,8 +1885,12 @@
                 confSales: headers.findIndex(h => h.includes('확정매출'))
             };
             const extraMap = buildExtraColumnMap_(headers);
-            const existingKeys = new Set(dbData.map(d => `${d.delDate}|${d.mealDate}|${d.unit}|${d.name}|${d.plan}|${d.conf}`));
+            // [수정] Set이 아니라 Map으로 바꿔서, 이미 캐시된 레코드를 찾으면 그냥 건너뛰지 않고
+            // 새로 추가된 필드(예정량/확정량 개별 값, 단위, 나라장터 등)가 비어있으면 채워넣는다.
+            // 예전 세션에서 캐시된 레코드가 새 필드 도입 전 버전이라 계속 "-"로 남던 버그 수정.
+            const existingMap = new Map(dbData.map(d => [`${d.delDate}|${d.mealDate}|${d.unit}|${d.name}|${d.plan}|${d.conf}`, d]));
             const newList = [];
+            let healedCount = 0;
             for(let i = hIdx + 1; i < json.length; i++) {
                 const row = json[i]; if(!row || !row[map.name]) continue;
                 const uidCell = map.uid !== -1 ? row[map.uid] : '';
@@ -1915,14 +1919,28 @@
                 const unitValRaw = map.unit!==-1 ? String(row[map.unit]).trim() : '공통';
                 const unitVal = normalizeUnitName(unitValRaw);
 
-                const key = `${dDate}|${mDate}|${unitVal}|${nameVal}|${p}|${c}`;
-                if(existingKeys.has(key)) continue;
-                existingKeys.add(key);
-
                 const priceVal = map.price !== -1 && row[map.price] !== undefined && row[map.price] !== '' ? parseFloat(String(row[map.price]).replace(/,/g,'')) : null;
                 const planSalesVal = map.planSales !== -1 && row[map.planSales] !== undefined && row[map.planSales] !== '' ? parseFloat(String(row[map.planSales]).replace(/,/g,'')) : null;
                 const confSalesVal = map.confSales !== -1 && row[map.confSales] !== undefined && row[map.confSales] !== '' ? parseFloat(String(row[map.confSales]).replace(/,/g,'')) : null;
                 const extra = readExtraColumns_(row, extraMap);
+
+                const key = `${dDate}|${mDate}|${unitVal}|${nameVal}|${p}|${c}`;
+                const existing = existingMap.get(key);
+                if (existing) {
+                    // [신규] 이미 캐시된 행이지만, 이번에 새로 읽은 값 중 예전엔 없던(undefined) 필드만 보강한다.
+                    let healed = false;
+                    const fillIfMissing = (field, val) => { if (existing[field] === undefined) { existing[field] = val; healed = true; } };
+                    fillIfMissing('planEa', extra.planEa); fillIfMissing('planKg', extra.planKg);
+                    fillIfMissing('confEa', extra.confEa); fillIfMissing('confKg', extra.confKg);
+                    fillIfMissing('unitType', extra.unitType);
+                    fillIfMissing('reqDate', extra.reqDate); fillIfMissing('inspectDate', extra.inspectDate); fillIfMissing('paymentDate', extra.paymentDate);
+                    fillIfMissing('price', (priceVal !== null && !isNaN(priceVal)) ? priceVal : null);
+                    fillIfMissing('planSales', (planSalesVal !== null && !isNaN(planSalesVal)) ? planSalesVal : null);
+                    fillIfMissing('confSales', (confSalesVal !== null && !isNaN(confSalesVal)) ? confSalesVal : null);
+                    if (healed) healedCount++;
+                    continue;
+                }
+                existingMap.set(key, null); // 같은 배치 내 중복 재추가 방지용 placeholder
 
                 newList.push({
                     id: key,
@@ -1941,8 +1959,8 @@
                     excludedFromStats: isMarkedExcluded
                 });
             }
-            if (newList.length > 0) {
-                dbData = dbData.concat(newList);
+            if (newList.length > 0 || healedCount > 0) {
+                if (newList.length > 0) dbData = dbData.concat(newList);
                 saveToDB('dbData', dbData);
                 refreshAll();
             }
