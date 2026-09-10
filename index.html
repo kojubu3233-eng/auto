@@ -385,17 +385,18 @@
                 <h2 style="font-size: 15px; color:#1e3a8a;">📦 재고 현황 (재고수불대장 실시간 조회)</h2>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span id="inventoryStatusMsg" style="font-size:12px; color:#64748b;">아직 불러오지 않았습니다.</span>
+                    <button class="btn btn-success" onclick="saveActualExpiryDates()" title="소비기한 칸에 입력/수정한 실측값을 재고수불대장에 반영합니다">💾 소비기한 저장</button>
                     <button class="btn btn-primary" onclick="loadInventoryStatus()">🔄 재고 새로고침</button>
                 </div>
             </div>
             <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                <input type="text" id="inventorySearch" placeholder="품명 검색..." onkeyup="filterInventoryTable()" style="width:220px;">
-                <select id="inventoryStorageFilter" onchange="filterInventoryTable()">
-                    <option value="ALL">보관방법 전체</option>
-                    <option value="냉동">냉동</option>
-                    <option value="냉장">냉장</option>
-                    <option value="상온">상온</option>
+                <select id="inventoryCatFilter" onchange="filterInventoryTable()">
+                    <option value="ALL">구분 전체</option>
                 </select>
+                <div class="ac-wrap" style="width:240px;">
+                    <input type="text" id="inventorySearch" autocomplete="off" placeholder="품명 검색..." oninput="showInventoryNameSuggestions(this); filterInventoryTable();" onblur="hideInventoryNameSuggestionsLater()" style="width:100%;">
+                    <div class="ac-list" id="inventoryNameSuggestList"></div>
+                </div>
             </div>
             <div class="table-wrapper">
                 <table class="responsive-table" id="inventoryStatusTable">
@@ -1496,9 +1497,10 @@
                     if (!product) continue;
                     const inDate = r[2], inQty = r[3];
                     const outDate = r[4], stockVal = r[9];
+                    const actualExpiryVal = r[10]; // [신규] K열 = 물류팀이 실사 후 입력하는 실제 소비기한
 
                     const key = sheetName + '|' + product;
-                    if (!productMap[key]) { productMap[key] = { name: product, category: sheetName, company: '', stock: null, pendingIn: 0, lastDate: '', lastInDate: '' }; order.push(key); }
+                    if (!productMap[key]) { productMap[key] = { name: product, category: sheetName, company: '', stock: null, pendingIn: 0, lastDate: '', lastInDate: '', actualExpiry: '' }; order.push(key); }
                     const p = productMap[key];
                     if (company) p.company = company;
                     const stockNum = Number(stockVal);
@@ -1509,6 +1511,7 @@
                         p.pendingIn += Number(inQty) || 0;
                     }
                     if (inDate) p.lastInDate = String(inDate); // [신규] 실제 입고일(경과일수 계산용, 출고일과 구분)
+                    if (actualExpiryVal) p.actualExpiry = parseExcelDate(actualExpiryVal); // [신규] 실측 소비기한(있으면 추정치보다 우선)
                     const latestDate = outDate || inDate;
                     if (latestDate) p.lastDate = String(latestDate);
                 }
@@ -1682,9 +1685,13 @@
                 const info = infoMap[p.name] || {};
                 const storageMethod = info.storageMethod || '-';
                 const lastInDate = p.lastInDate || '';
-                let expiryDate = '';
-                if (info.shelfLifeDays && lastInDate) {
+                // [수정] 물류팀이 실사 후 직접 입력한 실제 소비기한(actualExpiry)이 있으면 그것을 우선 사용하고,
+                // 없을 때만 품목정보의 유효일수로 추정한 값을 보여준다(추정치임을 표시).
+                let expiryDate = p.actualExpiry || '';
+                let expiryIsEstimated = false;
+                if (!expiryDate && info.shelfLifeDays && lastInDate) {
                     expiryDate = addDaysIso(lastInDate, info.shelfLifeDays) || '';
+                    expiryIsEstimated = true;
                 }
                 const expiryInfo = expiryByName[p.name];
                 const deliveryDeadline = expiryInfo ? expiryInfo.deadline : '';
@@ -1696,45 +1703,123 @@
                 return {
                     key, name: p.name, category: p.category, storageMethod,
                     lastInDate, stock: p.stock, stockUnavailable: !!p.stockUnavailable,
-                    expiryDate, deliveryDeadline, remainingDays, agingDays
+                    expiryDate, expiryIsEstimated, deliveryDeadline, remainingDays, agingDays
                 };
             });
         }
 
         function filterInventoryTable() {
             const kw = (document.getElementById('inventorySearch').value || '').trim().toLowerCase();
-            const storageEl = document.getElementById('inventoryStorageFilter');
-            const storageFilter = storageEl ? storageEl.value : 'ALL';
+            const catEl = document.getElementById('inventoryCatFilter');
+            const catFilter = catEl ? catEl.value : 'ALL';
             const tbody = document.getElementById('inventoryStatusBody');
 
             const records = computeInventoryDashboardRecords();
             window.__inventoryRecords = records;
+            populateInventoryCatFilterOptions(records);
 
             const filtered = records.filter(r => {
-                const passKw = !kw || r.name.toLowerCase().includes(kw) || r.category.toLowerCase().includes(kw);
-                const passStorage = storageFilter === 'ALL' || r.storageMethod === storageFilter;
-                return passKw && passStorage;
+                const passKw = !kw || r.name.toLowerCase().includes(kw);
+                const passCat = catFilter === 'ALL' || r.category === catFilter;
+                return passKw && passCat;
             });
             if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="8">표시할 품목이 없습니다.</td></tr>'; return; }
 
-            tbody.innerHTML = filtered.map(r => {
+            window.__inventoryTableRows = filtered; // 소비기한 입력칸이 참조할 배열(인덱스 매칭)
+
+            tbody.innerHTML = filtered.map((r, idx) => {
                 const stockTxt = r.stockUnavailable
                     ? '<span style="color:#94a3b8;">재고 미관리</span>'
                     : (r.stock === null ? '<span style="color:#94a3b8;">기록없음</span>' : r.stock.toLocaleString());
                 const stockColor = (!r.stockUnavailable && r.stock !== null && r.stock <= 0) ? '#ef4444' : '#16a34a';
                 const remainTxt = r.remainingDays === null ? '-'
                     : (r.remainingDays < 0 ? `<span style="color:#dc2626; font-weight:bold;">경과 ${Math.abs(r.remainingDays)}일</span>` : `${r.remainingDays}일`);
+                const expiryHint = r.expiryIsEstimated ? ' title="품목정보 유효일수로 추정한 값입니다. 실사 후 정확한 날짜를 입력해주세요."' : '';
                 return `<tr>
                     <td data-label="카테고리" style="color:#64748b;">${r.category}</td>
                     <td data-label="품명" style="text-align:left; font-weight:600;">${r.name}</td>
                     <td data-label="보관방법">${r.storageMethod}</td>
                     <td data-label="입고일">${r.lastInDate || '-'}</td>
                     <td data-label="재고" style="font-weight:bold; color:${stockColor};">${stockTxt}</td>
-                    <td data-label="소비기한">${r.expiryDate || '-'}</td>
+                    <td data-label="소비기한"${expiryHint}>
+                        <input type="date" class="inv-expiry-input" data-idx="${idx}" value="${r.expiryDate || ''}" style="padding:4px; border:1px solid ${r.expiryIsEstimated ? '#fbbf24' : '#cbd5e1'}; border-radius:4px; font-size:11px;" onchange="markExpiryDirty(this)">
+                        ${r.expiryIsEstimated ? '<div style="font-size:9px; color:#b45309;">추정치(미실사)</div>' : ''}
+                    </td>
                     <td data-label="납품기한" style="color:#ea580c;">${r.deliveryDeadline || '-'}</td>
                     <td data-label="잔여일">${remainTxt}</td>
                 </tr>`;
             }).join('');
+        }
+
+        function populateInventoryCatFilterOptions(records) {
+            const el = document.getElementById('inventoryCatFilter');
+            if (!el) return;
+            const cur = el.value;
+            const cats = [...new Set(records.map(r => r.category))].sort();
+            el.innerHTML = '<option value="ALL">구분 전체</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (cats.includes(cur)) el.value = cur;
+        }
+
+        // [신규] 품명 검색칸 자동완성 드롭다운 — "불" 입력 시 "돼지불고기(간장)" 등 포함된 품명 목록 표시
+        function showInventoryNameSuggestions(inputEl) {
+            const list = document.getElementById('inventoryNameSuggestList');
+            const q = inputEl.value.trim();
+            if (!q) { list.style.display = 'none'; list.innerHTML = ''; return; }
+            const names = [...new Set((window.__inventoryRecords || []).map(r => r.name))].sort();
+            const matches = names.filter(n => n.includes(q)).slice(0, 20);
+            if (matches.length === 0) { list.style.display = 'none'; list.innerHTML = ''; return; }
+            list.innerHTML = matches.map(n => `<div onmousedown="selectInventoryNameSuggestion('${n.replace(/'/g,"\\'")}')">${n}</div>`).join('');
+            list.style.display = 'block';
+        }
+        function selectInventoryNameSuggestion(name) {
+            document.getElementById('inventorySearch').value = name;
+            document.getElementById('inventoryNameSuggestList').style.display = 'none';
+            filterInventoryTable();
+        }
+        function hideInventoryNameSuggestionsLater() {
+            setTimeout(() => { const list = document.getElementById('inventoryNameSuggestList'); if (list) list.style.display = 'none'; }, 150);
+        }
+
+        // [신규] 실제 소비기한 입력 저장(물류팀 실사 결과 반영)
+        function markExpiryDirty(inputEl) {
+            inputEl.style.background = '#fef9c3';
+            inputEl.style.borderColor = '#f59e0b';
+            inputEl.dataset.dirty = '1';
+        }
+
+        async function saveActualExpiryDates() {
+            const url = getLedgerUrl(); if (!url) return;
+            const rows = window.__inventoryTableRows || [];
+            const inputs = document.querySelectorAll('.inv-expiry-input[data-dirty="1"]');
+            if (inputs.length === 0) { alert('변경된 소비기한이 없습니다.'); return; }
+
+            const updates = [];
+            inputs.forEach(inp => {
+                const idx = Number(inp.dataset.idx);
+                const rec = rows[idx];
+                if (!rec) return;
+                const raw = inp.value.trim();
+                if (!raw) return;
+                updates.push({ rec, inp, sheet: rec.category, name: rec.name, date: raw });
+            });
+            if (updates.length === 0) { alert('반영할 값이 없습니다.'); return; }
+            if (!confirm(`${updates.length}건의 실제 소비기한을 재고수불대장에 반영할까요?`)) return;
+
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'text/plain;charset=utf-8'},
+                    body: JSON.stringify({ action: 'updateActualExpiry', rows: updates.map(u => ({ sheet: u.sheet, name: u.name, date: u.date })) })
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const result = await res.json();
+                if (result.error) throw new Error(result.error);
+                updates.forEach(u => { u.inp.style.background = ''; u.inp.style.borderColor = '#cbd5e1'; delete u.inp.dataset.dirty; });
+                alert(`✅ ${updates.length}건 저장 완료!`);
+                loadInventoryStatus();
+            } catch (err) {
+                alert('소비기한 저장에 실패했습니다: ' + err.message);
+            }
         }
 
         // [신규] 보관일수/경과일수 버킷 대시보드 (재고 상세 탭 + 홈 탭 요약이 함께 씀)
