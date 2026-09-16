@@ -1832,12 +1832,18 @@
             { key: '31+',  label: '31일 초과', min: 31, max: Infinity, bg: '#fef2f2', text: '#dc2626' }
         ];
 
+        // [신규] 실제로 창고에 남아있는 재고가 있는 품목만 "보관일수/경과일수" 통계 대상으로 삼는다.
+        // 재고가 0이거나 재고 자체를 관리 안 하는 탭(범용제품 등)은 "쌓여있는 재고"가 없으므로 제외.
+        function isAgeable_(r) {
+            return r.agingDays !== null && !r.stockUnavailable && r.stock !== null && r.stock > 0;
+        }
+
         function renderAgingBuckets(boxesId, detailWrapId, detailTitleId, detailBodyId) {
             const boxesEl = document.getElementById(boxesId);
             if (!boxesEl) return;
-            const records = window.__inventoryRecords || computeInventoryDashboardRecords();
+            const records = (window.__inventoryRecords || computeInventoryDashboardRecords()).filter(isAgeable_);
             boxesEl.innerHTML = AGING_BUCKETS.map(b => {
-                const count = records.filter(r => r.agingDays !== null && r.agingDays >= b.min && r.agingDays <= b.max).length;
+                const count = records.filter(r => r.agingDays >= b.min && r.agingDays <= b.max).length;
                 return `<div class="card" style="cursor:pointer; border-left-color:${b.text}; background:${b.bg};" onclick="showAgingBucketDetail('${b.key}','${detailWrapId}','${detailTitleId}','${detailBodyId}')">
                     <h3 style="color:${b.text};">${b.label}</h3>
                     <div class="value" style="color:${b.text};">${count}건</div>
@@ -1848,8 +1854,8 @@
         function showAgingBucketDetail(bucketKey, detailWrapId, detailTitleId, detailBodyId) {
             const b = AGING_BUCKETS.find(x => x.key === bucketKey);
             if (!b) return;
-            const records = window.__inventoryRecords || computeInventoryDashboardRecords();
-            const items = records.filter(r => r.agingDays !== null && r.agingDays >= b.min && r.agingDays <= b.max)
+            const records = (window.__inventoryRecords || computeInventoryDashboardRecords()).filter(isAgeable_);
+            const items = records.filter(r => r.agingDays >= b.min && r.agingDays <= b.max)
                 .sort((a, c) => (c.agingDays || 0) - (a.agingDays || 0));
             document.getElementById(detailTitleId).innerText = `${b.label} 경과 재고 (${items.length}건)`;
             document.getElementById(detailBodyId).innerHTML = items.length === 0
