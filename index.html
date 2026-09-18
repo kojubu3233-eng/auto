@@ -2015,12 +2015,13 @@
             if (silentRemote) {
                 if (statusEl) { statusEl.innerText = '⏳ 구글시트에서 불러오는 중...'; statusEl.style.color = '#64748b'; }
                 const errors = [];
-                if (hasMain) {
-                    try { await loadFromGoogleSheetSilent(); } catch (err) { errors.push('예정량/확정량: ' + err.message); }
-                }
-                if (hasLedger) {
-                    try { await loadInventoryStatus(false); } catch (err) { errors.push('재고수불대장: ' + err.message); }
-                }
+                // [최적화] 예정량/확정량 이력 조회와 재고수불대장 조회는 서로 무관한 데이터라
+                // 순서대로(직렬) 기다릴 필요가 없습니다. 동시에 요청해서 더 느린 쪽 하나만큼만 기다립니다.
+                // (각자 완료되는 즉시 해당 화면 요소는 바로 갱신되며, 이 Promise.all은 상단 상태 메시지 갱신용입니다.)
+                const tasks = [];
+                if (hasMain) tasks.push(loadFromGoogleSheetSilent().catch(err => errors.push('예정량/확정량: ' + err.message)));
+                if (hasLedger) tasks.push(loadInventoryStatus(false).catch(err => errors.push('재고수불대장: ' + err.message)));
+                await Promise.all(tasks);
                 if (statusEl) {
                     if (errors.length === 0) { statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준으로 갱신됨`; statusEl.style.color = '#16a34a'; }
                     else { statusEl.innerText = '⚠️ ' + errors.join(' / '); statusEl.style.color = '#ef4444'; }
@@ -2036,20 +2037,26 @@
             // 아직 미확정/미이관 최신 건) 둘 다 읽어서 합친다. 이렇게 해야 당월처럼 아직
             // '데이터' 탭으로 옮겨지지 않은 최신 계획도 확정량 입력 탭에서 바로 보인다.
             const sheetsToRead = [HISTORY_SHEET_NAME, WRITE_SHEET_NAME];
+            // [최적화] 두 시트를 하나씩 순서대로 기다리지 않고 동시에 요청합니다.
+            // (응답이 각각 도착한 뒤 데이터 반영은 순서대로 처리해 안전하게 병합됩니다.)
+            const results = await Promise.allSettled(sheetsToRead.map(async (sheetName) => {
+                const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=read&sheet=' + encodeURIComponent(sheetName));
+                const rawText = await res.text();
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = JSON.parse(rawText);
+                const rowsArr = extractRowsArray(json);
+                if (!rowsArr) throw new Error('데이터 형식을 인식하지 못했습니다.');
+                return rowsArr;
+            }));
+
             const errors = [];
-            for (const sheetName of sheetsToRead) {
-                try {
-                    const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=read&sheet=' + encodeURIComponent(sheetName));
-                    const rawText = await res.text();
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    const json = JSON.parse(rawText);
-                    const rowsArr = extractRowsArray(json);
-                    if (!rowsArr) throw new Error('데이터 형식을 인식하지 못했습니다.');
-                    ingestRowsSilent(rowsArr);
-                } catch (err) {
-                    errors.push(`${sheetName}: ${err.message}`);
+            results.forEach((r, i) => {
+                if (r.status === 'fulfilled') {
+                    ingestRowsSilent(r.value);
+                } else {
+                    errors.push(`${sheetsToRead[i]}: ${r.reason.message}`);
                 }
-            }
+            });
             if (errors.length === sheetsToRead.length) throw new Error(errors.join(' / '));
         }
 
