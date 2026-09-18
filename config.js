@@ -11,7 +11,7 @@ window.APP_CONFIG = {
   HISTORY_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbw46wO5Yww9RavXDXaOcVCeysUkoEqTHkXGJCH5ozfsnRwJEIm9S4AXnrJPPP9QeXQQqQ/exec",
 
   // 재고수불대장 시트(국탕류/식육가공품/자사양념육/납품기한임박/납품기한경과 등이 있는 스프레드시트)
-  LEDGER_WEBAPP_URL: LEDGER_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbwl6-jYaQkZin6FUo-TY1GFKDMF8JH91drG0yryxtupRmjgOMEel2OfKr_5UVpNIDrs/exec",
+  LEDGER_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbwl6-jYaQkZin6FUo-TY1GFKDMF8JH91drG0yryxtupRmjgOMEel2OfKr_5UVpNIDrs/exec",
 
   // [선택] 확정량 저장 전용 웹앱 URL. "확정량저장_전용_새프로젝트_전체코드.gs"를
   // 별도 Apps Script 프로젝트로 배포한 뒤 그 URL을 여기 넣으면 홈 탭 "확정량 저장"이 바로 동작합니다.
