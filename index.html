@@ -386,7 +386,7 @@
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span id="inventoryStatusMsg" style="font-size:12px; color:#64748b;">아직 불러오지 않았습니다.</span>
                     <button class="btn btn-success" onclick="saveActualExpiryDates()" title="소비기한 칸에 입력/수정한 실측값을 재고수불대장에 반영합니다">💾 소비기한 저장</button>
-                    <button class="btn btn-primary" onclick="loadInventoryStatus()">🔄 재고 새로고침</button>
+                    <button class="btn btn-primary" onclick="loadInventoryStatus().catch(()=>{})">🔄 재고 새로고침</button>
                 </div>
             </div>
             <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap;">
@@ -1405,8 +1405,7 @@
                 refreshConfirmTab();
             }
             if (name === 'inventory' && !window.__inventoryLoadedOnce) {
-                window.__inventoryLoadedOnce = true;
-                loadInventoryStatus();
+                loadInventoryStatus().catch(()=>{}); // 성공 시 renderInventoryStatus 내부에서 __inventoryLoadedOnce=true 설정됨(실패하면 다음 진입 시 재시도됨)
             }
         }
 
@@ -1430,11 +1429,12 @@
         // [최적화 Step A] 캐시가 있으면 즉시 렌더링하고, 실제 조회는 뒤에서 조용히 진행합니다.
         // 캐시 유효기간: 12시간. 그 안이면 화면은 바로 뜨고, 최신 데이터는 몇 초 뒤 자동 반영됩니다.
         // 기존 코드와 동일하게 Promise를 반환하므로 await loadInventoryStatus(...) 호출부는 그대로 동작합니다.
+        // (실제로 실패하면 이 Promise가 reject되어, 호출한 쪽(예: 홈 탭)에서도 "성공"으로 잘못 표시되지 않고 진짜 실패 사유가 보입니다.)
         function loadInventoryStatus(alertIfMissing = true) {
             const url = alertIfMissing ? getLedgerUrl() : getLedgerUrlSilent();
             const statusEl = document.getElementById('inventoryStatusMsg');
 
-            return new Promise((resolve) => {
+            return new Promise((resolve, reject) => {
                 loadFromDB('cachedLedgerSheets', function(cached) {
                     const cacheAgeMs = cached ? (Date.now() - (cached.timestamp || 0)) : Infinity;
                     const cacheValid = !!(cached && cached.sheets && cacheAgeMs < 12 * 60 * 60 * 1000);
@@ -1446,14 +1446,14 @@
                             statusEl.innerText = `✅ 캐시 표시 중 (${Math.round(cacheAgeMs/60000)}분 전, 탭 ${tabCount}개) — 최신 데이터 동기화 중...`;
                             statusEl.style.color = '#64748b';
                         }
-                        if (url) fetchAndCacheInventory(url, false); // 백그라운드 갱신(기다리지 않음)
+                        if (url) fetchAndCacheInventory(url, false).catch(() => {}); // 백그라운드 갱신(화면엔 이미 캐시가 떠 있으므로 실패해도 조용히 무시)
                         resolve();
                         return;
                     }
 
                     if (!url) { resolve(); return; }
                     if (statusEl) { statusEl.innerText = '⏳ 불러오는 중...'; statusEl.style.color = '#64748b'; }
-                    fetchAndCacheInventory(url, true).then(resolve).catch(resolve);
+                    fetchAndCacheInventory(url, true).then(resolve).catch(reject);
                 });
             });
         }
@@ -1471,38 +1471,54 @@
             return promise;
         }
 
+        // [신규] 실제 네트워크 요청 1회. 구글 Apps Script는 오랜만에 호출되면(콜드스타트)
+        // 처음 한 번은 응답이 느리거나 실패하는 경우가 있어, 이 함수는 실패 시 예외를 그대로 던지고
+        // 재시도는 호출부(fetchAndCacheInventoryImpl)에서 한 번 더 시도합니다.
+        async function fetchLedgerSheetsOnce(url) {
+            const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=readLedgerAll');
+            const rawText = await res.text();
+            if(!res.ok) throw new Error(`HTTP ${res.status} — ${rawText.slice(0,200)}`);
+            let json;
+            try { json = JSON.parse(rawText); }
+            catch(e) { throw new Error(`응답이 JSON이 아닙니다: ${rawText.slice(0,200)}`); }
+            if (json && json.error) throw new Error(json.error);
+            const sheetsObj = json && json.sheets;
+            if (!sheetsObj || typeof sheetsObj !== 'object') throw new Error(`탭별 데이터를 찾지 못했습니다: ${JSON.stringify(json).slice(0,200)}`);
+            return sheetsObj;
+        }
+
         // [최적화 Step A 보조] 실제 재고수불대장 조회 + 캐시 저장 + 화면 반영을 한 곳에서 처리.
         // isForeground=true면 로딩/에러 메시지를 사용자에게 보여주고, false면 화면은 이미 캐시로 떠 있으므로 조용히 갱신만 합니다.
+        // 첫 시도가 실패하면(Apps Script 콜드스타트 등) 1.5초 후 한 번만 자동으로 다시 시도합니다.
         async function fetchAndCacheInventoryImpl(url, isForeground) {
             const statusEl = document.getElementById('inventoryStatusMsg');
-            let rawText = '';
+            let sheetsObj;
             try {
-                const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=readLedgerAll');
-                rawText = await res.text();
-                if(!res.ok) throw new Error(`HTTP ${res.status} — ${rawText.slice(0,200)}`);
-                let json;
-                try { json = JSON.parse(rawText); }
-                catch(e) { throw new Error(`응답이 JSON이 아닙니다: ${rawText.slice(0,200)}`); }
-                if (json && json.error) throw new Error(json.error);
-                const sheetsObj = json && json.sheets;
-                if (!sheetsObj || typeof sheetsObj !== 'object') throw new Error(`탭별 데이터를 찾지 못했습니다: ${JSON.stringify(json).slice(0,200)}`);
+                sheetsObj = await fetchLedgerSheetsOnce(url);
+            } catch (firstErr) {
+                console.warn('재고 현황 첫 시도 실패, 1.5초 후 재시도:', firstErr.message);
+                await new Promise(r => setTimeout(r, 1500));
+                try {
+                    sheetsObj = await fetchLedgerSheetsOnce(url);
+                } catch (secondErr) {
+                    console.error('재고 현황 불러오기 실패(재시도 포함):', secondErr);
+                    if (isForeground) {
+                        if (statusEl) { statusEl.innerText = '❌ 불러오기 실패(재시도 포함): ' + secondErr.message; statusEl.style.color = '#ef4444'; }
+                        document.getElementById('inventoryStatusBody').innerHTML = `<tr><td colspan="8">불러오기 실패했습니다. 웹앱 URL과 배포 상태를 확인해주세요.</td></tr>`;
+                    } else if (statusEl) {
+                        statusEl.innerText = '⚠️ 캐시 표시 중 (최신 동기화 실패: ' + secondErr.message + ')';
+                        statusEl.style.color = '#b45309';
+                    }
+                    throw secondErr; // 호출한 쪽(예: 홈 탭)이 진짜 실패를 알 수 있도록 전달
+                }
+            }
 
-                saveToDB('cachedLedgerSheets', { sheets: sheetsObj, timestamp: Date.now() });
-                renderInventoryStatus(sheetsObj);
-                const tabCount = Object.keys(sheetsObj).length;
-                if (statusEl) {
-                    statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준 (탭 ${tabCount}개 통합)`;
-                    statusEl.style.color = '#16a34a';
-                }
-            } catch(err) {
-                console.error('재고 현황 불러오기 실패:', err, rawText);
-                if (isForeground) {
-                    if (statusEl) { statusEl.innerText = '❌ 불러오기 실패: ' + err.message; statusEl.style.color = '#ef4444'; }
-                    document.getElementById('inventoryStatusBody').innerHTML = `<tr><td colspan="8">불러오기 실패했습니다. 웹앱 URL과 배포 상태를 확인해주세요.</td></tr>`;
-                } else if (statusEl) {
-                    statusEl.innerText = '⚠️ 캐시 표시 중 (최신 동기화 실패: ' + err.message + ')';
-                    statusEl.style.color = '#b45309';
-                }
+            saveToDB('cachedLedgerSheets', { sheets: sheetsObj, timestamp: Date.now() });
+            renderInventoryStatus(sheetsObj);
+            const tabCount = Object.keys(sheetsObj).length;
+            if (statusEl) {
+                statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준 (탭 ${tabCount}개 통합)`;
+                statusEl.style.color = '#16a34a';
             }
         }
 
@@ -1929,7 +1945,7 @@
                 if (result.error) throw new Error(result.error);
                 updates.forEach(u => { u.inp.style.background = ''; u.inp.style.borderColor = '#cbd5e1'; delete u.inp.dataset.dirty; });
                 alert(`✅ ${updates.length}건 저장 완료!`);
-                loadInventoryStatus();
+                loadInventoryStatus().catch(()=>{});
             } catch (err) {
                 alert('소비기한 저장에 실패했습니다: ' + err.message);
             }
@@ -2691,7 +2707,7 @@
                     msg += `\n\n❌ 등록 실패:\n- ` + failed.map(r => `${r.name || '(품명없음)'}: ${r.reason}`).join('\n- ');
                 }
                 alert(msg);
-                if (window.__inventoryLoadedOnce) loadInventoryStatus();
+                if (window.__inventoryLoadedOnce) loadInventoryStatus().catch(()=>{});
             } catch(err) {
                 alert("재고수불대장 등록에 실패했습니다: " + err.message);
             }
@@ -2827,7 +2843,7 @@
                 document.getElementById('deliverySlipReviewWrap').style.display = 'none';
                 document.getElementById('deliverySlipStatus').innerText = '';
                 window.__deliverySlipItems = [];
-                if (window.__inventoryLoadedOnce) loadInventoryStatus();
+                if (window.__inventoryLoadedOnce) loadInventoryStatus().catch(()=>{});
                 refreshHomeTab(false);
             } catch (err) {
                 alert('재고수불대장 반영에 실패했습니다: ' + err.message);
