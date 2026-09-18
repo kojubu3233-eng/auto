@@ -1458,9 +1458,22 @@
             });
         }
 
+        // [최적화] 홈 탭과 재고 상세 탭이 거의 동시에 열려도 재고수불대장 조회는 딱 한 번만 나가도록,
+        // 이미 진행 중인 조회가 있으면 그 결과를 같이 기다립니다(중복 fetch 방지).
+        function fetchAndCacheInventory(url, isForeground) {
+            if (isForeground && window.__ledgerForegroundFetchPromise) {
+                return window.__ledgerForegroundFetchPromise;
+            }
+            const promise = fetchAndCacheInventoryImpl(url, isForeground).finally(() => {
+                if (window.__ledgerForegroundFetchPromise === promise) window.__ledgerForegroundFetchPromise = null;
+            });
+            if (isForeground) window.__ledgerForegroundFetchPromise = promise;
+            return promise;
+        }
+
         // [최적화 Step A 보조] 실제 재고수불대장 조회 + 캐시 저장 + 화면 반영을 한 곳에서 처리.
         // isForeground=true면 로딩/에러 메시지를 사용자에게 보여주고, false면 화면은 이미 캐시로 떠 있으므로 조용히 갱신만 합니다.
-        async function fetchAndCacheInventory(url, isForeground) {
+        async function fetchAndCacheInventoryImpl(url, isForeground) {
             const statusEl = document.getElementById('inventoryStatusMsg');
             let rawText = '';
             try {
@@ -1494,6 +1507,7 @@
         }
 
         function renderInventoryStatus(sheetsObj) {
+            window.__inventoryLoadedOnce = true; // [최적화] 홈이든 재고상세든, 한 번 데이터가 그려지면 다른 쪽에서 또 불러오지 않도록 표시
             const productMap = {}; const order = [];
             let selfSeasonedList = [], expiryUpcomingList = [], expiryPastList = [];
 
