@@ -390,11 +390,11 @@
                 </div>
             </div>
             <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                <select id="inventoryCatFilter" onchange="filterInventoryTable()">
+                <select id="inventoryCatFilter" onchange="window.__inventoryPage=1; filterInventoryTable()">
                     <option value="ALL">구분 전체</option>
                 </select>
                 <div class="ac-wrap" style="width:240px;">
-                    <input type="text" id="inventorySearch" autocomplete="off" placeholder="품명 검색..." oninput="showInventoryNameSuggestions(this); filterInventoryTable();" onblur="hideInventoryNameSuggestionsLater()" style="width:100%;">
+                    <input type="text" id="inventorySearch" autocomplete="off" placeholder="품명 검색..." oninput="showInventoryNameSuggestions(this); window.__inventoryPage=1; filterInventoryTable();" onblur="hideInventoryNameSuggestionsLater()" style="width:100%;">
                     <div class="ac-list" id="inventoryNameSuggestList"></div>
                 </div>
             </div>
@@ -415,6 +415,7 @@
                     <tbody id="inventoryStatusBody"><tr><td colspan="8">우측 상단 '재고 새로고침'을 눌러 불러오세요.</td></tr></tbody>
                 </table>
             </div>
+            <div id="inventoryPaginationControls" style="display:none; justify-content:center; align-items:center; gap:6px; margin-top:10px; flex-wrap:wrap;"></div>
             <div style="font-size:11px; color:#94a3b8; margin-top:6px;">💡 보관방법·소비기한은 "품목정보" 시트에 '보관방법', '유효일수' 컬럼을 추가하시면 자동으로 채워집니다. (없으면 '-' 표시)</div>
         </div>
 
@@ -1426,11 +1427,41 @@
             return 'standard';
         }
 
-        async function loadInventoryStatus(alertIfMissing = true) {
+        // [최적화 Step A] 캐시가 있으면 즉시 렌더링하고, 실제 조회는 뒤에서 조용히 진행합니다.
+        // 캐시 유효기간: 12시간. 그 안이면 화면은 바로 뜨고, 최신 데이터는 몇 초 뒤 자동 반영됩니다.
+        // 기존 코드와 동일하게 Promise를 반환하므로 await loadInventoryStatus(...) 호출부는 그대로 동작합니다.
+        function loadInventoryStatus(alertIfMissing = true) {
             const url = alertIfMissing ? getLedgerUrl() : getLedgerUrlSilent();
-            if(!url) return;
             const statusEl = document.getElementById('inventoryStatusMsg');
-            statusEl.innerText = '⏳ 불러오는 중...'; statusEl.style.color = '#64748b';
+
+            return new Promise((resolve) => {
+                loadFromDB('cachedLedgerSheets', function(cached) {
+                    const cacheAgeMs = cached ? (Date.now() - (cached.timestamp || 0)) : Infinity;
+                    const cacheValid = !!(cached && cached.sheets && cacheAgeMs < 12 * 60 * 60 * 1000);
+
+                    if (cacheValid) {
+                        renderInventoryStatus(cached.sheets);
+                        const tabCount = Object.keys(cached.sheets).length;
+                        if (statusEl) {
+                            statusEl.innerText = `✅ 캐시 표시 중 (${Math.round(cacheAgeMs/60000)}분 전, 탭 ${tabCount}개) — 최신 데이터 동기화 중...`;
+                            statusEl.style.color = '#64748b';
+                        }
+                        if (url) fetchAndCacheInventory(url, false); // 백그라운드 갱신(기다리지 않음)
+                        resolve();
+                        return;
+                    }
+
+                    if (!url) { resolve(); return; }
+                    if (statusEl) { statusEl.innerText = '⏳ 불러오는 중...'; statusEl.style.color = '#64748b'; }
+                    fetchAndCacheInventory(url, true).then(resolve).catch(resolve);
+                });
+            });
+        }
+
+        // [최적화 Step A 보조] 실제 재고수불대장 조회 + 캐시 저장 + 화면 반영을 한 곳에서 처리.
+        // isForeground=true면 로딩/에러 메시지를 사용자에게 보여주고, false면 화면은 이미 캐시로 떠 있으므로 조용히 갱신만 합니다.
+        async function fetchAndCacheInventory(url, isForeground) {
+            const statusEl = document.getElementById('inventoryStatusMsg');
             let rawText = '';
             try {
                 const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=readLedgerAll');
@@ -1443,15 +1474,22 @@
                 const sheetsObj = json && json.sheets;
                 if (!sheetsObj || typeof sheetsObj !== 'object') throw new Error(`탭별 데이터를 찾지 못했습니다: ${JSON.stringify(json).slice(0,200)}`);
 
+                saveToDB('cachedLedgerSheets', { sheets: sheetsObj, timestamp: Date.now() });
                 renderInventoryStatus(sheetsObj);
                 const tabCount = Object.keys(sheetsObj).length;
-                statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준 (탭 ${tabCount}개 통합)`;
-                statusEl.style.color = '#16a34a';
+                if (statusEl) {
+                    statusEl.innerText = `✅ ${new Date().toLocaleTimeString('ko-KR')} 기준 (탭 ${tabCount}개 통합)`;
+                    statusEl.style.color = '#16a34a';
+                }
             } catch(err) {
                 console.error('재고 현황 불러오기 실패:', err, rawText);
-                statusEl.innerText = '❌ 불러오기 실패: ' + err.message;
-                statusEl.style.color = '#ef4444';
-                document.getElementById('inventoryStatusBody').innerHTML = `<tr><td colspan="6">불러오기 실패했습니다. 웹앱 URL과 배포 상태를 확인해주세요.</td></tr>`;
+                if (isForeground) {
+                    if (statusEl) { statusEl.innerText = '❌ 불러오기 실패: ' + err.message; statusEl.style.color = '#ef4444'; }
+                    document.getElementById('inventoryStatusBody').innerHTML = `<tr><td colspan="8">불러오기 실패했습니다. 웹앱 URL과 배포 상태를 확인해주세요.</td></tr>`;
+                } else if (statusEl) {
+                    statusEl.innerText = '⚠️ 캐시 표시 중 (최신 동기화 실패: ' + err.message + ')';
+                    statusEl.style.color = '#b45309';
+                }
             }
         }
 
@@ -1708,11 +1746,17 @@
             });
         }
 
+        // [최적화 Step B] 500건 초과 시 한 번에 다 그리지 않고 50건씩 페이지로 나눠 렌더링합니다.
+        const INVENTORY_PAGE_THRESHOLD = 500;
+        const INVENTORY_PAGE_SIZE = 50;
+        if (window.__inventoryPage === undefined) window.__inventoryPage = 1;
+
         function filterInventoryTable() {
             const kw = (document.getElementById('inventorySearch').value || '').trim().toLowerCase();
             const catEl = document.getElementById('inventoryCatFilter');
             const catFilter = catEl ? catEl.value : 'ALL';
             const tbody = document.getElementById('inventoryStatusBody');
+            const pagerEl = document.getElementById('inventoryPaginationControls');
 
             const records = computeInventoryDashboardRecords();
             window.__inventoryRecords = records;
@@ -1723,11 +1767,32 @@
                 const passCat = catFilter === 'ALL' || r.category === catFilter;
                 return passKw && passCat;
             });
-            if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="8">표시할 품목이 없습니다.</td></tr>'; return; }
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8">표시할 품목이 없습니다.</td></tr>';
+                if (pagerEl) pagerEl.style.display = 'none';
+                return;
+            }
 
-            window.__inventoryTableRows = filtered; // 소비기한 입력칸이 참조할 배열(인덱스 매칭)
+            window.__inventoryTableRows = filtered; // 소비기한 입력칸이 참조할 배열(인덱스 매칭, 페이지 여부와 무관하게 전체 기준)
 
-            tbody.innerHTML = filtered.map((r, idx) => {
+            const useVirtual = filtered.length > INVENTORY_PAGE_THRESHOLD;
+            let pageRows = filtered;
+            let offset = 0;
+
+            if (useVirtual) {
+                const totalPages = Math.ceil(filtered.length / INVENTORY_PAGE_SIZE);
+                if (window.__inventoryPage > totalPages) window.__inventoryPage = totalPages;
+                if (window.__inventoryPage < 1) window.__inventoryPage = 1;
+                offset = (window.__inventoryPage - 1) * INVENTORY_PAGE_SIZE;
+                pageRows = filtered.slice(offset, offset + INVENTORY_PAGE_SIZE);
+                renderInventoryPaginationControls(totalPages, filtered.length);
+            } else {
+                window.__inventoryPage = 1;
+                if (pagerEl) pagerEl.style.display = 'none';
+            }
+
+            tbody.innerHTML = pageRows.map((r, i) => {
+                const idx = offset + i; // window.__inventoryTableRows(전체 filtered) 기준 실제 인덱스
                 const stockTxt = r.stockUnavailable
                     ? '<span style="color:#94a3b8;">재고 미관리</span>'
                     : (r.stock === null ? '<span style="color:#94a3b8;">기록없음</span>' : r.stock.toLocaleString());
@@ -1749,6 +1814,40 @@
                     <td data-label="잔여일">${remainTxt}</td>
                 </tr>`;
             }).join('');
+        }
+
+        // [최적화 Step B 보조] 페이지 이동 버튼 렌더링
+        function renderInventoryPaginationControls(totalPages, totalCount) {
+            const pagerEl = document.getElementById('inventoryPaginationControls');
+            if (!pagerEl) return;
+            const cur = window.__inventoryPage;
+            const btn = (label, page, disabled, active) =>
+                `<button class="btn ${active ? 'btn-primary' : 'btn-gray'}" style="padding:5px 10px; font-size:11px;${disabled ? ' opacity:0.4; cursor:not-allowed;' : ''}" ${disabled ? 'disabled' : `onclick="goToInventoryPage(${page})"`}>${label}</button>`;
+
+            let pageBtns = '';
+            const windowSize = 2;
+            for (let p = 1; p <= totalPages; p++) {
+                if (p === 1 || p === totalPages || Math.abs(p - cur) <= windowSize) {
+                    pageBtns += btn(String(p), p, false, p === cur);
+                } else if (Math.abs(p - cur) === windowSize + 1) {
+                    pageBtns += '<span style="color:#94a3b8; padding:0 2px;">…</span>';
+                }
+            }
+
+            pagerEl.style.display = 'flex';
+            pagerEl.innerHTML = `
+                <span style="font-size:11px; color:#64748b; margin-right:6px;">총 ${totalCount.toLocaleString()}건 · ${INVENTORY_PAGE_SIZE}건씩 표시</span>
+                ${btn('◀ 이전', cur - 1, cur <= 1, false)}
+                ${pageBtns}
+                ${btn('다음 ▶', cur + 1, cur >= totalPages, false)}
+            `;
+        }
+
+        function goToInventoryPage(page) {
+            window.__inventoryPage = page;
+            filterInventoryTable();
+            const wrapper = document.querySelector('#tabContentInventory .table-wrapper');
+            if (wrapper) wrapper.scrollTop = 0;
         }
 
         function populateInventoryCatFilterOptions(records) {
