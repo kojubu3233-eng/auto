@@ -7,8 +7,8 @@
 // index.html 본문 코드는 전혀 건드릴 필요 없습니다.
 // ============================================================
 window.APP_CONFIG = {
-  // 예정량/확정량 시트(부대별정보/품목정보/공휴일캐시/데이터/DB_Master가 있는 스프레드시트)
-  HISTORY_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbw46wO5Yww9RavXDXaOcVCeysUkoEqTHkXGJCH5ozfsnRwJEIm9S4AXnrJPPP9QeXQQqQ/exec",
+  // 예정량/확정량 시트(부대별정보/품목정보/공휴일캐시/데이터/DB_Master가 있는 스프레드시트) = "자동화시스템"
+  HISTORY_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbztWhg9G3OjM_kwg4CXSzPVZ-CKQy6kaZWVBHiuqXV8-9jvmxCpSYmNYsFUb9qoLp4RAA/exec",
 
   // 재고수불대장 시트(국탕류/식육가공품/자사양념육/납품기한임박/납품기한경과 등이 있는 스프레드시트)
   LEDGER_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbwl6-jYaQkZin6FUo-TY1GFKDMF8JH91drG0yryxtupRmjgOMEel2OfKr_5UVpNIDrs/exec",
