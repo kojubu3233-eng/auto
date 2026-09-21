@@ -1417,12 +1417,22 @@
         // 이걸 표준 탭처럼 읽으면 날짜 아닌 텍스트가 날짜 칸에 들어가 경과일수가 수십만일로 튀는 등
         // 재고현황 표가 깨지므로 아예 건너뛴다.
         const SKIP_SHEETS = ['설명절 업체일정', '음료시장조사', '훈제닭다리(1.02kg)'];
+        // [수정] 시트 탭 이름에 앞뒤 공백이나 중복 공백이 섞여 있으면 위 목록과 정확히 일치하지 않아
+        // '납품기한임박' 등이 특수 탭이 아닌 일반 재고 카테고리로 잘못 섞여 들어가는 문제가 있어,
+        // 비교 전에 공백을 정리한다.
+        function normalizeSheetNameForMatch_(s) {
+            return String(s || '').trim().replace(/\s+/g, ' ');
+        }
         function getSheetKindClient(sheetName) {
-            if (SKIP_SHEETS.indexOf(sheetName) !== -1) return 'skip';
-            if (EXPIRY_UPCOMING_SHEETS.indexOf(sheetName) !== -1) return 'expiryUpcoming';
-            if (EXPIRY_PAST_SHEETS.indexOf(sheetName) !== -1) return 'expiryPast';
-            if (SELF_SEASONED_SHEETS.indexOf(sheetName) !== -1) return 'selfSeasoned';
-            if (DELIVERY_LOG_SHEETS.indexOf(sheetName) !== -1) return 'deliveryLog';
+            const n = normalizeSheetNameForMatch_(sheetName);
+            if (SKIP_SHEETS.some(s => normalizeSheetNameForMatch_(s) === n)) return 'skip';
+            if (EXPIRY_UPCOMING_SHEETS.some(s => normalizeSheetNameForMatch_(s) === n)) return 'expiryUpcoming';
+            if (EXPIRY_PAST_SHEETS.some(s => normalizeSheetNameForMatch_(s) === n)) return 'expiryPast';
+            if (SELF_SEASONED_SHEETS.some(s => normalizeSheetNameForMatch_(s) === n)) return 'selfSeasoned';
+            if (DELIVERY_LOG_SHEETS.some(s => normalizeSheetNameForMatch_(s) === n)) return 'deliveryLog';
+            // [안전장치] 정확히 목록과 일치하지 않아도, 이름에 '납품기한'이 포함되면 일반 재고 카테고리로
+            // 잘못 섞이지 않도록 경과/임박 여부로 최대한 추정해 분류한다.
+            if (n.includes('납품기한')) return n.includes('경과') ? 'expiryPast' : 'expiryUpcoming';
             return 'standard';
         }
 
@@ -1766,12 +1776,15 @@
                 let remainingDays = null;
                 if (deliveryDeadline) remainingDays = daysFromToday(deliveryDeadline);
                 else if (expiryDate) remainingDays = daysFromToday(expiryDate);
+                // [신규] 납품기한이 이미 지난 품목은 "납품기한 경과" 섹션에서 별도로 보여주고 있으므로,
+                // 재고 현황 표에서는 (품명·재고는 그대로 두되) 이미 지난 납품기한 값 자체는 보여주지 않는다.
+                const deliveryDeadlinePassed = !!(deliveryDeadline && remainingDays !== null && remainingDays < 0);
                 const rawAging = lastInDate ? daysFromToday(lastInDate) : null;
                 const agingDays = rawAging === null ? null : -rawAging; // 오늘-입고일 (양수=며칠 지남)
                 return {
                     key, name: p.name, category: p.category, storageMethod,
                     lastInDate, stock: p.stock, stockUnavailable: !!p.stockUnavailable,
-                    expiryDate, expiryIsEstimated, deliveryDeadline, remainingDays, agingDays
+                    expiryDate, expiryIsEstimated, deliveryDeadline, deliveryDeadlinePassed, remainingDays, agingDays
                 };
             });
         }
@@ -1827,8 +1840,9 @@
                     ? '<span style="color:#94a3b8;">재고 미관리</span>'
                     : (r.stock === null ? '<span style="color:#94a3b8;">기록없음</span>' : r.stock.toLocaleString());
                 const stockColor = (!r.stockUnavailable && r.stock !== null && r.stock <= 0) ? '#ef4444' : '#16a34a';
-                const remainTxt = r.remainingDays === null ? '-'
-                    : (r.remainingDays < 0 ? `<span style="color:#dc2626; font-weight:bold;">경과 ${Math.abs(r.remainingDays)}일</span>` : `${r.remainingDays}일`);
+                const remainTxt = r.deliveryDeadlinePassed ? '-'
+                    : (r.remainingDays === null ? '-'
+                        : (r.remainingDays < 0 ? `<span style="color:#dc2626; font-weight:bold;">경과 ${Math.abs(r.remainingDays)}일</span>` : `${r.remainingDays}일`));
                 const expiryHint = r.expiryIsEstimated ? ' title="품목정보 유효일수로 추정한 값입니다. 실사 후 정확한 날짜를 입력해주세요."' : '';
                 return `<tr>
                     <td data-label="카테고리" style="color:#64748b;">${r.category}</td>
@@ -1840,7 +1854,7 @@
                         <input type="date" class="inv-expiry-input" data-idx="${idx}" value="${r.expiryDate || ''}" style="padding:4px; border:1px solid ${r.expiryIsEstimated ? '#fbbf24' : '#cbd5e1'}; border-radius:4px; font-size:11px;" onchange="markExpiryDirty(this)">
                         ${r.expiryIsEstimated ? '<div style="font-size:9px; color:#b45309;">추정치(미실사)</div>' : ''}
                     </td>
-                    <td data-label="납품기한" style="color:#ea580c;">${r.deliveryDeadline || '-'}</td>
+                    <td data-label="납품기한" style="color:#ea580c;" title="${r.deliveryDeadlinePassed ? '납품기한이 지나 납품기한 경과 섹션에서 확인할 수 있습니다.' : ''}">${r.deliveryDeadlinePassed ? '-' : (r.deliveryDeadline || '-')}</td>
                     <td data-label="잔여일">${remainTxt}</td>
                 </tr>`;
             }).join('');
