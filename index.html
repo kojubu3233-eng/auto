@@ -342,11 +342,9 @@
                 <button class="btn btn-gray" onclick="addGridRow()">+ 5행 추가</button>
                 <button class="btn btn-gray" style="background:#e2e8f0; color:#333;" onclick="exportPredictionExcel()">📥 예측결과 다운로드</button>
                 <button class="btn btn-gray" style="background:var(--accent); color:#fff;" onclick="saveGridToGoogleSheet()" title="이 그리드에 입력한 행을 상단에 설정한 '저장(신규 예정량) 시트'(기본 DB_Master)에 새 예정량 행으로 추가합니다. 각 행의 '저장기준' 선택에 따라 최소/권장/최대 중 하나가 예정량으로 들어갑니다.">구글시트에 저장</button>
-                <button class="btn btn-gray" style="background:#4A4238; color:#fff;" onclick="saveGridToInventoryLedger()" title="재고수불대장에 예정 입고를 등록합니다. A업체·B제품 자동 매칭, C입고일(=납품일-리드타임)·D수량·E납품일·I부대까지 자동 기록되며(빨간 글씨+연노랑 배경), F소계(확정량)만 실제 납품 후 직접 입력하시면 됩니다.">재고수불대장 등록</button>
-                <span id="leadDaysWrap" style="font-size:12px; color:#475569; display:flex; align-items:center; gap:4px;" title="재고수불대장의 '입고일'은 항상 납품일보다 이 일수만큼 이릅니다(창고 입고 후 납품). 급식일 기준 입력이면 부대별정보 요일 패턴으로 먼저 납품일을 역산한 뒤 여기서 뺍니다.">리드타임(입고일 = 납품일 -
-                    <input type="number" id="ledgerLeadDays" value="2" min="0" style="width:45px; padding:4px;">
-                    일)
-                </span>
+                <button class="btn btn-gray" style="background:#4A4238; color:#fff;" onclick="saveGridToInventoryLedger()" title="재고수불대장에 예정 입고를 등록합니다. A업체·B제품 자동 매칭, D수량·E납품일·I부대까지 자동 기록됩니다. C입고일과 F소계(확정량)는 실제 입고/납품 후 시트에서 직접 입력하는 칸이라 비워둡니다. 새로 추가된 셀은 색으로 표시됩니다.">재고수불대장 등록</button>
+                <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
+                <button class="btn btn-danger" onclick="deleteSelectedGridRows()" title="맨 왼쪽 체크박스를 선택한 행들을 그리드에서 삭제합니다(구글시트에는 영향 없음, 화면에서만 지워짐)">선택 행 삭제</button>
                 <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
                 <button class="btn btn-gray" style="background:var(--accent); color:#fff;" onclick="document.getElementById('planScheduleInput').click()" title="부대·관공서에서 전파받은 급식/발주 예정량 사진을 올리면 AI가 표를 읽어 품명·수량을 추출합니다. 자사 품목으로 보이는 것만 미리 체크된 채 확인 팝업이 뜨고, 확인 후 적용해야 실제로 그리드에 들어갑니다(자동 반영 안 됨).">전파 사진으로 자동 입력</button>
                 <input type="file" id="planScheduleInput" accept="image/*" style="display:none;" onchange="handlePlanScheduleUpload(event)">
@@ -843,6 +841,18 @@
 
         function toggleSelectAllRows(headerChk) {
             document.querySelectorAll('#excelGridBody .grid-select').forEach(chk => chk.checked = headerChk.checked);
+        }
+
+        // [신규] 체크된 행들을 그리드에서 삭제(구글시트에는 영향 없음, 화면상의 그리드만 정리)
+        function deleteSelectedGridRows() {
+            const checked = document.querySelectorAll('#excelGridBody .grid-select:checked');
+            if (checked.length === 0) { alert('삭제할 행을 왼쪽 체크박스로 먼저 선택해주세요.'); return; }
+            if (!confirm(`체크된 ${checked.length}개 행을 그리드에서 삭제할까요? (구글시트에는 영향 없습니다)`)) return;
+            checked.forEach(chk => chk.closest('tr').remove());
+            const gridSelectAll = document.getElementById('gridSelectAll');
+            if (gridSelectAll) gridSelectAll.checked = false;
+            if (document.getElementById('excelGridBody').children.length === 0) addGridRow(true);
+            calculateMultiRows();
         }
 
         function addGridRow(isSingle=false) {
@@ -2843,7 +2853,6 @@
             const ledgerSheetHint = window.APP_URLS.ledgerSheetHint;
             const dateBasis = getDateBasis();
             const mode = document.querySelector('input[name="calcMode"]:checked').value;
-            const leadDays = parseInt(document.getElementById('ledgerLeadDays').value, 10) || 0;
             const rowsToSend = [];
             const missingDeliveryRows = [];
 
@@ -2863,28 +2872,21 @@
                 if (orderQtyOverride !== '' && !isNaN(parseFloat(orderQtyOverride))) qty = parseFloat(orderQtyOverride);
                 if (qty <= 0) continue;
 
+                // [수정] 입고일은 더 이상 리드타임으로 자동계산하지 않고 항상 비워서 보낸다.
+                // 실제 입고일은 재고수불대장 시트에서 직접 입력한다.
                 const deliveryDateForCalc = dateBasis === 'delivery'
                     ? dateVal
                     : ((unitName && dateVal) ? computeCounterpartDate(unitName, dateVal, dateBasis) : null);
+                if (!deliveryDateForCalc) missingDeliveryRows.push(`${unitName || '(부대미입력)'} - ${name}`);
 
-                let incomingDate = '';
-                if (deliveryDateForCalc) {
-                    const d = new Date(deliveryDateForCalc);
-                    if (!isNaN(d.getTime())) {
-                        d.setDate(d.getDate() - leadDays);
-                        incomingDate = d.toISOString().split('T')[0];
-                    }
-                }
-                if (!incomingDate) missingDeliveryRows.push(`${unitName || '(부대미입력)'} - ${name}`);
-
-                rowsToSend.push({ name, date: incomingDate, deliveryDate: deliveryDateForCalc || '', qty, unit: unitName });
+                rowsToSend.push({ name, date: '', deliveryDate: deliveryDateForCalc || '', qty, unit: unitName });
             }
 
             if (rowsToSend.length === 0) { alert('전송할 행이 없습니다. 품명과 소요량을 입력해주세요.'); return; }
             const targetDesc = ledgerSheetHint ? `'${ledgerSheetHint}' 탭 우선, 없으면 다른 탭 자동 탐색` : '전체 탭 자동 탐색';
-            let confirmMsg = `재고수불대장(${targetDesc})에 ${rowsToSend.length}건을 예정 입고로 등록합니다.\n(A업체·B제품 자동 매칭, C입고일=납품일-리드타임 ${leadDays}일, D수량=선택한 저장기준 값, E납품일도 함께 채워집니다. F소계(확정량)는 실제 납품 후 직접 입력하는 칸이라 비워둡니다.)`;
+            let confirmMsg = `재고수불대장(${targetDesc})에 ${rowsToSend.length}건을 예정 입고로 등록합니다.\n(A업체·B제품 자동 매칭, D수량=선택한 저장기준 값, E납품일·I부대까지 함께 채워집니다. C입고일과 F소계(확정량)는 실제 입고/납품 후 시트에서 직접 입력하는 칸이라 비워둡니다. 새로 추가된 셀은 색으로 표시됩니다.)`;
             if (missingDeliveryRows.length > 0) {
-                confirmMsg += `\n\n⚠️ 아래 ${missingDeliveryRows.length}건은 납품일을 계산하지 못해 입고일이 빈 채로 등록됩니다(부대별정보에 해당 부대 요일 패턴이 없음 — 직접 채워주세요):\n- ` + missingDeliveryRows.join('\n- ');
+                confirmMsg += `\n\n⚠️ 아래 ${missingDeliveryRows.length}건은 납품일을 계산하지 못했습니다(부대별정보에 해당 부대 요일 패턴이 없음 — E열도 비워지니 직접 채워주세요):\n- ` + missingDeliveryRows.join('\n- ');
             }
             confirmMsg += `\n계속할까요?`;
             if (!confirm(confirmMsg)) return;
