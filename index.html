@@ -133,6 +133,41 @@
                 text-align: left;
             }
             #inventoryStatusTable td[data-label="소비기한"] input[type="date"] { width: 100%; }
+
+            /* [신규] 예정량 입력 그리드 — PC에서는 기존 가로 스크롤 엑셀 그리드 그대로 유지하고,
+               모바일에서만 필드를 숨기지 않고 2열 카드형으로 압축한다(붙여넣기는 PC 전용 기능으로 남김). */
+            .excel-table tbody tr {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                overflow: hidden;
+                margin-bottom: 10px;
+                background: var(--surface);
+            }
+            .excel-table td {
+                display: block;
+                position: relative;
+                border: none;
+                border-bottom: 1px solid var(--border-soft);
+                padding: 20px 8px 6px;
+                min-height: 15px;
+            }
+            .excel-table td::before {
+                content: attr(data-label);
+                position: absolute;
+                top: 4px; left: 8px;
+                font-size: 10px; font-weight: 700; color: var(--muted-2);
+            }
+            .excel-table td.hide-col { display: none; }
+            .excel-table td.grid-select-col {
+                grid-column: 1 / -1;
+                display: flex; justify-content: flex-end;
+                padding: 6px 8px; border-bottom: 1px solid var(--border-soft);
+            }
+            .excel-table td.grid-select-col::before { content: none; }
+            .excel-table td.ac-wrap { grid-column: 1 / -1; }
+            .excel-table td input, .excel-table td select { width: 100%; box-sizing: border-box; }
             .controls-row { flex-direction: column; align-items: stretch; }
             .dashboard-grid { grid-template-columns: 1fr 1fr; }
         }
@@ -790,39 +825,39 @@
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td class="grid-select-col"><input type="checkbox" class="grid-select"></td>
-                    <td>
+                    <td data-label="일(day)">
                         <div style="display:flex; align-items:center; justify-content:center; gap:2px;">
                             <input type="date" class="grid-date" style="padding:4px; font-size:11px;" value="${defaultDate}" onchange="calculateMultiRows()" onkeydown="handleDateKey(event, this)">
                             <span class="row-day-badge day-badge" style="display:none; padding:2px 4px;"></span>
                         </div>
                     </td>
-                    <td><input type="text" class="grid-unit-name" list="unitNameList" value="${lastUnit}" placeholder="부대 입력" onchange="handleUnitChange(this)"></td>
-                    <td class="ac-wrap">
+                    <td data-label="부대"><input type="text" class="grid-unit-name" list="unitNameList" value="${lastUnit}" placeholder="부대 입력" onchange="handleUnitChange(this)"></td>
+                    <td class="ac-wrap" data-label="품명">
                         <input type="text" class="grid-name" autocomplete="off"
                             oninput="showProductSuggestions(this)"
                             onblur="handleNameBlur(this)"
                             onkeydown="handleNameKeydown(event, this)">
                         <div class="ac-list"></div>
                     </td>
-                    <td><input type="text" class="grid-cat" placeholder="자동" oninput="this.dataset.autoFilled=''"></td>
-                    <td class="col-total ${tClass}"><input type="number" class="grid-req-tot"></td>
-                    <td class="col-person ${pClass}"><input type="number" class="grid-req-per" placeholder="예: 160(g)"></td>
-                    <td style="background:#f1f5f9;">
+                    <td data-label="구분"><input type="text" class="grid-cat" placeholder="자동" oninput="this.dataset.autoFilled=''"></td>
+                    <td class="col-total ${tClass}" data-label="총소요량"><input type="number" class="grid-req-tot"></td>
+                    <td class="col-person ${pClass}" data-label="기준량(g)"><input type="number" class="grid-req-per" placeholder="예: 160(g)"></td>
+                    <td style="background:#f1f5f9;" data-label="단위">
                         <select class="grid-unit">
                             <option value="kg">kg</option>
                             <option value="ea">EA(팩)</option>
                         </select>
                     </td>
-                    <td style="background:#fffbeb;"><input type="number" class="grid-spec" value="1.0"></td>
-                    <td class="res-min">-</td><td class="res-rec">-</td><td class="res-max">-</td>
-                    <td style="background:#f5f3ff;">
+                    <td style="background:#fffbeb;" data-label="포장규격"><input type="number" class="grid-spec" value="1.0"></td>
+                    <td class="res-min" data-label="최소(팩)">-</td><td class="res-rec" data-label="권장(팩)">-</td><td class="res-max" data-label="최대(팩)">-</td>
+                    <td style="background:#f5f3ff;" data-label="저장기준">
                         <select class="grid-save-basis" title="구글시트 저장 시 사용할 값">
                             <option value="min">최소</option>
                             <option value="rec" selected>★권장</option>
                             <option value="max">최대</option>
                         </select>
                     </td>
-                    <td style="background:#fdf2f8;"><input type="number" class="grid-order-qty" placeholder="비워두면 저장기준값"></td>
+                    <td style="background:#fdf2f8;" data-label="업체발주량"><input type="number" class="grid-order-qty" placeholder="비워두면 저장기준값"></td>
                 `;
                 tbody.appendChild(tr);
             }
