@@ -136,6 +136,7 @@
 
             /* [신규] 예정량 입력 그리드 — PC에서는 기존 가로 스크롤 엑셀 그리드 그대로 유지하고,
                모바일에서만 필드를 숨기지 않고 2열 카드형으로 압축한다(붙여넣기는 PC 전용 기능으로 남김). */
+            .excel-table thead { display: none; }
             .excel-table tbody tr {
                 display: grid;
                 grid-template-columns: 1fr 1fr;
@@ -313,7 +314,7 @@
                 <button class="btn btn-success" onclick="calculateMultiRows()">일괄 산출</button>
             </div>
 
-            <div style="overflow-x: auto; border: 1px solid #cbd5e1;">
+            <div style="overflow-x: auto; border: 1px solid var(--border);">
                 <table class="excel-table">
                     <thead>
                         <tr>
