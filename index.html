@@ -96,6 +96,43 @@
             table.responsive-table td { text-align: right; padding: 6px 10px; border: none; border-bottom: 1px solid var(--border-soft); position: relative; padding-left: 42%; min-height: 16px; }
             table.responsive-table td:last-child { border-bottom: none; }
             table.responsive-table td::before { content: attr(data-label); position: absolute; left: 10px; text-align: left; font-weight: 700; color: var(--muted-2); }
+            /* [신규] 확정량 입력 표는 컬럼이 17개라 모바일에서 한 품목당 스크롤이 너무 길어짐 —
+               핵심(납품일/품명/부대/예정량(개)/확정량 입력/오차율)만 남기고 나머지는 숨긴다.
+               데스크탑(720px 초과)에서는 이 규칙이 적용되지 않아 전체 컬럼이 그대로 보인다. */
+            #confirmTable td[data-label="구분"],
+            #confirmTable td[data-label="단위"],
+            #confirmTable td[data-label="예정량(kg)"],
+            #confirmTable td[data-label="급식일"],
+            #confirmTable td[data-label="판매단가"],
+            #confirmTable td[data-label="매출계획"],
+            #confirmTable td[data-label="매출"],
+            #confirmTable td[data-label="나라장터"],
+            #confirmTable td[data-label="검사검수"],
+            #confirmTable td[data-label="대금청구"] { display: none; }
+
+            /* [신규] 재고 현황(소비기한 입력) 표 — 필드를 숨기지 않고 2열로 압축 배치해서
+               품목 하나당 세로 길이를 절반 이하로 줄인다. 소비기한만 입력칸이 있어 한 줄 전체를 쓴다. */
+            #inventoryStatusTable tbody tr {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                overflow: hidden;
+                margin-bottom: 8px;
+            }
+            #inventoryStatusTable td {
+                display: block;
+                border: none;
+                border-bottom: 1px solid var(--border-soft);
+                padding: 7px 10px 7px 38%;
+                min-height: 15px;
+            }
+            #inventoryStatusTable td[data-label="소비기한"] {
+                grid-column: 1 / -1;
+                padding: 8px 10px 8px 78px;
+                text-align: left;
+            }
+            #inventoryStatusTable td[data-label="소비기한"] input[type="date"] { width: 100%; }
             .controls-row { flex-direction: column; align-items: stretch; }
             .dashboard-grid { grid-template-columns: 1fr 1fr; }
         }
