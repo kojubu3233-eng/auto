@@ -338,17 +338,24 @@
                 </table>
             </div>
             <datalist id="unitNameList"></datalist>
-            <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+
+            <div style="margin-top:12px; display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+                <span style="font-size:11px; font-weight:700; color:var(--muted); min-width:64px;">그리드 편집</span>
                 <button class="btn btn-gray" onclick="addGridRow()">+ 5행 추가</button>
-                <button class="btn btn-gray" style="background:#e2e8f0; color:#333;" onclick="exportPredictionExcel()">📥 예측결과 다운로드</button>
-                <button class="btn btn-gray" style="background:var(--accent); color:#fff;" onclick="saveGridToGoogleSheet()" title="이 그리드에 입력한 행을 상단에 설정한 '저장(신규 예정량) 시트'(기본 DB_Master)에 새 예정량 행으로 추가합니다. 각 행의 '저장기준' 선택에 따라 최소/권장/최대 중 하나가 예정량으로 들어갑니다.">구글시트에 저장</button>
-                <button class="btn btn-gray" style="background:#4A4238; color:#fff;" onclick="saveGridToInventoryLedger()" title="재고수불대장에 예정 입고를 등록합니다. A업체·B제품 자동 매칭, D수량·E납품일·I부대까지 자동 기록됩니다. C입고일과 F소계(확정량)는 실제 입고/납품 후 시트에서 직접 입력하는 칸이라 비워둡니다. 새로 추가된 셀은 색으로 표시됩니다.">재고수불대장 등록</button>
-                <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
                 <button class="btn btn-danger" onclick="deleteSelectedGridRows()" title="맨 왼쪽 체크박스를 선택한 행들을 그리드에서 삭제합니다(구글시트에는 영향 없음, 화면에서만 지워짐)">선택 행 삭제</button>
-                <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
+                <span style="border-left:1px solid var(--border); height:20px; margin:0 2px;"></span>
                 <button class="btn btn-gray" style="background:var(--accent); color:#fff;" onclick="document.getElementById('planScheduleInput').click()" title="부대·관공서에서 전파받은 급식/발주 예정량 사진을 올리면 AI가 표를 읽어 품명·수량을 추출합니다. 자사 품목으로 보이는 것만 미리 체크된 채 확인 팝업이 뜨고, 확인 후 적용해야 실제로 그리드에 들어갑니다(자동 반영 안 됨).">전파 사진으로 자동 입력</button>
                 <input type="file" id="planScheduleInput" accept="image/*" style="display:none;" onchange="handlePlanScheduleUpload(event)">
                 <span id="planScheduleStatus" style="font-size:12px; color:var(--muted);"></span>
+            </div>
+
+            <div style="margin-top:10px; display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+                <span style="font-size:11px; font-weight:700; color:var(--muted); min-width:64px;">저장·내보내기</span>
+                <button class="btn btn-gray" style="background:var(--accent); color:#fff;" onclick="saveGridToGoogleSheet()" title="이 그리드에 입력한 행을 상단에 설정한 '저장(신규 예정량) 시트'(기본 DB_Master)에 새 예정량 행으로 추가합니다. 각 행의 '저장기준' 선택에 따라 최소/권장/최대 중 하나가 예정량으로 들어갑니다.">구글시트에 저장</button>
+                <button class="btn btn-gray" style="background:#4A4238; color:#fff;" onclick="saveGridToInventoryLedger()" title="재고수불대장에 예정 입고를 등록합니다. A업체·B제품 자동 매칭, D수량·E납품일·I부대까지 자동 기록됩니다. C입고일과 F소계(확정량)는 실제 입고/납품 후 시트에서 직접 입력하는 칸이라 비워둡니다. 새로 추가된 셀은 색으로 표시됩니다.">재고수불대장 등록</button>
+                <span style="border-left:1px solid var(--border); height:20px; margin:0 2px;"></span>
+                <button class="btn btn-gray" style="background:#e2e8f0; color:#333;" onclick="exportPredictionExcel()">📥 예측결과 다운로드</button>
+            </div>
             </div>
         </div>
 
@@ -496,7 +503,7 @@
                 <h2 style="font-size: 15px; color:var(--ink);">재고 현황 (재고수불대장 실시간 조회)</h2>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span id="inventoryStatusMsg" style="font-size:12px; color:#64748b;">아직 불러오지 않았습니다.</span>
-                    <button class="btn btn-success" onclick="saveActualExpiryDates()" title="소비기한 칸에 입력/수정한 실측값을 재고수불대장에 반영합니다">소비기한 저장</button>
+                    <button class="btn btn-success" onclick="saveInventoryEdits()" title="입고일·재고·소비기한 칸에 직접 입력/수정한 값을 재고수불대장에 반영합니다">변경사항 저장</button>
                     <button class="btn btn-primary" onclick="loadInventoryStatus().catch(()=>{})">재고 새로고침</button>
                 </div>
             </div>
@@ -2033,22 +2040,27 @@
 
             tbody.innerHTML = pageRows.map((r, i) => {
                 const idx = offset + i; // window.__inventoryTableRows(전체 filtered) 기준 실제 인덱스
-                const stockTxt = r.stockUnavailable
-                    ? '<span style="color:#94a3b8;">재고 미관리</span>'
-                    : (r.stock === null ? '<span style="color:#94a3b8;">기록없음</span>' : r.stock.toLocaleString());
+                const stockUnavailTxt = '<span style="color:#94a3b8;">재고 미관리</span>';
                 const stockColor = (!r.stockUnavailable && r.stock !== null && r.stock <= 0) ? '#ef4444' : '#16a34a';
                 const remainTxt = r.deliveryDeadlinePassed ? '-'
                     : (r.remainingDays === null ? '-'
                         : (r.remainingDays < 0 ? `<span style="color:#dc2626; font-weight:bold;">경과 ${Math.abs(r.remainingDays)}일</span>` : `${r.remainingDays}일`));
                 const expiryHint = r.expiryIsEstimated ? ' title="품목정보 유효일수로 추정한 값입니다. 실사 후 정확한 날짜를 입력해주세요."' : '';
+                // [신규] 입고일·재고도 소비기한처럼 직접 수정 가능(재고 미관리 탭은 그대로 읽기전용)
+                const inDateCell = r.stockUnavailable
+                    ? (r.lastInDate || '-')
+                    : `<input type="date" class="inv-indate-input" data-idx="${idx}" value="${r.lastInDate || ''}" style="width:100%; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:11px;" onchange="markInventoryDirty(this)">`;
+                const stockCell = r.stockUnavailable
+                    ? stockUnavailTxt
+                    : `<input type="number" class="inv-stock-input" data-idx="${idx}" value="${r.stock !== null ? r.stock : ''}" placeholder="기록없음" style="width:100%; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:12px; font-weight:bold; color:${stockColor};" onchange="markInventoryDirty(this)">`;
                 return `<tr>
                     <td data-label="카테고리" style="color:#64748b;">${r.category}</td>
                     <td data-label="품명" style="text-align:left; font-weight:600;">${r.name}</td>
                     <td data-label="보관방법">${r.storageMethod}</td>
-                    <td data-label="입고일">${r.lastInDate || '-'}</td>
-                    <td data-label="재고" style="font-weight:bold; color:${stockColor};">${stockTxt}</td>
+                    <td data-label="입고일">${inDateCell}</td>
+                    <td data-label="재고">${stockCell}</td>
                     <td data-label="소비기한"${expiryHint}>
-                        <input type="date" class="inv-expiry-input" data-idx="${idx}" value="${r.expiryDate || ''}" style="padding:4px; border:1px solid ${r.expiryIsEstimated ? '#fbbf24' : '#cbd5e1'}; border-radius:4px; font-size:11px;" onchange="markExpiryDirty(this)">
+                        <input type="date" class="inv-expiry-input" data-idx="${idx}" value="${r.expiryDate || ''}" style="padding:4px; border:1px solid ${r.expiryIsEstimated ? '#fbbf24' : '#cbd5e1'}; border-radius:4px; font-size:11px;" onchange="markInventoryDirty(this)">
                         ${r.expiryIsEstimated ? '<div style="font-size:9px; color:#b45309;">추정치(미실사)</div>' : ''}
                     </td>
                     <td data-label="납품기한" style="color:#ea580c;" title="${r.deliveryDeadlinePassed ? '납품기한이 지나 납품기한 경과 섹션에서 확인할 수 있습니다.' : ''}">${r.deliveryDeadlinePassed ? '-' : (r.deliveryDeadline || '-')}</td>
@@ -2120,45 +2132,55 @@
             setTimeout(() => { const list = document.getElementById('inventoryNameSuggestList'); if (list) list.style.display = 'none'; }, 150);
         }
 
-        // [신규] 실제 소비기한 입력 저장(물류팀 실사 결과 반영)
-        function markExpiryDirty(inputEl) {
+        // [신규] 입고일·재고·소비기한 중 무엇을 고쳐도 공통으로 사용하는 dirty 표시
+        function markInventoryDirty(inputEl) {
             inputEl.style.background = '#fef9c3';
             inputEl.style.borderColor = '#f59e0b';
             inputEl.dataset.dirty = '1';
         }
 
-        async function saveActualExpiryDates() {
+        // [수정] 입고일·재고·소비기한 세 가지 중 바뀐 것을 한 번에 모아서 재고수불대장에 반영.
+        // 같은 행에서 여러 칸을 고쳤으면 하나의 업데이트로 합쳐서 보낸다.
+        async function saveInventoryEdits() {
             const url = getLedgerUrl(); if (!url) return;
             const rows = window.__inventoryTableRows || [];
-            const inputs = document.querySelectorAll('.inv-expiry-input[data-dirty="1"]');
-            if (inputs.length === 0) { alert('변경된 소비기한이 없습니다.'); return; }
 
-            const updates = [];
-            inputs.forEach(inp => {
-                const idx = Number(inp.dataset.idx);
-                const rec = rows[idx];
-                if (!rec) return;
-                const raw = inp.value.trim();
-                if (!raw) return;
-                updates.push({ rec, inp, sheet: rec.category, name: rec.name, date: raw });
-            });
-            if (updates.length === 0) { alert('반영할 값이 없습니다.'); return; }
-            if (!confirm(`${updates.length}건의 실제 소비기한을 재고수불대장에 반영할까요?`)) return;
+            const dirtyByIdx = {}; // idx -> { rec, inputs:[], inDate?, stock?, expiry? }
+            const collect = (selector, field) => {
+                document.querySelectorAll(selector + '[data-dirty="1"]').forEach(inp => {
+                    const idx = Number(inp.dataset.idx);
+                    const rec = rows[idx];
+                    if (!rec) return;
+                    if (!dirtyByIdx[idx]) dirtyByIdx[idx] = { rec, inputs: [] };
+                    dirtyByIdx[idx][field] = inp.value.trim();
+                    dirtyByIdx[idx].inputs.push(inp);
+                });
+            };
+            collect('.inv-indate-input', 'inDate');
+            collect('.inv-stock-input', 'stock');
+            collect('.inv-expiry-input', 'expiry');
+
+            const updates = Object.values(dirtyByIdx);
+            if (updates.length === 0) { alert('변경된 내용이 없습니다.'); return; }
+            if (!confirm(`${updates.length}건의 변경사항을 재고수불대장에 반영할까요?`)) return;
 
             try {
                 const res = await fetch(url, {
                     method: 'POST',
                     headers: {'Content-Type': 'text/plain;charset=utf-8'},
-                    body: JSON.stringify({ action: 'updateActualExpiry', rows: updates.map(u => ({ sheet: u.sheet, name: u.name, date: u.date })) })
+                    body: JSON.stringify({
+                        action: 'updateInventoryFields',
+                        rows: updates.map(u => ({ sheet: u.rec.category, name: u.rec.name, inDate: u.inDate || '', stock: u.stock !== undefined ? u.stock : '', expiry: u.expiry || '' }))
+                    })
                 });
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const result = await res.json();
                 if (result.error) throw new Error(result.error);
-                updates.forEach(u => { u.inp.style.background = ''; u.inp.style.borderColor = '#cbd5e1'; delete u.inp.dataset.dirty; });
+                updates.forEach(u => u.inputs.forEach(inp => { inp.style.background = ''; inp.style.borderColor = 'var(--border)'; delete inp.dataset.dirty; }));
                 alert(`✅ ${updates.length}건 저장 완료!`);
                 loadInventoryStatus().catch(()=>{});
             } catch (err) {
-                alert('소비기한 저장에 실패했습니다: ' + err.message);
+                alert('저장에 실패했습니다: ' + err.message);
             }
         }
 
