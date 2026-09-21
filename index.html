@@ -10,70 +10,80 @@
          이 config.js 파일만 GitHub에서 고치면 됩니다 (index.html 본문은 건드릴 필요 없음). -->
     <script src="config.js"></script>
     <style>
-        * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
-        body { background-color: #f8fafc; color: #1e293b; padding: 15px; font-size: 13px; }
+        :root {
+            --paper: #F6F5F1; --surface: #FFFFFF; --surface-alt: #FBFAF6;
+            --ink: #1D1B18; --muted: #6B6660; --muted-2: #8A8478;
+            --border: #E4E1DA; --border-soft: #EEEBE4;
+            --accent: #2B3A55; --accent-soft: rgba(43,58,85,0.08); --accent-soft-2: rgba(43,58,85,0.14);
+            --danger: #B3261E; --danger-soft: #F7E9E7; --danger-border: #E9D9D6;
+            --warn: #9A6324; --warn-soft: #FBF1E4; --warn-border: #F0DFC4;
+        }
+        * { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", system-ui, sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
+        body { background-color: var(--paper); color: var(--ink); padding: 15px; font-size: 13px; }
         
-        .panel { background: #fff; padding: 15px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-        .header { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #1e3a8a, #3b82f6); color: white; flex-wrap: wrap; gap: 10px; }
+        .panel { background: var(--surface); padding: 18px; border-radius: 10px; margin-bottom: 15px; border: 1px solid var(--border); }
+        .header { display: flex; justify-content: space-between; align-items: center; background: var(--surface); color: var(--ink); flex-wrap: wrap; gap: 10px; border-bottom: 2px solid var(--border); border-radius: 0; }
+        .header h1 { font-weight: 700; letter-spacing: -0.01em; }
         
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 15px; }
-        .card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; border-left: 5px solid #cbd5e1; }
-        .card.blue { border-left-color: #3b82f6; }
-        .card.green { border-left-color: #10b981; }
-        .card.orange { border-left-color: #f97316; }
-        .card h3 { font-size: 12px; color: #64748b; margin-bottom: 5px; }
-        .card .value { font-size: 22px; font-weight: bold; }
+        .card { background: var(--surface); padding: 15px; border-radius: 10px; border: 1px solid var(--border); }
+        .card.blue, .card.green, .card.orange { border-color: var(--border); }
+        .card h3 { font-size: 12px; color: var(--muted-2); margin-bottom: 5px; font-weight: 600; }
+        .card .value { font-size: 22px; font-weight: 700; color: var(--ink); }
 
         .main-container { display: grid; grid-template-columns: 1fr; gap: 15px; }
         @media (min-width: 1200px) { .main-container { grid-template-columns: 1.4fr 0.6fr; } }
 
-        .btn { padding: 8px 12px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; color: white; display: inline-block; text-align: center; }
-        .btn-primary { background: #2563eb; } .btn-success { background: #10b981; } .btn-danger { background: #ef4444; } .btn-gray { background: #64748b; }
+        .btn { padding: 9px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; display: inline-block; text-align: center; transition: opacity .12s ease; }
+        .btn:hover { opacity: 0.88; }
+        .btn-primary { background: var(--accent); } .btn-success { background: #3F6B4A; } .btn-danger { background: var(--danger); } .btn-gray { background: #6B6660; }
         
         table { width: 100%; border-collapse: collapse; text-align: center; font-size: 12px; }
-        th { background: #f1f5f9; padding: 8px 4px; font-weight: 600; border: 1px solid #cbd5e1; position: sticky; top: 0; }
-        td { padding: 4px; border: 1px solid #cbd5e1; background: #fff; vertical-align: middle; }
-        input[type="text"], input[type="number"], input[type="date"], input[type="month"], select { border: 1px solid #cbd5e1; padding: 6px; border-radius: 4px; outline: none; }
-        input:focus, select:focus { border-color: #2563eb; background: #eff6ff; }
+        th { background: var(--surface-alt); color: var(--muted-2); padding: 9px 4px; font-weight: 600; border: 1px solid var(--border); position: sticky; top: 0; }
+        td { padding: 4px; border: 1px solid var(--border); background: var(--surface); vertical-align: middle; }
+        tbody tr:nth-child(even) td { background: var(--surface-alt); }
+        input[type="text"], input[type="number"], input[type="date"], input[type="month"], select { border: 1px solid var(--border); padding: 6px; border-radius: 6px; outline: none; background: var(--surface); color: var(--ink); }
+        input:focus, select:focus { border-color: var(--accent); background: var(--accent-soft); }
         
         .excel-table td { padding: 2px; }
         .excel-table input, .excel-table select { width: 100%; border: none; border-radius: 0; background: transparent; }
         
-        .res-min { background: #f0f9ff !important; color: #0284c7; font-weight: bold; }
-        .res-rec { background: #f0fdf4 !important; color: #16a34a; font-weight: bold; font-size: 14px; }
-        .res-max { background: #fff7ed !important; color: #ea580c; font-weight: bold; }
+        .res-min { background: var(--surface-alt) !important; color: var(--muted); font-weight: bold; }
+        .res-rec { background: var(--accent-soft) !important; color: var(--accent); font-weight: bold; font-size: 14px; }
+        .res-max { background: var(--warn-soft) !important; color: var(--warn); font-weight: bold; }
 
-        .table-wrapper { max-height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .table-wrapper { max-height: 400px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
         .chart-wrapper { height: 200px; }
         
-        .controls-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .controls-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; background: var(--surface-alt); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
         .slider-container { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 200px; }
         input[type="range"] { flex: 1; cursor: pointer; }
         .radio-group { display: flex; gap: 15px; }
-        .radio-group label { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 4px; color: #334155; }
+        .radio-group label { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 4px; color: var(--muted); }
         
         .hide-col { display: none !important; }
         .volatility-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 10px; }
-        .vol-item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; text-align: center; }
-        .vol-item .cat-name { font-weight: 600; font-size: 11px; color: #475569; margin-bottom: 4px; }
+        .vol-item { background: var(--surface-alt); border: 1px solid var(--border); padding: 8px; border-radius: 8px; text-align: center; }
+        .vol-item .cat-name { font-weight: 600; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
         .vol-item .std-val { font-size: 15px; font-weight: bold; }
-        .std-safe { color: #10b981; } .std-warn { color: #f59e0b; } .std-danger { color: #ef4444; }
+        .std-safe { color: var(--accent); } .std-warn { color: var(--warn); } .std-danger { color: var(--danger); }
 
-        .rec-badge { background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 12px; margin-left: 10px; border: 1px solid #bbf7d0; cursor: pointer;}
-        .rec-badge:hover { background: #bbf7d0; }
-        .day-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 2px; }
-        .day-work { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-        .day-holi { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
-        .day-sat { background: #ecfeff; color: #0e7490; border: 1px solid #a5f3fc; }
+        .rec-badge { background: var(--accent-soft); color: var(--accent); padding: 4px 8px; border-radius: 12px; font-weight: bold; font-size: 12px; margin-left: 10px; border: 1px solid var(--border); cursor: pointer;}
+        .rec-badge:hover { background: var(--accent-soft-2); }
+        .day-badge { padding: 2px 7px; border-radius: 5px; font-size: 11px; font-weight: 600; margin-left: 2px; }
+        .day-work { background: var(--surface-alt); color: var(--muted); border: 1px solid var(--border); }
+        .day-holi { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-border); }
+        .day-sat { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--border); }
 
-        .tab-bar { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
-        .tab-btn { padding: 10px 18px; border: 1px solid #cbd5e1; background: #fff; color: #475569; font-weight: 600; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 13px; }
-        .tab-btn.active { background: #1e3a8a; color: #fff; border-color: #1e3a8a; }
+        .tab-bar { display: flex; gap: 6px; margin-bottom: 15px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding: 6px 4px 0; }
+        .tab-btn { padding: 11px 16px; margin-bottom: -1px; border: none; background: transparent; color: var(--muted-2); font-weight: 500; border-radius: 8px 8px 0 0; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; }
+        .tab-btn:hover { background: var(--surface-alt); }
+        .tab-btn.active { background: var(--accent-soft); color: var(--ink); font-weight: 700; border-bottom: 2px solid var(--accent); }
 
         .ac-wrap { position: relative; }
-        .ac-list { position: absolute; z-index: 50; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #cbd5e1; border-top: none; max-height: 180px; overflow-y: auto; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .ac-list { position: absolute; z-index: 50; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-top: none; max-height: 180px; overflow-y: auto; display: none; box-shadow: 0 4px 10px rgba(29,27,24,0.08); }
         .ac-list div { padding: 6px 8px; font-size: 12px; text-align: left; cursor: pointer; }
-        .ac-list div:hover { background: #eff6ff; }
+        .ac-list div:hover { background: var(--surface-alt); }
 
         /* [신규] 홈 대시보드 - 당월 납품계획 표를 모바일에서 카드형으로 전환 */
         .responsive-table td { text-align: center; }
@@ -82,46 +92,46 @@
             .panel { padding: 10px; }
             table.responsive-table thead { display: none; }
             table.responsive-table, table.responsive-table tbody, table.responsive-table tr, table.responsive-table td { display: block; width: 100%; }
-            table.responsive-table tr { margin-bottom: 8px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-            table.responsive-table td { text-align: right; padding: 6px 10px; border: none; border-bottom: 1px solid #f1f5f9; position: relative; padding-left: 42%; min-height: 16px; }
+            table.responsive-table tr { margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+            table.responsive-table td { text-align: right; padding: 6px 10px; border: none; border-bottom: 1px solid var(--border-soft); position: relative; padding-left: 42%; min-height: 16px; }
             table.responsive-table td:last-child { border-bottom: none; }
-            table.responsive-table td::before { content: attr(data-label); position: absolute; left: 10px; text-align: left; font-weight: 700; color: #64748b; }
+            table.responsive-table td::before { content: attr(data-label); position: absolute; left: 10px; text-align: left; font-weight: 700; color: var(--muted-2); }
             .controls-row { flex-direction: column; align-items: stretch; }
             .dashboard-grid { grid-template-columns: 1fr 1fr; }
         }
-        .mobile-cards { display: flex; flex-direction: column; gap: 8px; }
-        .mobile-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .mobile-card .mc-name { font-weight: 700; font-size: 13px; }
-        .mobile-card .mc-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+        .mobile-cards { display: flex; flex-direction: column; gap: 6px; }
+        .mobile-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .mobile-card .mc-name { font-weight: 700; font-size: 13px; color: var(--ink); }
+        .mobile-card .mc-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
         .mobile-card .mc-right { text-align: right; white-space: nowrap; }
-        .mobile-card.upcoming { border-left: 4px solid #ea580c; }
-        .mobile-card.past { border-left: 4px solid #dc2626; }
+        .mobile-card.upcoming { border-left: 3px solid var(--warn); background: var(--warn-soft); }
+        .mobile-card.past { border-left: 3px solid var(--danger); background: var(--danger-soft); }
 
         .grid-select-col { width: 26px; }
         select#gridYear, select#gridMonth { font-weight: bold; }
 
         /* [신규] 확정량 입력 탭 - 구분/부대 다중선택 드롭다운 */
         .ms-wrap { position: relative; display: inline-block; }
-        .ms-btn { border: 1px solid #cbd5e1; background: #fff; padding: 8px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; white-space: nowrap; color: #1e293b; }
-        .ms-btn:hover { background: #f8fafc; }
-        .ms-panel { position: absolute; z-index: 60; top: 100%; left: 0; margin-top: 2px; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.12); max-height: 240px; overflow-y: auto; min-width: 170px; padding: 4px 0; }
+        .ms-btn { border: 1px solid var(--border); background: var(--surface); padding: 8px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap; color: var(--ink); }
+        .ms-btn:hover { background: var(--surface-alt); }
+        .ms-panel { position: absolute; z-index: 60; top: 100%; left: 0; margin-top: 2px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 10px rgba(29,27,24,0.1); max-height: 240px; overflow-y: auto; min-width: 170px; padding: 4px 0; }
         .ms-panel label { display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
-        .ms-panel label:hover { background: #f1f5f9; }
+        .ms-panel label:hover { background: var(--surface-alt); }
     </style>
 </head>
 <body>
 
     <div class="panel header">
-        <h1 style="font-size: 18px;">🗄️ 자동화시스템</h1>
+        <h1 style="font-size: 18px;">자동화시스템</h1>
     </div>
 
 
     <!-- [신규 v10] 탭 3개: 홈(기본) / 예정량·확정량 입력 / 재고 상세 -->
     <div class="tab-bar">
-        <button class="tab-btn active" id="tabBtnHome" onclick="switchTab('home')">🏠 홈</button>
-        <button class="tab-btn" id="tabBtnPredict" onclick="switchTab('predict')">📝 예정량 입력</button>
-        <button class="tab-btn" id="tabBtnConfirm" onclick="switchTab('confirm')">✅ 확정량 입력</button>
-        <button class="tab-btn" id="tabBtnInventory" onclick="switchTab('inventory')">📦 재고 상세</button>
+        <button class="tab-btn active" id="tabBtnHome" onclick="switchTab('home')">홈</button>
+        <button class="tab-btn" id="tabBtnPredict" onclick="switchTab('predict')">예정량 입력</button>
+        <button class="tab-btn" id="tabBtnConfirm" onclick="switchTab('confirm')">확정량 입력</button>
+        <button class="tab-btn" id="tabBtnInventory" onclick="switchTab('inventory')">재고 상세</button>
     </div>
 
     <!-- ============================================================ -->
@@ -133,21 +143,21 @@
     <div id="tabContentHome">
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                <h2 style="font-size:15px; color:#ea580c;">⏰ 납품기한임박</h2>
-                <button class="btn btn-primary" onclick="refreshHomeTab()">🔄 새로고침</button>
+                <h2 style="font-size:15px; color:var(--warn);">납품기한임박</h2>
+                <button class="btn btn-primary" onclick="refreshHomeTab()">새로고침</button>
             </div>
             <div id="homeStatusMsg" style="font-size:12px; color:#64748b; margin-bottom:8px;">새로고침을 눌러 불러오세요.</div>
             <div id="homeExpiryUpcoming" class="mobile-cards"><div style="color:#94a3b8; font-size:12px;">새로고침을 눌러 불러오세요.</div></div>
         </div>
 
         <div class="panel">
-            <h2 style="font-size:15px; color:#dc2626; margin-bottom:10px;">🚨 납품기한 경과</h2>
+            <h2 style="font-size:15px; color:var(--danger); margin-bottom:10px;">납품기한 경과</h2>
             <div id="homeExpiryPast" class="mobile-cards"><div style="color:#94a3b8; font-size:12px;">새로고침을 눌러 불러오세요.</div></div>
         </div>
 
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h2 style="font-size:15px; color:#1e3a8a;">📅 보관일수 및 경과일수 (요약)</h2>
+                <h2 style="font-size:15px; color:var(--ink);">보관일수 및 경과일수 (요약)</h2>
                 <span style="font-size:11px; color:#64748b;">상세는 '재고 상세' 탭</span>
             </div>
             <div id="homeAgingBucketBoxes" class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));"></div>
@@ -228,7 +238,7 @@
                 <div class="slider-container" style="flex-wrap: wrap;">
                     <span style="font-weight:bold; color:#16a34a; font-size:12px;" title="더 이상 수동으로 배율을 조정하지 않습니다. 품목별 과거 데이터의 표본수·변동성을 바탕으로 결품0%를 지키는 선에서 재고가 최대한 0에 수렴하도록 시스템이 매번 자동으로 안전재고를 계산합니다.">🤖 안전재고 자동계산 적용됨 (품목별 변동성 기반)</span>
                 </div>
-                <button class="btn btn-success" onclick="calculateMultiRows()">🚀 일괄 산출</button>
+                <button class="btn btn-success" onclick="calculateMultiRows()">일괄 산출</button>
             </div>
 
             <div style="overflow-x: auto; border: 1px solid #cbd5e1;">
@@ -258,8 +268,8 @@
             <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                 <button class="btn btn-gray" onclick="addGridRow()">+ 5행 추가</button>
                 <button class="btn btn-gray" style="background:#e2e8f0; color:#333;" onclick="exportPredictionExcel()">📥 예측결과 다운로드</button>
-                <button class="btn btn-gray" style="background:#0f9d58; color:#fff;" onclick="saveGridToGoogleSheet()" title="이 그리드에 입력한 행을 상단에 설정한 '저장(신규 예정량) 시트'(기본 DB_Master)에 새 예정량 행으로 추가합니다. 각 행의 '저장기준' 선택에 따라 최소/권장/최대 중 하나가 예정량으로 들어갑니다.">📤 구글시트에 저장</button>
-                <button class="btn btn-gray" style="background:#7c3aed; color:#fff;" onclick="saveGridToInventoryLedger()" title="재고수불대장에 예정 입고를 등록합니다. A업체·B제품 자동 매칭, C입고일(=납품일-리드타임)·D수량·E납품일·I부대까지 자동 기록되며(빨간 글씨+연노랑 배경), F소계(확정량)만 실제 납품 후 직접 입력하시면 됩니다.">📦 재고수불대장 등록</button>
+                <button class="btn btn-gray" style="background:var(--accent); color:#fff;" onclick="saveGridToGoogleSheet()" title="이 그리드에 입력한 행을 상단에 설정한 '저장(신규 예정량) 시트'(기본 DB_Master)에 새 예정량 행으로 추가합니다. 각 행의 '저장기준' 선택에 따라 최소/권장/최대 중 하나가 예정량으로 들어갑니다.">구글시트에 저장</button>
+                <button class="btn btn-gray" style="background:#4A4238; color:#fff;" onclick="saveGridToInventoryLedger()" title="재고수불대장에 예정 입고를 등록합니다. A업체·B제품 자동 매칭, C입고일(=납품일-리드타임)·D수량·E납품일·I부대까지 자동 기록되며(빨간 글씨+연노랑 배경), F소계(확정량)만 실제 납품 후 직접 입력하시면 됩니다.">재고수불대장 등록</button>
                 <span id="leadDaysWrap" style="font-size:12px; color:#475569; display:flex; align-items:center; gap:4px;" title="재고수불대장의 '입고일'은 항상 납품일보다 이 일수만큼 이릅니다(창고 입고 후 납품). 급식일 기준 입력이면 부대별정보 요일 패턴으로 먼저 납품일을 역산한 뒤 여기서 뺍니다.">리드타임(입고일 = 납품일 -
                     <input type="number" id="ledgerLeadDays" value="2" min="0" style="width:45px; padding:4px;">
                     일)
@@ -322,10 +332,10 @@
     <div id="tabContentConfirm" style="display:none;">
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                <h2 style="font-size:15px; color:#1e3a8a;">✅ 확정량 입력</h2>
+                <h2 style="font-size:15px; color:var(--ink);">확정량 입력</h2>
                 <div style="display:flex; gap:8px;">
-                    <button class="btn btn-success" onclick="saveConfirmedQuantities()" title="아래 표의 '확정량' 칸에 입력/수정한 값을 구글시트 '데이터' 탭에 반영합니다">💾 확정량 저장</button>
-                    <button class="btn btn-primary" onclick="refreshConfirmTab()">🔄 새로고침</button>
+                    <button class="btn btn-success" onclick="saveConfirmedQuantities()" title="아래 표의 '확정량' 칸에 입력/수정한 값을 구글시트 '데이터' 탭에 반영합니다">확정량 저장</button>
+                    <button class="btn btn-primary" onclick="refreshConfirmTab()">새로고침</button>
                 </div>
             </div>
             <div id="confirmStatusMsg" style="font-size:12px; color:#64748b; margin-bottom:8px;">새로고침을 눌러 구글시트 데이터를 불러오세요.</div>
@@ -361,7 +371,7 @@
     <div id="tabContentInventory" style="display:none;">
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <h2 style="font-size:15px; color:#7c3aed;">📸 거래명세서 업로드 (자동 재고 반영)</h2>
+                <h2 style="font-size:15px; color:var(--ink);">거래명세서 업로드 (자동 재고 반영)</h2>
             </div>
             <div style="font-size:11px; color:#64748b; margin-bottom:10px;">물류팀에서 받은 거래명세서 사진을 올리면 AI가 품명·수량을 읽어냅니다. 읽은 내용은 아래에서 확인/수정한 뒤 "재고에 반영"을 눌러야 실제로 저장됩니다(자동으로 바로 반영되지 않음).</div>
             <input type="file" id="deliverySlipInput" accept="image/*" capture="environment" onchange="handleDeliverySlipUpload(event)">
@@ -375,18 +385,18 @@
                 </div>
                 <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
                     <button class="btn btn-gray" onclick="addDeliverySlipRow()">+ 행 추가</button>
-                    <button class="btn btn-success" onclick="applyDeliverySlipToLedger()">✅ 재고수불대장에 반영</button>
+                    <button class="btn btn-success" onclick="applyDeliverySlipToLedger()">재고수불대장에 반영</button>
                 </div>
             </div>
         </div>
 
         <div class="panel">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                <h2 style="font-size: 15px; color:#1e3a8a;">📦 재고 현황 (재고수불대장 실시간 조회)</h2>
+                <h2 style="font-size: 15px; color:var(--ink);">재고 현황 (재고수불대장 실시간 조회)</h2>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span id="inventoryStatusMsg" style="font-size:12px; color:#64748b;">아직 불러오지 않았습니다.</span>
-                    <button class="btn btn-success" onclick="saveActualExpiryDates()" title="소비기한 칸에 입력/수정한 실측값을 재고수불대장에 반영합니다">💾 소비기한 저장</button>
-                    <button class="btn btn-primary" onclick="loadInventoryStatus().catch(()=>{})">🔄 재고 새로고침</button>
+                    <button class="btn btn-success" onclick="saveActualExpiryDates()" title="소비기한 칸에 입력/수정한 실측값을 재고수불대장에 반영합니다">소비기한 저장</button>
+                    <button class="btn btn-primary" onclick="loadInventoryStatus().catch(()=>{})">재고 새로고침</button>
                 </div>
             </div>
             <div style="margin-bottom:10px; display:flex; gap:8px; flex-wrap:wrap;">
@@ -420,7 +430,7 @@
         </div>
 
         <div class="panel">
-            <h2 style="font-size: 15px; color:#1e3a8a; margin-bottom: 10px;">📅 보관일수 및 경과일수</h2>
+            <h2 style="font-size: 15px; color:var(--ink); margin-bottom: 10px;">보관일수 및 경과일수</h2>
             <div id="agingBucketBoxes" class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));"></div>
             <div id="agingBucketDetail" style="margin-top:12px; display:none;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -437,7 +447,7 @@
         </div>
 
         <div class="panel" style="margin-top:15px;">
-            <h2 style="font-size: 15px; color:#7c3aed; margin-bottom: 10px;">🧂 자사양념육 (납품계획 로그)</h2>
+            <h2 style="font-size: 15px; color:var(--ink); margin-bottom: 10px;">자사양념육 (납품계획 로그)</h2>
             <p style="font-size:11px; color:#64748b; margin-bottom:10px;">이 탭은 현재고 개념이 없고, 부대별 납품계획만 누적 기록되는 방식입니다. 품목별 가장 최근 계획을 보여줍니다.</p>
             <div class="table-wrapper">
                 <table id="selfSeasonedTable">
@@ -459,7 +469,7 @@
         </div>
 
         <div class="panel" style="margin-top:15px;">
-            <h2 style="font-size: 15px; color:#ea580c; margin-bottom: 10px;">⏰ 납품기한임박</h2>
+            <h2 style="font-size: 15px; color:var(--warn); margin-bottom: 10px;">납품기한임박</h2>
             <div class="table-wrapper">
                 <table id="expiryUpcomingTable">
                     <thead>
@@ -476,7 +486,7 @@
         </div>
 
         <div class="panel" style="margin-top:15px;">
-            <h2 style="font-size: 15px; color:#dc2626; margin-bottom: 10px;">🚨 납품기한 경과</h2>
+            <h2 style="font-size: 15px; color:var(--danger); margin-bottom: 10px;">납품기한 경과</h2>
             <div class="table-wrapper">
                 <table id="expiryPastTable">
                     <thead>
@@ -1535,16 +1545,16 @@
         function renderInventoryStatus(sheetsObj) {
             window.__inventoryLoadedOnce = true; // [최적화] 홈이든 재고상세든, 한 번 데이터가 그려지면 다른 쪽에서 또 불러오지 않도록 표시
             const productMap = {}; const order = [];
-            let selfSeasonedList = [], expiryUpcomingList = [], expiryPastList = [];
+            let selfSeasonedList = [];
 
             Object.keys(sheetsObj).forEach(sheetName => {
                 const rows = sheetsObj[sheetName] || [];
                 const kind = getSheetKindClient(sheetName);
 
-                if (kind === 'skip') return; // [신규] 표준 구조가 아닌 참고용 탭은 건너뜀
+                // [수정] 납품기한임박/경과는 더 이상 시트에서 읽지 않고 아래에서 자동 계산하므로,
+                // 혹시 시트가 아직 남아있어도 표준 재고 탭으로 잘못 섞이지 않게 건너뛴다.
+                if (kind === 'skip' || kind === 'expiryUpcoming' || kind === 'expiryPast') return;
                 if (kind === 'selfSeasoned') { selfSeasonedList = selfSeasonedList.concat(parseSelfSeasonedSheet(rows)); return; }
-                if (kind === 'expiryUpcoming') { expiryUpcomingList = expiryUpcomingList.concat(parseExpiryUpcomingSheet(rows)); return; }
-                if (kind === 'expiryPast') { expiryPastList = expiryPastList.concat(parseExpiryPastSheet(rows)); return; }
 
                 if (kind === 'deliveryLog') {
                     let currentProduct = '';
@@ -1595,25 +1605,56 @@
                 }
             });
 
-            // [신규] 납품기한임박/경과 목록을 품명 기준으로 조회할 수 있게 맵으로 만들어둔다 (재고현황 표의 '납품기한' 컬럼용)
-            const expiryByName = {};
-            expiryUpcomingList.forEach(e => { if (e.name && !expiryByName[e.name]) expiryByName[e.name] = { deadline: e.deadline, source: 'upcoming' }; });
-            expiryPastList.forEach(e => { if (e.name && !expiryByName[e.name]) expiryByName[e.name] = { deadline: e.expiry, source: 'past' }; });
-            window.__expiryByName = expiryByName;
-
             window.__inventoryProductMap = productMap;
             window.__inventoryOrder = order;
             filterInventoryTable();
             renderAgingBuckets('agingBucketBoxes', 'agingBucketDetail', 'agingBucketDetailTitle', 'agingBucketDetailBody');
             renderAgingBuckets('homeAgingBucketBoxes', 'homeAgingBucketDetail', 'homeAgingBucketDetailTitle', 'homeAgingBucketDetailBody');
 
+            // [신규] 납품기한임박/경과를 더 이상 별도 시트에서 읽지 않고, 입고일·소비기한·보관방법으로
+            // 자동 계산한 결과에서 바로 뽑아낸다 (계산 규칙은 computeInventoryDashboardRecords 참고).
+            const autoLists = computeAutoExpiryLists(computeInventoryDashboardRecords());
+
             window.__selfSeasonedList = selfSeasonedList;
-            window.__expiryUpcomingList = expiryUpcomingList;
-            window.__expiryPastList = expiryPastList;
+            window.__expiryUpcomingList = autoLists.upcoming;
+            window.__expiryPastList = autoLists.past;
             renderSelfSeasonedTable();
             renderExpiryUpcomingTable();
             renderExpiryPastTable();
             renderHomeExpiryCards(); // [신규] 홈 탭 임박/경과 카드도 함께 갱신
+        }
+
+        // [신규] 보관방법에 따른 납품기한 배율. 냉동·상온은 소비기한(총 보관기간)의 1/2 시점,
+        // 냉장은 1/3 시점을 납품기한으로 본다. 보관방법을 알 수 없으면 규칙을 적용하지 않는다(null).
+        function getDeliveryDeadlineFraction_(storageMethod) {
+            const s = String(storageMethod || '').trim();
+            if (!s) return null;
+            if (s.includes('냉장')) return 1 / 3;
+            if (s.includes('냉동') || s.includes('상온')) return 1 / 2;
+            return null;
+        }
+
+        // [신규] 홈 탭 "납품기한임박"에 며칠 이내 남은 것까지 보여줄지 — 그 이상은 아직 급하지 않다고 봄.
+        const HOME_UPCOMING_WINDOW_DAYS = 10;
+
+        // [신규] 계산된 재고 레코드에서 임박/경과 목록을 자동으로 뽑아낸다.
+        // 재고 미관리 탭(범용제품 등)이나 보관방법을 몰라 납품기한을 계산할 수 없는 품목은 제외한다.
+        // ※ 매입단가/합계는 이 시스템에 단가 데이터가 없어 자동으로 채울 수 없으므로 '-'로 표시된다.
+        function computeAutoExpiryLists(records) {
+            const upcoming = [];
+            const past = [];
+            records.forEach(r => {
+                if (r.stockUnavailable) return;
+                if (!r.deliveryDeadline) return;
+                if (r.deliveryDeadlinePassed) {
+                    past.push({ name: r.name, expiry: r.deliveryDeadline, qty: r.stock, unitPrice: null, total: null, note: '' });
+                } else if (r.remainingDays !== null && r.remainingDays >= 0 && r.remainingDays <= HOME_UPCOMING_WINDOW_DAYS) {
+                    upcoming.push({ name: r.name, deadline: r.deliveryDeadline, stock: r.stockUnavailable ? null : r.stock, lastDelivery: r.lastInDate });
+                }
+            });
+            past.sort((a, b) => new Date(a.expiry) - new Date(b.expiry)); // 가장 오래 지난 것부터
+            upcoming.sort((a, b) => new Date(a.deadline) - new Date(b.deadline)); // 가장 임박한 것부터
+            return { upcoming, past };
         }
 
         function parseSelfSeasonedSheet(rows) {
@@ -1756,7 +1797,6 @@
         function computeInventoryDashboardRecords() {
             const order = window.__inventoryOrder || [];
             const productMap = window.__inventoryProductMap || {};
-            const expiryByName = window.__expiryByName || {};
             const infoMap = window.productInfoMap || {};
             return order.map(key => {
                 const p = productMap[key];
@@ -1771,8 +1811,16 @@
                     expiryDate = addDaysIso(lastInDate, info.shelfLifeDays) || '';
                     expiryIsEstimated = true;
                 }
-                const expiryInfo = expiryByName[p.name];
-                const deliveryDeadline = expiryInfo ? expiryInfo.deadline : '';
+                // [신규] 납품기한 = 입고일부터 소비기한까지의 총 보관기간 중, 보관방법별 비율(냉동·상온=1/2,
+                // 냉장=1/3) 시점. 더 이상 별도 시트에서 읽지 않고 여기서 직접 계산한다.
+                let deliveryDeadline = '';
+                if (lastInDate && isValidIsoDateLike(lastInDate) && expiryDate && isValidIsoDateLike(expiryDate)) {
+                    const totalSpanDays = (new Date(expiryDate) - new Date(lastInDate)) / 86400000;
+                    const fraction = getDeliveryDeadlineFraction_(storageMethod);
+                    if (fraction !== null && totalSpanDays > 0) {
+                        deliveryDeadline = addDaysIso(lastInDate, totalSpanDays * fraction) || '';
+                    }
+                }
                 let remainingDays = null;
                 if (deliveryDeadline) remainingDays = daysFromToday(deliveryDeadline);
                 else if (expiryDate) remainingDays = daysFromToday(expiryDate);
@@ -1967,12 +2015,12 @@
 
         // [신규] 보관일수/경과일수 버킷 대시보드 (재고 상세 탭 + 홈 탭 요약이 함께 씀)
         const AGING_BUCKETS = [
-            { key: '1-3',  label: '1~3일',    min: 1,  max: 3,        bg: '#f0f9ff', text: '#0284c7' },
-            { key: '4-5',  label: '4~5일',    min: 4,  max: 5,        bg: '#f0fdf4', text: '#16a34a' },
-            { key: '6-7',  label: '6~7일',    min: 6,  max: 7,        bg: '#fff7ed', text: '#ea580c' },
-            { key: '8-15', label: '8~15일',   min: 8,  max: 15,       bg: '#fef2f2', text: '#dc2626' },
-            { key: '16-30',label: '16~30일',  min: 16, max: 30,       bg: '#fef2f2', text: '#dc2626' },
-            { key: '31+',  label: '31일 초과', min: 31, max: Infinity, bg: '#fef2f2', text: '#dc2626' }
+            { key: '1-3',  label: '1~3일',    min: 1,  max: 3,        bg: 'var(--surface-alt)', text: 'var(--muted)' },
+            { key: '4-5',  label: '4~5일',    min: 4,  max: 5,        bg: 'var(--surface-alt)', text: 'var(--muted)' },
+            { key: '6-7',  label: '6~7일',    min: 6,  max: 7,        bg: 'var(--surface-alt)', text: 'var(--ink)' },
+            { key: '8-15', label: '8~15일',   min: 8,  max: 15,       bg: 'var(--warn-soft)', text: 'var(--warn)' },
+            { key: '16-30',label: '16~30일',  min: 16, max: 30,       bg: 'var(--danger-soft)', text: 'var(--danger)' },
+            { key: '31+',  label: '31일 초과', min: 31, max: Infinity, bg: 'var(--danger-soft)', text: 'var(--danger)' }
         ];
 
         // [신규] 실제로 창고에 남아있는 재고가 있는 품목만 "보관일수/경과일수" 통계 대상으로 삼는다.
