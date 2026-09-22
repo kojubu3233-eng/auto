@@ -12,5 +12,5 @@ window.APP_CONFIG = {
   CONFIRM_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbztWhg9G3OjM_kwg4CXSzPVZ-CKQy6kaZWVBHiuqXV8-9jvmxCpSYmNYsFUb9qoLp4RAA/exec",
 
   // 거래명세서·전파문서 OCR 전용 (방금 새로 배포한 URL로 교체됨)
-  OCR_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbyF--PABxdyVarU4JVNW4F-0rjFHskSTa0DsWVLlYAOhKXbfD-sOaOPEcjXv5dxrZZ1/exec"
+  OCR_WEBAPP_URL: "https://script.google.com/macros/s/AKfycbwq7-yQ5YTzX_7RWRQe4M_jzK2zx40GaWCkTgOmLLz7aRG1R77MaEurTcMFT--Pu_Y/exec"
 };
