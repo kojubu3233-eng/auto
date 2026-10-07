@@ -108,6 +108,8 @@ tr.picked td { background:#FFFBEB !important; }
 .prod-box .p-sheet { font-size:11px; color:var(--muted-2); }
 .prod-box .p-stock { font-size:18px; font-weight:700; margin-top:6px; }
 .prod-box .p-sub { font-size:11px; color:var(--muted); }
+.cat-box .p-name { font-size:15px; }
+.cat-box .p-stock { font-size:13px; font-weight:600; color:var(--muted); }
 .chips { display:flex; gap:6px; flex-wrap:wrap; }
 .chip { border:1px solid var(--border); background:var(--surface); border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer; }
 .chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
@@ -276,7 +278,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="row"><label class="lbl muted">기간</label><span id="ledgerFrom"></span><span>~</span><span id="ledgerTo"></span>
         <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월</button></div>
     </div>
-    <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="품명 검색" style="width:200px"><div class="chips" id="ledgerSheets"></div></div>
+    <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn light sm hidden" id="ledgerBack" onclick="Ledger.goSheets()">대분류로</button><h3 id="ledgerCrumb"></h3></div>
     <div class="prod-grid" id="ledgerProducts"></div>
   </div>
   <div class="panel hidden" id="ledgerDetail">
@@ -547,7 +549,10 @@ const Api = {
       const res = await fetch(u + (u.includes('?') ? '&' : '?') + new URLSearchParams(params), { signal: ctl.signal });
       text = await res.text();
       if (!res.ok) throw new Error('HTTP ' + res.status);
-    } catch (e) { throw new Error(e.name === 'AbortError' ? '응답 시간 초과' : '접속 실패 (' + e.message + ')'); }
+    } catch (e) {
+      if (e.name === 'AbortError') throw new Error('응답 시간 초과');
+      throw new Error('접속 실패. 웹앱 배포의 액세스 권한이 \'모든 사용자\'인지, config.js 주소가 맞는지 확인하세요 (' + e.message + ')');
+    }
     finally { clearTimeout(timer); }
     let json;
     try { json = JSON.parse(text); } catch { throw new Error('웹앱이 JSON이 아닌 응답을 보냈습니다. 배포 권한(모든 사용자)을 확인하세요: ' + text.slice(0, 80)); }
@@ -567,7 +572,7 @@ const Api = {
 /* ---------- 품목정보·별칭 매칭 ---------- */
 const DISTINCT_WORDS = ['소스', '간장', '고추장', '매콤', '달콤', '냉장', '냉동', '홀', '조각', '치즈', '김치', '불고기', '제육', '차돌', '치킨', '오리', '닭', '돼지', '소고기', '꿀'];
 const Names = {
-  products: [], byName: new Map(), aliasIdx: new Map(), units: [], unitMap: new Map(),
+  products: [], byName: new Map(), aliasIdx: new Map(), units: [], unitMap: new Map(), cache: new Map(),
   norm: s => String(s ?? '').replace(/[\s'"’`]/g, '').toLowerCase(),
   load(products, units) {
     Names.products = products || []; Names.byName = new Map(); Names.aliasIdx = new Map();
@@ -1375,9 +1380,12 @@ const Ledger = {
     const to = DF.mount($('ledgerTo'), 'l-to', '');
     to.placeholder = '이후 전체';
     [from, to].forEach(i => i.addEventListener('datechange', () => { Ledger.renderList(); if (Ledger.key) Ledger.renderDetail(); }));
-    $('ledgerSearch').addEventListener('input', debounce(Ledger.renderList, 150));
-    $('ledgerSheets').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; Ledger.sheet = c.dataset.sheet; Ledger.renderList(); });
-    $('ledgerProducts').addEventListener('click', e => { const b = e.target.closest('.prod-box'); if (b) Ledger.openProduct(b.dataset.key); });
+    $('ledgerSearch').addEventListener('input', debounce(() => { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); }, 150));
+    $('ledgerProducts').addEventListener('click', e => {
+      const b = e.target.closest('.prod-box'); if (!b) return;
+      if (b.dataset.sheet !== undefined) { Ledger.sheet = b.dataset.sheet; $('ledgerSearch').value = ''; Ledger.close(); }
+      else Ledger.openProduct(b.dataset.key);
+    });
     DF.mount($('ldAddDate'), 'ld-add-date', '');
     DF.mount($('ldAddExp'), 'ld-add-exp', '', 'future');
     $('ldAddDate').querySelector('input').placeholder = '입고일';
@@ -1386,22 +1394,34 @@ const Ledger = {
   },
   resetPeriod() { DF.set(document.querySelector('.l-from'), D.addMonths(D.today(), -3)); DF.set(document.querySelector('.l-to'), ''); },
   period() { return { from: DF.get(document.querySelector('.l-from')), to: DF.get(document.querySelector('.l-to')) }; },
+  goSheets() { Ledger.sheet = ''; $('ledgerSearch').value = ''; Ledger.close(); },
   render() {
-    const sheets = [...new Set(LedgerData.products.map(p => p.sheet))];
-    $('ledgerSheets').innerHTML = [['', '전체'], ...sheets.map(s => [s, s])].map(([v, l]) => `<button class="chip ${Ledger.sheet === v ? 'on' : ''}" data-sheet="${esc(v)}">${esc(l)}</button>`).join('');
     Ledger.renderList();
     if (Ledger.key) { if (LedgerData.byKey.has(Ledger.key)) Ledger.renderDetail(); else Ledger.close(); }
   },
   renderList() {
-    document.querySelectorAll('#ledgerSheets .chip').forEach(c => c.classList.toggle('on', c.dataset.sheet === Ledger.sheet));
     const kw = Names.norm($('ledgerSearch').value), t = D.today();
     if (!LedgerData.raw) { $('ledgerProducts').innerHTML = '<div class="empty" style="grid-column:1/-1">재고수불대장을 불러오지 못했습니다. 상단 안내를 확인하세요.</div>'; return; }
-    const list = LedgerData.products.filter(p => (!Ledger.sheet || p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))));
+    const showSheets = !Ledger.sheet && !kw;
+    $('ledgerBack').classList.toggle('hidden', showSheets);
+    $('ledgerCrumb').textContent = kw ? '검색 결과' : Ledger.sheet;
+    if (showSheets) {
+      const sheets = LedgerData.raw.sheets.map(s => s.sheet);
+      $('ledgerProducts').innerHTML = sheets.map(s => {
+        const ps = LedgerData.products.filter(p => p.sheet === s);
+        const warn = ps.filter(p => p.nextDeadline && D.diff(p.nextDeadline, t) <= 30).length;
+        const planIn = ps.filter(p => p.planIn).length, planOut = ps.filter(p => p.planOut).length;
+        return `<button class="prod-box cat-box" data-sheet="${esc(s)}"><div class="p-name">${esc(s)}</div><div class="p-stock">품목 ${ps.length}개</div>
+          <div class="p-sub">${planIn ? `입고예정 ${planIn}품목 ` : ''}${planOut ? `출고예정 ${planOut}품목` : ''}</div>${warn ? `<span class="tag warn">납품기한 30일 이내 ${warn}품목</span>` : ''}</button>`;
+      }).join('') || '<div class="empty" style="grid-column:1/-1">탭이 없습니다</div>';
+      return;
+    }
+    const list = LedgerData.products.filter(p => (kw ? true : p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))));
     $('ledgerProducts').innerHTML = list.map(p => {
       const dl = p.nextDeadline ? D.diff(p.nextDeadline, t) : null;
       const tag = dl === null ? '' : dl < 0 ? '<span class="tag danger">납품기한 경과</span>' : dl <= 30 ? `<span class="tag warn">납품기한 ${dl}일</span>` : '';
       const stock = p.type === 'standard' ? `<div class="p-stock">${fmtN(p.stock)}</div><div class="p-sub">${p.planIn ? `입고예정 ${fmtN(p.planIn)} ` : ''}${p.planOut ? `출고예정 ${fmtN(p.planOut)}` : ''}</div>` : `<div class="p-sub mt8">출고 ${p.rows.length}건</div>`;
-      return `<button class="prod-box ${Ledger.key === p.key ? 'on' : ''}" data-key="${esc(p.key)}"><div class="p-name">${esc(p.name)}</div><div class="p-sheet">${esc(p.sheet)}${p.company ? ' · ' + esc(p.company) : ''}</div>${stock}<div>${tag}</div></button>`;
+      return `<button class="prod-box ${Ledger.key === p.key ? 'on' : ''}" data-key="${esc(p.key)}"><div class="p-name">${esc(p.name)}</div><div class="p-sheet">${kw ? esc(p.sheet) + ' · ' : ''}${esc(p.company || '')}</div>${stock}<div>${tag}</div></button>`;
     }).join('') || '<div class="empty" style="grid-column:1/-1">조건에 맞는 품목이 없습니다</div>';
   },
   openProduct(key) { Ledger.key = key; Ledger.editing = null; Ledger.renderList(); Ledger.renderDetail(); $('ledgerDetail').classList.remove('hidden'); $('ledgerDetail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
