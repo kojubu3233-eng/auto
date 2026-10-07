@@ -76,8 +76,11 @@ tr.picked td { background:#FFFBEB !important; }
 .dfield { display:inline-flex; align-items:center; gap:2px; position:relative; }
 .dfield input.dinput { width:96px; }
 .grid .dfield input.dinput { width:92px; }
-.dfield .dpick { border:none; background:transparent; cursor:pointer; color:var(--muted-2); font-size:12px; padding:2px 3px; }
-.dfield input[type=date].dnative { position:absolute; left:0; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none; }
+.dfield .dpick { border:1px solid var(--border); background:var(--surface); cursor:pointer; color:var(--accent); padding:3px 5px; border-radius:6px; line-height:0; margin-left:3px; }
+.dfield .dpick:hover { background:var(--accent-soft); border-color:var(--accent); }
+.dfield .dpick svg { width:15px; height:15px; }
+.dfield input[type=date].dnative { position:absolute; right:0; bottom:0; width:24px; height:22px; opacity:0; pointer-events:none; }
+.dfield input[type=date].dnative.open { opacity:1; pointer-events:auto; width:150px; z-index:40; background:var(--surface); }
 
 .ac-wrap { position:relative; }
 .ac-list { position:absolute; z-index:50; top:100%; left:0; right:0; min-width:160px; background:var(--surface); border:1px solid var(--border); max-height:200px; overflow-y:auto; display:none; box-shadow:0 4px 10px rgba(29,27,24,.08); }
@@ -218,7 +221,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <thead><tr>
           <th class="sel-col"><input type="checkbox" id="predictAll"></th>
           <th id="dateHead">납품일</th><th>부대</th><th style="min-width:130px">품명</th><th>구분</th>
-          <th class="person-only hidden">기준량</th><th class="person-only hidden">급식인원</th><th>총소요량</th><th>단위</th><th>포장규격</th>
+          <th class="person-only hidden">기준량</th><th class="person-only hidden">급식인원</th><th class="total-only">총소요량</th><th>단위</th><th>포장규격</th>
           <th>단순산술값</th><th>최소</th><th>권장</th><th>최대</th><th>저장기준</th><th>발주량(직접)</th>
         </tr></thead>
         <tbody id="predictBody"></tbody>
@@ -463,7 +466,7 @@ const Holidays = {
 /* ---------- 날짜 입력칸: 숫자만 연속 입력, 자동으로 다음 칸 이동 ---------- */
 const DF = {
   html(cls, iso = '', mode = 'near', extra = '') {
-    return `<span class="dfield"><input type="text" inputmode="numeric" autocomplete="off" class="dinput ${cls}" data-mode="${mode}" data-iso="${iso}" value="${iso ? D.short(iso) : ''}" placeholder="MMDD" ${extra}><button type="button" class="dpick" tabindex="-1" aria-label="달력">▾</button><input type="date" class="dnative" tabindex="-1" value="${iso}"></span>`;
+    return `<span class="dfield"><input type="text" inputmode="numeric" autocomplete="off" class="dinput ${cls}" data-mode="${mode}" data-iso="${iso}" value="${iso ? D.short(iso) : ''}" placeholder="MMDD" ${extra}><button type="button" class="dpick" tabindex="-1" aria-label="달력에서 선택" title="달력에서 선택"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg></button><input type="date" class="dnative" tabindex="-1" value="${iso}"></span>`;
   },
   mount(el, cls, iso = '', mode = 'near') { el.innerHTML = DF.html(cls, iso, mode); return el.querySelector('.dinput'); },
   get: input => input ? (input.dataset.iso || '') : '',
@@ -498,7 +501,10 @@ const DF = {
       const v = t.value.trim();
       if (/^\d+$/.test(v) && DF.complete(v) && D.parse(v, t.dataset.mode)) { DF.commit(t); DF.next(t); }
     });
-    document.addEventListener('focusout', e => { if (e.target.classList?.contains('dinput')) DF.commit(e.target); });
+    document.addEventListener('focusout', e => {
+      if (e.target.classList?.contains('dinput')) DF.commit(e.target);
+      if (e.target.classList?.contains('dnative')) setTimeout(() => e.target.classList.remove('open'), 200);
+    });
     document.addEventListener('keydown', e => {
       const t = e.target; if (!t.classList?.contains('dinput')) return;
       if (e.key === 'Enter') { e.preventDefault(); if (DF.commit(t)) DF.next(t); }
@@ -510,10 +516,12 @@ const DF = {
     document.addEventListener('click', e => {
       const b = e.target.closest?.('.dpick'); if (!b) return;
       const nat = b.parentElement.querySelector('.dnative');
-      try { nat.showPicker(); } catch { nat.focus(); nat.click(); }
+      nat.value = b.parentElement.querySelector('.dinput').dataset.iso || '';
+      try { nat.showPicker(); }
+      catch { nat.classList.add('open'); nat.focus(); }
     });
     document.addEventListener('change', e => {
-      if (e.target.classList?.contains('dnative')) DF.set(e.target.parentElement.querySelector('.dinput'), e.target.value);
+      if (e.target.classList?.contains('dnative')) { e.target.classList.remove('open'); if (e.target.value) DF.set(e.target.parentElement.querySelector('.dinput'), e.target.value); }
     });
   }
 };
@@ -1088,7 +1096,7 @@ const Predict = {
       <td><input type="text" class="g-cat" placeholder="자동"></td>
       <td class="person-only ${person ? '' : 'hidden'}"><input type="number" class="g-base" placeholder="g"></td>
       <td class="person-only ${person ? '' : 'hidden'}"><input type="number" class="g-hc num" placeholder="인원"></td>
-      <td><input type="number" class="g-total num" ${person ? 'readonly' : ''}></td>
+      <td class="total-only ${person ? 'hidden' : ''}"><input type="number" class="g-total num"></td>
       <td><select class="g-utype"><option value="kg">kg</option><option value="ea">ea</option></select></td>
       <td><input type="number" class="g-spec num" value="1" step="any"></td>
       <td class="res-simple num o-simple">-</td><td class="res-min num o-min">-</td><td class="res-rec num o-rec">-</td><td class="res-max num o-max">-</td>
@@ -1126,7 +1134,7 @@ const Predict = {
   applyMode() {
     const person = Predict.mode() === 'person';
     document.querySelectorAll('.person-only').forEach(el => el.classList.toggle('hidden', !person));
-    document.querySelectorAll('#predictBody .g-total').forEach(el => { el.readOnly = person; });
+    document.querySelectorAll('.total-only').forEach(el => el.classList.toggle('hidden', person));
     Predict.calcAll();
   },
   pending: new Set(),
@@ -1166,7 +1174,9 @@ const Predict = {
     if (needHc) { ['o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); q('o-simple').textContent = '인원 입력'; q('o-simple').title = q('g-hc').title; return; }
     if (!name || req <= 0) { ['o-simple', 'o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); return; }
     const div = utype === 'ea' ? 1 : spec;
-    const simple = req / div;
+    const simple = Math.round(req / div);
+    const pack = Names.product(name)?.pack;
+    const simpleKg = utype === 'kg' ? Math.round(req) : (pack ? Math.round(req * pack) : null);
     let pool = unit ? (Hist.idxName.get(unit + '|' + name) || []) : Hist.records.filter(r => r.name === name && r.rate !== null && !Hist.excluded.has(r.id));
     let fallback = false;
     const cat = q('g-cat').value.trim();
@@ -1183,8 +1193,10 @@ const Predict = {
     const minP = mean, recP = Math.max(minP, mean + z(REC_Z) * std), maxP = Math.max(recP, mean + z(MAX_Z) * std, maxRate);
     const v = p => Math.round(req * (1 + p / 100) / div);
     const note = fallback ? ` · '${cat}' 구분 이력으로 대체` : '';
-    tr.dataset.simple = Math.round(simple * 10) / 10; tr.dataset.min = v(minP); tr.dataset.rec = v(recP); tr.dataset.max = v(maxP); tr.dataset.ready = '1';
-    set('o-simple', simple, '총소요량 ÷ 포장규격' + (hcNote ? ' · ' + hcNote : ''));
+    tr.dataset.simple = simple; tr.dataset.simpleKg = simpleKg ?? ''; tr.dataset.min = v(minP); tr.dataset.rec = v(recP); tr.dataset.max = v(maxP); tr.dataset.ready = '1';
+    const os = q('o-simple');
+    os.innerHTML = `${fmtN(simple)}<span class="hint">ea</span><br><span class="hint">${simpleKg === null ? '-' : fmtN(simpleKg) + 'kg'}</span>`;
+    os.title = `${utype === 'kg' ? `총소요량 ${fmtN(req, 2)}kg ÷ 포장규격 ${spec}kg` : `총소요량 ${fmtN(req)}ea`} (반올림)` + (hcNote ? ' · ' + hcNote : '');
     set('o-min', v(minP), `과거 평균 오차 ${mean.toFixed(1)}% (이력 ${n}건)${note}`);
     set('o-rec', v(recP), `평균 + 안전마진 (이력 ${n}건)${note}`);
     set('o-max', v(maxP), `평균 + 넉넉한 안전마진, 과거 최대 편차 ${Math.round(maxRate)}% 반영${note}`);
@@ -1198,7 +1210,7 @@ const Predict = {
     return {
       tr, date: DF.get(q('g-date')), unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
       total: num(q('g-total').value), base: Predict.mode() === 'person' ? num(q('g-base').value) : null, hc: Predict.mode() === 'person' ? num(tr.dataset.hc) : null, utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
-      simple: num(tr.dataset.simple), min: num(tr.dataset.min), rec: num(tr.dataset.rec), max: num(tr.dataset.max), qty
+      simple: num(tr.dataset.simple), simpleKg: num(tr.dataset.simpleKg), min: num(tr.dataset.min), rec: num(tr.dataset.rec), max: num(tr.dataset.max), qty
     };
   },
   applyUnitToPicked() {
@@ -1283,9 +1295,9 @@ const Predict = {
     if (!rows.length) return toast('내보낼 행이 없습니다');
     const basis = Predict.basis();
     await simpleSheet(`예정량_${D.today()}.xlsx`, '예정량',
-      [basis === 'delivery' ? '납품일' : '급식일', '부대', '품명', '구분', '기준량', '급식인원', '총소요량', '단위', '포장규격', '단순산술값', '최소', '권장', '최대', '저장값'],
-      rows.map(r => [r.date, r.unit, r.name, r.cat, r.base, r.hc, r.total, r.utype, r.spec, r.simple, r.min, r.rec, r.max, r.qty]),
-      [12, 14, 22, 10, 9, 9, 10, 6, 9, 11, 8, 8, 8, 8]);
+      [basis === 'delivery' ? '납품일' : '급식일', '부대', '품명', '구분', '기준량', '급식인원', '총소요량', '단위', '포장규격', '단순산술값(ea)', '단순산술값(kg)', '최소', '권장', '최대', '저장값'],
+      rows.map(r => [r.date, r.unit, r.name, r.cat, r.base, r.hc, r.total, r.utype, r.spec, r.simple, r.simpleKg, r.min, r.rec, r.max, r.qty]),
+      [12, 14, 22, 10, 9, 9, 10, 6, 9, 13, 13, 8, 8, 8, 8]);
   },
   async renderChart(recs) {
     const byCat = {};
