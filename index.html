@@ -118,6 +118,9 @@ tr.picked td { background:#FFFBEB !important; }
 .chips { display:flex; gap:6px; flex-wrap:wrap; }
 .chip { border:1px solid var(--border); background:var(--surface); border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer; }
 .chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+#reportTable td { white-space:nowrap; }
+#reportTable tr.chg td { color:var(--plan); }
+#reportTable td.grp { background:var(--surface-alt); font-weight:700; }
 tr.carry td { background:var(--surface-alt) !important; font-weight:700; }
 tr.edit-row td { background:#FFFBEB !important; }
 
@@ -169,7 +172,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       </div>
     </div>
     <div class="panel">
-      <div class="row between mb12"><h2>잔여 납품기한 현황</h2><span class="hint">냉동 2/3, 냉장·상온 1/2 기준</span></div>
+      <div class="row between mb12"><h2>잔여 납품기한 현황</h2><span class="hint">소비기한 남은 비율 냉동 2/3, 냉장·상온 1/2 기준</span></div>
       <div class="buckets" id="dueBuckets"></div>
       <div class="mt12 hidden" id="dueDetailWrap">
         <div class="row between mb8"><h3 id="dueDetailTitle"></h3><button class="btn light sm" onclick="Home.closeDetail('due')">닫기</button></div>
@@ -281,9 +284,9 @@ tr.edit-row td { background:#FFFBEB !important; }
   <div class="panel">
     <div class="row between mb12"><h2>재고수불대장</h2>
       <div class="row"><label class="lbl muted">기간</label><span id="ledgerFrom"></span><span>~</span><span id="ledgerTo"></span>
-        <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월</button></div>
+        <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월</button><button class="btn light sm" onclick="Ledger.allPeriod()">전체기간</button></div>
     </div>
-    <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn light sm hidden" id="ledgerBack" onclick="Ledger.goSheets()">대분류로</button><h3 id="ledgerCrumb"></h3></div>
+    <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><h2 id="ledgerCrumb"></h2></div>
     <div class="prod-grid" id="ledgerProducts"></div>
   </div>
   <div class="panel hidden" id="ledgerDetail">
@@ -302,7 +305,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="table-wrap" style="max-height:560px">
       <table id="ldTable"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
     </div>
-    <div class="row mt8"><span class="hint">빨간 글씨 예정 · 파란 글씨 확정 · 검정 글씨 완료. 행을 누르면 수정할 수 있습니다.</span></div>
+    <div class="row mt8 between"><span class="hint">빨간 글씨 예정 · 파란 글씨 확정 · 검정 글씨 완료. 행을 누르면 수정할 수 있습니다. Esc 키 또는 같은 품목 박스를 다시 누르면 닫힙니다.</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
   </div>
 </section>
 
@@ -358,6 +361,17 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="table-wrap"><table><thead><tr><th>저장시각</th><th>구분</th><th>품명</th><th>일자</th><th>수량</th><th>부대</th><th>시트 반영</th></tr></thead><tbody id="logBody"></tbody></table></div>
       <div class="row mt8"><button class="btn light sm" onclick="Logi.resendMissing()">시트에 없는 건 다시 반영</button></div>
     </div>
+  </div>
+  <div class="panel">
+    <div class="row between mb12">
+      <div class="row"><h2>입출고 및 재고현황</h2><span id="reportDate"></span><label class="row muted"><input type="checkbox" id="reportHideZero" checked> 재고·입출고 없는 품목 숨기기</label></div>
+      <button class="btn light" onclick="Report.exportExcel()">엑셀 다운로드</button>
+    </div>
+    <div class="hint mb8">빨간색 글씨는 해당 일자에 입출고 변화가 있는 품목입니다. 부대 사용기한 = 소비기한 − 제품 소비기한(개월) × 2/3 (냉장·상온 1/2)</div>
+    <div class="table-wrap" style="max-height:640px"><table id="reportTable"><thead>
+      <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">부대 사용기한</th><th rowspan="2">전일재고</th><th rowspan="2">총계</th><th colspan="2">금일 입고내역</th><th colspan="2">금일 출고내역</th><th colspan="2">금일 재고현황</th></tr>
+      <tr><th style="top:33px">소비기한</th><th style="top:33px">입고량</th><th style="top:33px">출고량</th><th style="top:33px">출고 부대</th><th style="top:33px">재고</th><th style="top:33px">총계</th></tr>
+    </thead><tbody id="reportBody"></tbody></table></div>
   </div>
   <div class="panel">
     <div class="row between mb8"><h2>오늘 저장한 입출고</h2></div>
@@ -620,12 +634,13 @@ const Names = {
     }
     Names.cache.set(raw, r); return r;
   },
-  fraction: storage => /냉동/.test(storage || '') ? 2 / 3 : 1 / 2,
-  // 납품기한 = 소비기한 - 소비기한기간 × (1 - 비율)
+  // 납품 시 남아 있어야 하는 소비기한 비율: 냉장·상온 1/2, 냉동(또는 미입력) 2/3
+  fraction: storage => /냉장|상온/.test(storage || '') ? 1 / 2 : 2 / 3,
+  // 부대 사용기한(납품기한) = 소비기한 - 소비기한(개월) × 비율  예) 12개월 냉동 → 소비기한 - 8개월
   deadline(expiry, product) {
     if (!D.isIso(expiry) || !product || !product.shelfMonths) return '';
-    const shelfDays = product.shelfMonths * 30.44;
-    return D.add(expiry, -Math.round(shelfDays * (1 - Names.fraction(product.storage))));
+    const months = product.shelfMonths * Names.fraction(product.storage);
+    return Number.isInteger(months) ? D.addMonths(expiry, -months) : D.add(expiry, -Math.round(months * 30.44));
   },
   // 식수인원(급식일 기준): '4000' 그대로 / '4500 ~ 5500' 평일은 큰 값, 토·일·공휴일은 작은 값
   // 요일별 여러 줄('일요일 : 1900 ~ 2000' / '휴일 : …' / '평일 : …')은 해당 줄의 중간값
@@ -1447,7 +1462,12 @@ const Ledger = {
     $('ldAddDate').querySelector('input').placeholder = '입고일';
     $('ldAddExp').querySelector('input').placeholder = '소비기한';
     $('ldBody').addEventListener('click', Ledger.onRowClick);
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || App.tab !== 'ledger' || e.target.classList?.contains('dinput')) return;
+      if (Ledger.editing) { Ledger.editing = null; Ledger.renderDetail(); } else if (Ledger.key) Ledger.close();
+    });
   },
+  allPeriod() { DF.set(document.querySelector('.l-from'), ''); DF.set(document.querySelector('.l-to'), ''); },
   resetPeriod() { DF.set(document.querySelector('.l-from'), D.addMonths(D.today(), -3)); DF.set(document.querySelector('.l-to'), ''); },
   period() { return { from: DF.get(document.querySelector('.l-from')), to: DF.get(document.querySelector('.l-to')) }; },
   goSheets() { Ledger.sheet = ''; $('ledgerSearch').value = ''; Ledger.close(); },
@@ -1480,7 +1500,7 @@ const Ledger = {
       return `<button class="prod-box ${Ledger.key === p.key ? 'on' : ''}" data-key="${esc(p.key)}"><div class="p-name">${esc(p.name)}</div><div class="p-sheet">${kw ? esc(p.sheet) + ' · ' : ''}${esc(p.company || '')}</div>${stock}<div>${tag}</div></button>`;
     }).join('') || '<div class="empty" style="grid-column:1/-1">조건에 맞는 품목이 없습니다</div>';
   },
-  openProduct(key) { Ledger.key = key; Ledger.editing = null; Ledger.renderList(); Ledger.renderDetail(); $('ledgerDetail').classList.remove('hidden'); $('ledgerDetail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+  openProduct(key) { if (Ledger.key === key && !$('ledgerDetail').classList.contains('hidden')) return Ledger.close(); Ledger.key = key; Ledger.editing = null; Ledger.renderList(); Ledger.renderDetail(); $('ledgerDetail').classList.remove('hidden'); $('ledgerDetail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   close() { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); },
   renderDetail() {
     const p = LedgerData.byKey.get(Ledger.key); if (!p) return;
@@ -1603,7 +1623,7 @@ const Logi = {
     });
     Logi.log = (await Store.get('logiLog')) || [];
   },
-  render() { Logi.renderToday(); Logi.renderPlans('in'); Logi.renderPlans('out'); document.querySelectorAll('#inBody tr, #outBody tr').forEach(Logi.refreshRow); },
+  render() { Report.render(); Logi.renderToday(); Logi.renderPlans('in'); Logi.renderPlans('out'); document.querySelectorAll('#inBody tr, #outBody tr').forEach(Logi.refreshRow); },
   productOptions: () => LedgerData.standard().map(p => ({ label: `${p.name} · ${p.sheet}`, value: p.name, key: p.key })),
   addRow(kind, silent) {
     const tr = document.createElement('tr');
@@ -1619,16 +1639,25 @@ const Logi = {
     $(kind + 'Body').appendChild(tr);
     tr.dataset.kind = kind;
     AC.bind(tr.querySelector('.l-name'), Logi.productOptions, it => { tr.dataset.key = it.key; Logi.refreshRow(tr); });
-    tr.querySelector('.l-name').addEventListener('change', () => { const m = Logi.productOptions().filter(x => Names.norm(x.value) === Names.norm(tr.querySelector('.l-name').value)); if (m.length === 1) tr.dataset.key = m[0].key; Logi.refreshRow(tr); });
+    tr.querySelector('.l-name').addEventListener('change', () => { const k = Logi.matchKey(tr.querySelector('.l-name').value); if (k) tr.dataset.key = k; Logi.refreshRow(tr); });
     if (kind === 'out') AC.bind(tr.querySelector('.l-unit'), AC.units);
     if (!silent) tr.querySelector('.l-name').focus();
   },
   prod: tr => LedgerData.byKey.get(tr.dataset.key || ''),
+  // 직접 입력한 품명을 재고수불대장 품목으로 연결: 정확히 일치 → 품목정보 제품명·별칭 → 부분 일치(하나일 때)
+  matchKey(raw) {
+    const n = Names.norm(raw); if (!n) return '';
+    const all = LedgerData.standard();
+    let m = all.filter(p => Names.norm(p.name) === n);
+    if (!m.length) { const pr = Names.resolve(raw).product || Names.product(raw); if (pr) m = all.filter(p => p.product && p.product.name === pr.name); }
+    if (!m.length) m = all.filter(p => Names.norm(p.name).includes(n));
+    return m.length === 1 ? m[0].key : '';
+  },
   refreshRow(tr) {
     if (!tr) return; const p = Logi.prod(tr), info = p && p.product;
     if (tr.dataset.kind === 'in') {
-      tr.querySelector('.o-storage').textContent = info?.storage || '-';
-      tr.querySelector('.o-shelf').textContent = info?.shelfMonths ? info.shelfMonths + '개월' : '-';
+      tr.querySelector('.o-storage').innerHTML = !p ? '-' : info?.storage ? esc(info.storage) : '<span class="hint" title="품목정보 G열에 입력하면 표시됩니다. 미입력 시 냉동 기준(2/3)으로 계산">미입력</span>';
+      tr.querySelector('.o-shelf').innerHTML = !p ? '-' : info?.shelfMonths ? info.shelfMonths + '개월' : '<span class="hint" title="품목정보 H열(소비기한 개월)을 입력하세요">미입력</span>';
     } else if (p) {
       const sel = tr.querySelector('.l-lot'), cur = sel.value;
       sel.innerHTML = '<option value="">소비기한 선택</option>' + p.lots.filter(l => l.expiry).map(l => `<option value="${l.expiry}">${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})</option>`).join('') + '<option value="__manual">직접 입력</option>';
@@ -1798,6 +1827,115 @@ const Logi = {
       if (c === 5 && i > 4) cell.numFmt = '#,##0';
     }
     await downloadWorkbook(wb, `${kind === 'in' ? '입고일지' : '출고일지'}_${date}.xlsx`);
+  }
+};
+
+/* ---------- 입출고 및 재고현황 (일일 보고) ---------- */
+const Report = {
+  inited: false,
+  init() {
+    if (Report.inited) return; Report.inited = true;
+    DF.mount($('reportDate'), 'report-date', D.today()).addEventListener('datechange', Report.render);
+    $('reportHideZero').addEventListener('change', Report.render);
+  },
+  date: () => DF.get(document.querySelector('.report-date')) || D.today(),
+  // 특정 일자 마감 재고 = 현재고 - 그 이후 입고 + 그 이후 출고
+  stockAt(p, day) {
+    let s = p.stock;
+    p.rows.forEach(o => {
+      if (o.inQty && ACTUAL_IN.has(o.status) && o.inDate > day) s -= o.inQty;
+      if (o.outTotal && ACTUAL_OUT.has(o.status) && o.outDate > day) s += o.outTotal;
+    });
+    return s;
+  },
+  lotsAt(p, day, stock) {
+    const res = new Map(); let need = Math.max(0, stock);
+    for (let i = p.rows.length - 1; i >= 0 && need > 0; i--) {
+      const o = p.rows[i];
+      if (!(o.inQty && ACTUAL_IN.has(o.status)) || (o.inDate && o.inDate > day)) continue;
+      const t = Math.min(o.inQty, need); need -= t; res.set(o, t);
+    }
+    return res;
+  },
+  build() {
+    const day = Report.date(), prevDay = D.add(day, -1), out = [];
+    LedgerData.standard().forEach(p => {
+      const end = Report.stockAt(p, day), prev = Report.stockAt(p, prevDay);
+      const ins = p.rows.filter(o => o.inQty && ACTUAL_IN.has(o.status) && o.inDate === day);
+      const outs = p.rows.filter(o => o.outTotal && ACTUAL_OUT.has(o.status) && o.outDate === day);
+      const inQty = ins.reduce((a, o) => a + o.inQty, 0), outQty = outs.reduce((a, o) => a + o.outTotal, 0);
+      if ($('reportHideZero').checked && !end && !prev && !inQty && !outQty) return;
+      const lp = Report.lotsAt(p, prevDay, prev), le = Report.lotsAt(p, day, end);
+      const keys = [...new Set([...lp.keys(), ...le.keys(), ...ins])].sort((a, b) => String(a.expiry || a.inDate || '').localeCompare(String(b.expiry || b.inDate || '')));
+      const lots = keys.map(o => {
+        const pr = lp.get(o) || 0, en = le.get(o) || 0, inn = ins.includes(o) ? o.inQty : 0;
+        return { expiry: o.expiry, deadline: Names.deadline(o.expiry, p.product), prev: pr, in: inn, out: Math.max(0, pr + inn - en), end: en };
+      });
+      if (!lots.length) lots.push({ expiry: '', deadline: '', prev: Math.max(prev, 0), in: 0, out: outQty, end: Math.max(end, 0) });
+      const units = [...new Set(outs.map(o => o.unit).filter(Boolean))].map(u => `${u} ${fmtN(outs.filter(o => o.unit === u).reduce((a, o) => a + o.outTotal, 0))}`).join(', ');
+      out.push({ p, lots, prev, end, inQty, outQty, units, changed: !!(inQty || outQty) });
+    });
+    return { day, items: out };
+  },
+  render() {
+    Report.init();
+    const { items } = Report.build();
+    let html = '', lastSheet = null;
+    const sheetCount = {}; items.forEach(it => { sheetCount[it.p.sheet] = (sheetCount[it.p.sheet] || 0) + it.lots.length; });
+    items.forEach(it => {
+      const n = it.lots.length, sh = it.p.sheet;
+      it.lots.forEach((l, i) => {
+        html += `<tr class="${it.changed ? 'chg' : ''}">`;
+        if (sh !== lastSheet) { html += `<td class="grp" rowspan="${sheetCount[sh]}">${esc(sh)}</td>`; lastSheet = sh; }
+        if (i === 0) html += `<td rowspan="${n}" style="text-align:left;font-weight:600">${esc(it.p.name)}</td><td rowspan="${n}">${it.p.product?.shelfMonths || '-'}</td>`;
+        html += `<td>${l.expiry || '-'}</td><td>${l.deadline || '-'}</td><td class="num">${fmtN(l.prev)}</td>`;
+        if (i === 0) html += `<td rowspan="${n}" class="num"><b>${fmtN(it.prev)}</b></td>`;
+        html += `<td>${l.in ? (l.expiry || '-') : ''}</td><td class="num">${l.in ? fmtN(l.in) : ''}</td><td class="num">${l.out ? fmtN(l.out) : ''}</td>`;
+        if (i === 0) html += `<td rowspan="${n}" style="text-align:left">${esc(it.units)}</td>`;
+        html += `<td class="num">${fmtN(l.end)}</td>`;
+        if (i === 0) html += `<td rowspan="${n}" class="num"><b>${fmtN(it.end)}</b></td>`;
+        html += '</tr>';
+      });
+    });
+    $('reportBody').innerHTML = html || '<tr><td colspan="13" class="empty">표시할 품목이 없습니다</td></tr>';
+  },
+  async exportExcel() {
+    const { day, items } = Report.build(); if (!items.length) return toast('내보낼 내용이 없습니다');
+    await loadExcel();
+    const [, m, d] = day.split('-');
+    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet(`군납 ${m}월 ${d}일입출고 및 재고 현황`);
+    ws.columns = [8, 26, 10, 12, 12, 10, 10, 12, 10, 10, 22, 10, 10].map(w => ({ width: w }));
+    ws.mergeCells('A1:M2'); ws.getCell('A1').value = `군납 ${m}월 ${d}일 입출고 및 재고현황`; ws.getCell('A1').font = { bold: true, size: 16 };
+    ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    const put = (r, arr) => arr.forEach((v, i) => { ws.getCell(r, i + 1).value = v === '' || v === undefined ? null : v; });
+    put(3, ['구  분', '품  명', '제품 소비기한(개월)', '소비기한', '부대 사용기한', '전일재고', '총계', '금일 군납 OEM 입고내역', '', '금일 군납 OEM 출고 내역', '', '금일 재고 현황', '']);
+    put(4, ['', '', '', '', '', '', '', '소비기한', '입고량', '출고량', '출고 부대', '재고', '총계']);
+    ['A3:A4', 'B3:B4', 'C3:C4', 'D3:D4', 'E3:E4', 'F3:F4', 'G3:G4', 'H3:I3', 'J3:K3', 'L3:M3'].forEach(x => ws.mergeCells(x));
+    let r = 5; const sheetStart = {};
+    items.forEach(it => {
+      const s = r;
+      if (!(it.p.sheet in sheetStart)) sheetStart[it.p.sheet] = { from: r, to: r };
+      it.lots.forEach((l, i) => {
+        put(r, [i === 0 && sheetStart[it.p.sheet].from === r ? it.p.sheet : '', i === 0 ? it.p.name : '', i === 0 ? (it.p.product?.shelfMonths || '') : '',
+          l.expiry ? D.toDate(l.expiry) : '', l.deadline ? D.toDate(l.deadline) : '', l.prev, i === 0 ? it.prev : '',
+          l.in ? (l.expiry ? D.toDate(l.expiry) : '') : '', l.in || '', l.out || '', i === 0 ? it.units : '', l.end, i === 0 ? it.end : '']);
+        if (it.changed) for (let c = 2; c <= 13; c++) ws.getCell(r, c).font = { color: { argb: 'FFDC2626' } };
+        r++;
+      });
+      if (r - 1 > s) ['B', 'C', 'G', 'K', 'M'].forEach(c => ws.mergeCells(`${c}${s}:${c}${r - 1}`));
+      sheetStart[it.p.sheet].to = r - 1;
+    });
+    Object.values(sheetStart).forEach(x => { if (x.to > x.from) ws.mergeCells(`A${x.from}:A${x.to}`); });
+    for (let i = 3; i < r; i++) for (let c = 1; c <= 13; c++) {
+      const cell = ws.getCell(i, c);
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      if (i <= 4) cell.font = { bold: true };
+      if (i > 4 && [4, 5, 8].includes(c)) cell.numFmt = 'yyyy-mm-dd';
+      if (i > 4 && [6, 7, 9, 10, 12, 13].includes(c)) cell.numFmt = '#,##0';
+    }
+    ws.views = [{ state: 'frozen', ySplit: 4 }];
+    await downloadWorkbook(wb, `입출고및재고현황_${day}.xlsx`);
   }
 };
 
