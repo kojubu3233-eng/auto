@@ -39,6 +39,8 @@ h3 { font-size:13px; font-weight:700; }
 input[type=text], input[type=number], input[type=date], input[type=month], select {
   border:1px solid var(--border); padding:6px; border-radius:6px; background:var(--surface); color:var(--ink); font-size:13px; outline:none; }
 input:focus, select:focus { border-color:var(--accent); background:var(--accent-soft); }
+input[readonly] { color:var(--muted); background:var(--surface-alt) !important; }
+input.g-hc.manual { color:var(--warn); font-weight:700; }
 input.dirty { background:#FEF9C3 !important; border-color:#F59E0B !important; }
 input.invalid { border-color:var(--danger) !important; }
 
@@ -203,7 +205,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <label><input type="radio" name="dateBasis" value="delivery" checked> 납품일 기준</label>
         <label><input type="radio" name="dateBasis" value="meal"> 급식일 기준</label>
       </div>
-      <div class="row person-only hidden"><label class="lbl" for="headcount">급식인원</label><input type="number" id="headcount" style="width:90px"><span class="hint" id="headcountInfo"></span></div>
+      <span class="hint person-only hidden">급식인원은 행마다 급식일(평일·휴일)에 맞춰 부대별정보에서 자동 입력되며, 직접 고칠 수 있습니다</span>
     </div>
     <div class="controls">
       <label class="lbl" for="pickedUnit">체크한 행에 부대 적용</label>
@@ -216,7 +218,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <thead><tr>
           <th class="sel-col"><input type="checkbox" id="predictAll"></th>
           <th id="dateHead">납품일</th><th>부대</th><th style="min-width:130px">품명</th><th>구분</th>
-          <th class="person-only hidden">기준량</th><th>총소요량</th><th>단위</th><th>포장규격</th>
+          <th class="person-only hidden">기준량</th><th class="person-only hidden">급식인원</th><th>총소요량</th><th>단위</th><th>포장규격</th>
           <th>단순산술값</th><th>최소</th><th>권장</th><th>최대</th><th>저장기준</th><th>발주량(직접)</th>
         </tr></thead>
         <tbody id="predictBody"></tbody>
@@ -617,10 +619,33 @@ const Names = {
     const shelfDays = product.shelfMonths * 30.44;
     return D.add(expiry, -Math.round(shelfDays * (1 - Names.fraction(product.storage))));
   },
-  headcount(unit) {
+  // 식수인원(급식일 기준): '4000' 그대로 / '4500 ~ 5500' 평일은 큰 값, 토·일·공휴일은 작은 값
+  // 요일별 여러 줄('일요일 : 1900 ~ 2000' / '휴일 : …' / '평일 : …')은 해당 줄의 중간값
+  headcount(unit, iso) {
     const u = Names.unitMap.get(unit); if (!u) return null;
-    const s = String(u.headcount || '').trim(), r = s.match(/^(\d+)\s*~\s*(\d+)$/);
-    return r ? Math.round((+r[1] + +r[2]) / 2) : (num(s) || null);
+    const text = String(u.headcount ?? '').trim(); if (!text) return null;
+    const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    let pick = lines[0];
+    if (lines.length > 1) {
+      const kind = iso ? Holidays.kind(iso) : 'WORK', sunday = iso && D.toDate(iso).getDay() === 0;
+      const want = sunday ? ['일요일', '휴일'] : kind === 'HOLI' || kind === 'SAT' ? ['휴일', '토요일', '주말'] : ['평일'];
+      pick = want.map(w => lines.find(l => l.includes(w))).find(Boolean) || lines.find(l => l.includes('평일')) || lines[0];
+    }
+    const v = pick.replace(/^[^:：]*[:：]/, '').replace(/,/g, '');
+    const r = v.match(/(\d+)\s*~\s*(\d+)/);
+    if (r) {
+      const lo = Math.min(+r[1], +r[2]), hi = Math.max(+r[1], +r[2]);
+      if (lines.length > 1) return Math.round((lo + hi) / 2);
+      const kind = iso ? Holidays.kind(iso) : 'WORK';
+      return kind === 'WORK' ? hi : lo;
+    }
+    const n = v.match(/\d+/); return n ? +n[0] : null;
+  },
+  // 부대명 일부만 입력해도 하나로 특정되면 정식 명칭으로 바꾼다 ('8급양' → '8급양대')
+  matchUnit(name) {
+    const n = normUnit(name); if (!n || Names.unitMap.has(n)) return n;
+    const c = Names.units.filter(u => u.name.startsWith(n) || Names.norm(u.name) === Names.norm(n));
+    return c.length === 1 ? c[0].name : n;
   },
   counterpart(unit, iso, basis) {
     const u = Names.unitMap.get(unit); if (!u || !D.isIso(iso)) return '';
@@ -1021,20 +1046,23 @@ const Home = {
 
 /* ---------- 예정량 입력 ---------- */
 const REC_Z = 1.28, MAX_Z = 2.33;
-const COLS_EDIT = ['g-date', 'g-unit', 'g-name', 'g-cat', 'g-base', 'g-total', 'g-utype', 'g-spec'];
+const COLS_EDIT = ['g-date', 'g-unit', 'g-name', 'g-cat', 'g-base', 'g-hc', 'g-total', 'g-utype', 'g-spec'];
 const Predict = {
   mode: () => document.querySelector('input[name=calcMode]:checked').value,
   basis: () => document.querySelector('input[name=dateBasis]:checked').value,
   init() {
     const body = $('predictBody');
     for (let i = 0; i < 8; i++) Predict.addRow(true);
-    body.addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr && !e.target.classList.contains('pick')) Predict.queue(tr); });
+    body.addEventListener('input', e => {
+      const tr = e.target.closest('tr'); if (!tr || e.target.classList.contains('pick')) return;
+      if (e.target.classList.contains('g-hc')) { const m = e.target.value.trim() !== ''; e.target.dataset.manual = m ? '1' : ''; e.target.classList.toggle('manual', m); }
+      Predict.queue(tr);
+    });
     body.addEventListener('change', e => { const tr = e.target.closest('tr'); if (!tr) return; if (e.target.classList.contains('pick')) tr.classList.toggle('picked', e.target.checked); else Predict.queue(tr); });
     body.addEventListener('datechange', e => Predict.queue(e.target.closest('tr')));
     body.addEventListener('paste', Predict.paste);
     document.querySelectorAll('input[name=calcMode]').forEach(r => r.addEventListener('change', Predict.applyMode));
     document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.calcAll(); }));
-    $('headcount').addEventListener('input', () => { $('headcount').dataset.user = '1'; $('headcount').classList.remove('invalid'); Predict.calcAll(); });
     $('predictAll').addEventListener('change', e => body.querySelectorAll('.pick').forEach(c => { c.checked = e.target.checked; c.closest('tr').classList.toggle('picked', c.checked); }));
     AC.bind($('pickedUnit'), AC.units);
     $('statsPanel').addEventListener('toggle', () => { if ($('statsPanel').open) Predict.renderStats(); });
@@ -1059,6 +1087,7 @@ const Predict = {
       <td class="ac-wrap"><input type="text" class="g-name" autocomplete="off" placeholder="품명"><span class="ac-list"></span></td>
       <td><input type="text" class="g-cat" placeholder="자동"></td>
       <td class="person-only ${person ? '' : 'hidden'}"><input type="number" class="g-base" placeholder="g"></td>
+      <td class="person-only ${person ? '' : 'hidden'}"><input type="number" class="g-hc num" placeholder="인원"></td>
       <td><input type="number" class="g-total num" ${person ? 'readonly' : ''}></td>
       <td><select class="g-utype"><option value="kg">kg</option><option value="ea">ea</option></select></td>
       <td><input type="number" class="g-spec num" value="1" step="any"></td>
@@ -1077,13 +1106,10 @@ const Predict = {
   },
   baseHint(tr) { tr.querySelector('.g-base').placeholder = tr.querySelector('.g-utype').value === 'kg' ? 'g' : 'ea'; },
   onUnit(tr) {
-    const inp = tr.querySelector('.g-unit'); inp.value = normUnit(inp.value);
+    const inp = tr.querySelector('.g-unit'); inp.value = Names.matchUnit(inp.value);
     const known = Names.unitMap.has(inp.value) || Hist.units().includes(inp.value);
     inp.style.color = inp.value && !known ? 'var(--warn)' : ''; inp.title = inp.value && !known ? '부대별정보에 없는 부대명입니다' : '';
-    if (Predict.mode() === 'person' && $('headcount').dataset.user !== '1') {
-      const h = Names.headcount(inp.value); if (h) { $('headcount').value = h; $('headcountInfo').textContent = `${inp.value} 기준`; }
-    }
-    Predict.calcAll();
+    Predict.queue(tr);
   },
   onName(tr) {
     const name = tr.querySelector('.g-name').value.trim(); if (!name) return;
@@ -1101,7 +1127,6 @@ const Predict = {
     const person = Predict.mode() === 'person';
     document.querySelectorAll('.person-only').forEach(el => el.classList.toggle('hidden', !person));
     document.querySelectorAll('#predictBody .g-total').forEach(el => { el.readOnly = person; });
-    if (person) { const u = [...document.querySelectorAll('#predictBody .g-unit')].map(i => i.value).find(Boolean); const h = Names.headcount(u); if (h && $('headcount').dataset.user !== '1') { $('headcount').value = h; $('headcountInfo').textContent = `${u} 기준`; } }
     Predict.calcAll();
   },
   pending: new Set(),
@@ -1117,16 +1142,28 @@ const Predict = {
     q('g-badge').innerHTML = Holidays.badge(date);
     const unit = normUnit(q('g-unit').value), name = q('g-name').value.trim();
     const utype = q('g-utype').value, spec = num(q('g-spec').value) || 1;
-    let req, needHc = false;
+    let req, needHc = false, hcNote = '';
     const set = (cls, v, title = '') => { const el = q(cls); el.textContent = v === null ? '-' : fmtN(v, cls === 'o-simple' ? 1 : 0); el.title = title; };
     if (Predict.mode() === 'person') {
-      const base = num(q('g-base').value) || 0, hc = num($('headcount').value) || 0;
+      const hcIn = q('g-hc');
+      const meal = Predict.basis() === 'meal' ? date : (Names.counterpart(unit, date, 'delivery') || date);
+      const auto = Names.headcount(unit, meal);
+      const kindName = { WORK: '평일', SAT: '토요일', HOLI: D.isIso(meal) && D.toDate(meal).getDay() === 0 ? '일요일' : '공휴일' }[Holidays.kind(meal)] || '';
+      const autoNote = auto ? `급식일 ${D.short(meal)} ${kindName} 기준 ${fmtN(auto)}명 (${unit} 부대별정보)` : `${unit || '부대'}의 식수인원이 부대별정보에 없습니다. 직접 입력하세요`;
+      if (hcIn.dataset.manual !== '1') hcIn.value = auto ?? '';
+      const hc = num(hcIn.value) || 0;
+      hcIn.title = hcIn.dataset.manual === '1' ? `직접 입력값 (자동값: ${auto ? fmtN(auto) + '명' : '없음'}). 지우면 자동값으로 돌아갑니다` : autoNote;
+      hcNote = hc ? `급식인원 ${fmtN(hc)}명${hcIn.dataset.manual === '1' ? '(직접 입력)' : ''}` : '';
+      tr.dataset.hc = hc;
+      const base = num(q('g-base').value) || 0;
       needHc = base > 0 && !hc;
       req = base * hc / (utype === 'kg' ? 1000 : 1);
       q('g-total').value = req ? Math.round(req * 100) / 100 : '';
     } else req = num(q('g-total').value) || 0;
     delete tr.dataset.ready;
-    if (needHc) { ['o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); q('o-simple').textContent = '인원 입력'; $('headcount').classList.add('invalid'); return; }
+    q('g-total').title = hcNote;
+    q('g-hc').classList.toggle('invalid', needHc);
+    if (needHc) { ['o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); q('o-simple').textContent = '인원 입력'; q('o-simple').title = q('g-hc').title; return; }
     if (!name || req <= 0) { ['o-simple', 'o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); return; }
     const div = utype === 'ea' ? 1 : spec;
     const simple = req / div;
@@ -1147,7 +1184,7 @@ const Predict = {
     const v = p => Math.round(req * (1 + p / 100) / div);
     const note = fallback ? ` · '${cat}' 구분 이력으로 대체` : '';
     tr.dataset.simple = Math.round(simple * 10) / 10; tr.dataset.min = v(minP); tr.dataset.rec = v(recP); tr.dataset.max = v(maxP); tr.dataset.ready = '1';
-    set('o-simple', simple, '총소요량 ÷ 포장규격');
+    set('o-simple', simple, '총소요량 ÷ 포장규격' + (hcNote ? ' · ' + hcNote : ''));
     set('o-min', v(minP), `과거 평균 오차 ${mean.toFixed(1)}% (이력 ${n}건)${note}`);
     set('o-rec', v(recP), `평균 + 안전마진 (이력 ${n}건)${note}`);
     set('o-max', v(maxP), `평균 + 넉넉한 안전마진, 과거 최대 편차 ${Math.round(maxRate)}% 반영${note}`);
@@ -1160,12 +1197,12 @@ const Predict = {
     const qty = override !== null ? override : num(tr.dataset[basis]);
     return {
       tr, date: DF.get(q('g-date')), unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
-      total: num(q('g-total').value), utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
+      total: num(q('g-total').value), base: Predict.mode() === 'person' ? num(q('g-base').value) : null, hc: Predict.mode() === 'person' ? num(tr.dataset.hc) : null, utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
       simple: num(tr.dataset.simple), min: num(tr.dataset.min), rec: num(tr.dataset.rec), max: num(tr.dataset.max), qty
     };
   },
   applyUnitToPicked() {
-    const u = normUnit($('pickedUnit').value); if (!u) return toast('적용할 부대명을 입력하세요');
+    const u = Names.matchUnit($('pickedUnit').value); if (!u) return toast('적용할 부대명을 입력하세요');
     const picked = [...document.querySelectorAll('#predictBody .pick:checked')];
     if (!picked.length) return toast('먼저 행 왼쪽 체크박스를 선택하세요');
     picked.forEach(c => { const tr = c.closest('tr'); tr.querySelector('.g-unit').value = u; Predict.onUnit(tr); });
@@ -1184,7 +1221,7 @@ const Predict = {
     if (!text.includes('\t') && !text.includes('\n')) return;
     e.preventDefault();
     const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '').map(l => l.split('\t'));
-    const order = COLS_EDIT.filter(c => c !== 'g-base' || Predict.mode() === 'person').filter(c => c !== 'g-total' || Predict.mode() === 'total');
+    const order = COLS_EDIT.filter(c => !['g-base', 'g-hc'].includes(c) || Predict.mode() === 'person').filter(c => c !== 'g-total' || Predict.mode() === 'total');
     const start = order.indexOf(col);
     let tr = t.closest('tr');
     lines.forEach(cells => {
@@ -1193,7 +1230,7 @@ const Predict = {
         const c = order[start + j]; if (!c) return; v = v.trim(); const el = tr.querySelector('.' + c);
         if (c === 'g-date') { const iso = D.parse(v); if (iso) DF.set(el, iso, true); }
         else if (c === 'g-utype') { const vv = v.toLowerCase().startsWith('e') ? 'ea' : 'kg'; el.value = vv; }
-        else el.value = v;
+        else { el.value = v; if (c === 'g-hc' && v) { el.dataset.manual = '1'; el.classList.add('manual'); } }
       });
       if (tr.querySelector('.g-name').value.trim()) Predict.onName(tr);
       Predict.queue(tr);
@@ -1246,9 +1283,9 @@ const Predict = {
     if (!rows.length) return toast('내보낼 행이 없습니다');
     const basis = Predict.basis();
     await simpleSheet(`예정량_${D.today()}.xlsx`, '예정량',
-      [basis === 'delivery' ? '납품일' : '급식일', '부대', '품명', '구분', '총소요량', '단위', '포장규격', '단순산술값', '최소', '권장', '최대', '저장값'],
-      rows.map(r => [r.date, r.unit, r.name, r.cat, r.total, r.utype, r.spec, r.simple, r.min, r.rec, r.max, r.qty]),
-      [12, 14, 22, 10, 10, 6, 9, 11, 8, 8, 8, 8]);
+      [basis === 'delivery' ? '납품일' : '급식일', '부대', '품명', '구분', '기준량', '급식인원', '총소요량', '단위', '포장규격', '단순산술값', '최소', '권장', '최대', '저장값'],
+      rows.map(r => [r.date, r.unit, r.name, r.cat, r.base, r.hc, r.total, r.utype, r.spec, r.simple, r.min, r.rec, r.max, r.qty]),
+      [12, 14, 22, 10, 9, 9, 10, 6, 9, 11, 8, 8, 8, 8]);
   },
   async renderChart(recs) {
     const byCat = {};
