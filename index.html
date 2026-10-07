@@ -761,10 +761,10 @@ const Hist = {
 };
 
 /* ---------- 재고수불대장 데이터 ---------- */
-const ACTUAL_IN = new Set(['', '입고완료']);
 const PLAN_IN = new Set(['입고예정', '입고결정']);
-const ACTUAL_OUT = new Set(['', '출고확정', '출고완료']);
 const PLAN_OUT = new Set(['출고예정']);
+const ACTUAL_IN = { has: s => !PLAN_IN.has(s) };
+const ACTUAL_OUT = { has: s => !PLAN_OUT.has(s) };
 const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입고결정': 'c-conf', '출고확정': 'c-conf', '입고완료': 'c-done', '출고완료': 'c-done', '': 'c-done' };
 
 const LedgerData = {
@@ -777,7 +777,7 @@ const LedgerData = {
       const fields = sh.type === 'standard' ? F : SF;
       sh.rows.forEach(arr => {
         const o = { sheet: sh.sheet, type: sh.type }; fields.forEach((k, i) => { o[k] = arr[i]; });
-        if (sh.type === 'standard') { o.outTotal = (o.outMain || 0) + (o.outSample || 0); o.isIn = !!(o.inQty || o.inDate); o.isOut = !!(o.outTotal || o.outDate); }
+        if (sh.type === 'standard') { o.outTotal = o.outSub || ((o.outMain || 0) + (o.outSample || 0)); o.isIn = !!(o.inQty || o.inDate); o.isOut = !!(o.outTotal || o.outDate); if (o.stock === undefined) o.stock = ''; }
         else { o.outDate = o.date; o.outMain = o.qty; o.outSample = o.sample || 0; o.outTotal = o.qty + (o.sample || 0); o.isOut = true; o.status = ''; }
         const key = sh.sheet + '|' + o.name;
         let p = LedgerData.byKey.get(key);
@@ -790,24 +790,31 @@ const LedgerData = {
     LedgerData.products.forEach(LedgerData.compute);
   },
   link(p) { const r = Names.resolve(p.name); p.link = r; p.product = r.product; return p.product; },
+  // 현재고는 시트 J열(재고) 마지막 값을 기준으로 한다. 예정 행이 J열에 반영돼 있으면 되돌려 실재고로 맞춘다.
   compute(p) {
     LedgerData.link(p);
+    let last = -1; p.rows.forEach((o, i) => { if (o.stock !== '' && o.stock !== null && o.stock !== undefined) last = i; });
     let stock = 0, planIn = 0, planOut = 0;
-    const lots = [];
-    p.rows.forEach(o => {
-      if (o.inQty && ACTUAL_IN.has(o.status)) { stock += o.inQty; lots.push({ inDate: o.inDate, qty: o.inQty, remain: o.inQty, expiry: o.expiry, row: o }); }
-      if (o.inQty && PLAN_IN.has(o.status)) planIn += o.inQty;
-      if (o.outTotal && ACTUAL_OUT.has(o.status)) stock -= o.outTotal;
-      if (o.outTotal && PLAN_OUT.has(o.status)) planOut += o.outTotal;
+    p.rows.forEach((o, i) => {
+      const inJ = i <= last && o.stock !== '';
+      if (o.inQty && PLAN_IN.has(o.status)) { planIn += o.inQty; if (inJ) stock -= o.inQty; }
+      if (o.outTotal && PLAN_OUT.has(o.status)) { planOut += o.outTotal; if (inJ) stock += o.outTotal; }
+      if (i > last) {
+        if (o.inQty && ACTUAL_IN.has(o.status)) stock += o.inQty;
+        if (o.outTotal && ACTUAL_OUT.has(o.status)) stock -= o.outTotal;
+      }
     });
-    // 선입선출 배분: 소비기한이 적힌 출고는 같은 소비기한 로트에서 먼저 차감
-    lots.sort((a, b) => String(a.inDate || '9999').localeCompare(String(b.inDate || '9999')));
-    p.rows.filter(o => o.outTotal && ACTUAL_OUT.has(o.status)).sort((a, b) => String(a.outDate || '').localeCompare(String(b.outDate || ''))).forEach(o => {
-      let need = o.outTotal;
-      if (o.expiry) lots.filter(l => l.expiry === o.expiry).forEach(l => { const t = Math.min(l.remain, need); l.remain -= t; need -= t; });
-      for (const l of lots) { if (need <= 0) break; const t = Math.min(l.remain, need); l.remain -= t; need -= t; }
-    });
-    p.stock = stock; p.planIn = planIn; p.planOut = planOut; p.lots = lots.filter(l => l.remain > 0);
+    if (last >= 0) stock += p.rows[last].stock;
+    // 남은 재고는 최근 입고분부터 채워진 것으로 본다(선입선출)
+    const lots = []; let need = Math.max(0, stock);
+    for (let i = p.rows.length - 1; i >= 0 && need > 0; i--) {
+      const o = p.rows[i];
+      if (!(o.inQty && ACTUAL_IN.has(o.status))) continue;
+      const take = Math.min(o.inQty, need); need -= take;
+      lots.push({ inDate: o.inDate, qty: o.inQty, remain: take, expiry: o.expiry, row: o });
+    }
+    lots.reverse();
+    p.stock = stock; p.planIn = planIn; p.planOut = planOut; p.lots = lots;
     p.lots.forEach(l => { l.deadline = Names.deadline(l.expiry, p.product); });
     const ds = p.lots.map(l => l.deadline).filter(Boolean).sort();
     p.nextDeadline = ds[0] || '';
@@ -1440,17 +1447,14 @@ const Ledger = {
       return;
     }
     $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="2">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th rowspan="2">소비기한</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">일자</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th></tr>';
-    let run = 0; const shown = [];
+    const shown = [];
     const dateOf = o => o.inDate || o.outDate || '';
-    let carry = 0;
+    let carry = '';
     p.rows.forEach(o => {
-      const delta = (o.inQty && ACTUAL_IN.has(o.status) ? o.inQty : 0) - (o.outTotal && ACTUAL_OUT.has(o.status) ? o.outTotal : 0);
-      run += delta;
       const d = dateOf(o);
-      const before = from && d && d < from;
-      if (before) { carry += delta; return; }
+      if (from && d && d < from) { if (o.stock !== '') carry = o.stock; return; }
       if (to && d && d > to) return;
-      shown.push({ o, run, counted: delta !== 0 || !(o.inQty || o.outTotal) });
+      shown.push({ o, run: o.stock, counted: o.stock !== '' });
     });
     const statusCell = o => {
       const s = o.status || (o.inQty ? '입고완료' : '');
@@ -1467,7 +1471,7 @@ const Ledger = {
         <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td><td>${o.expiry ? o.expiry : esc(o.note || '')}</td><td>${statusCell(o)}</td></tr>`;
     };
     Ledger.shown = shown;
-    $('ldBody').innerHTML = (from ? `<tr class="carry"><td colspan="9" style="text-align:right">${D.short(from)} 이전 이월재고</td><td class="num">${fmtN(carry)}</td><td colspan="2"></td></tr>` : '') +
+    $('ldBody').innerHTML = (from && carry !== '' ? `<tr class="carry"><td colspan="9" style="text-align:right">${D.short(from)} 이전 재고</td><td class="num">${fmtN(carry)}</td><td colspan="2"></td></tr>` : '') +
       (shown.map(rowHtml).join('') || '<tr><td colspan="12" class="empty">기간 내 내역 없음</td></tr>');
   },
   editRow(o, i) {
