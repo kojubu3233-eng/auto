@@ -147,6 +147,7 @@ tr.edit-row td { background:#FFFBEB !important; }
   <button class="tab-btn" data-tab="ledger">재고수불대장</button>
   <button class="tab-btn" data-tab="logistics">물류관리</button>
 </nav>
+<div id="loadError" class="banner hidden" style="background:var(--danger-soft);color:var(--danger);border-color:#E9D9D6"><span id="loadErrorText"></span><button class="btn sm danger" onclick="App.reload(true)">다시 시도</button></div>
 <div id="linkBanner" class="banner hidden"><span id="linkBannerText"></span><button class="btn sm" onclick="Link.open()">품명 연결</button></div>
 
 <!-- 홈 -->
@@ -229,11 +230,12 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
   </div>
   <details class="panel" id="statsPanel">
-    <summary style="cursor:pointer;font-weight:700">과거 오차 분석</summary>
+    <summary style="cursor:pointer;font-weight:700">과거 오차 분석 (자동화시스템 '데이터'·DB_Master 납품 이력)</summary>
     <div class="row mt12 mb8">
       <select id="statUnit"></select>
       <span class="muted" id="statSummary"></span>
     </div>
+    <div style="height:260px" class="mb12"><canvas id="statChart"></canvas></div><div class="hint mb8" id="statChartMsg">구분별 월평균 오차율 (예정 대비 확정, 최근 12개월)</div>
     <div class="table-wrap" style="max-height:340px"><table><thead><tr><th>제외</th><th>납품일</th><th>부대</th><th>구분</th><th>품명</th><th>예정</th><th>확정</th><th>오차</th></tr></thead><tbody id="statBody"></tbody></table></div>
   </details>
 </section>
@@ -308,17 +310,29 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
 
     <div data-subpane="in">
+      <div class="row mb8"><h3>입고 예정</h3><span id="inPlanDate"></span><span class="hint">재고수불대장에서 입고 결정된 건. 실제 수량·소비기한을 확인하고 체크 후 저장</span></div>
       <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
-        <th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>수량</th><th style="min-width:160px">연결할 입고 예정</th><th></th>
+        <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>예정 수량</th><th>입고 수량</th><th>소비기한</th><th>납품기한</th>
+      </tr></thead><tbody id="inPlanBody"></tbody></table></div>
+      <div class="row mt8" style="justify-content:flex-end"><button class="btn ok" onclick="Logi.completePlans('in')">체크한 건 입고 완료</button></div>
+      <div class="row mt12 mb8"><h3>예정에 없던 입고</h3></div>
+      <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
+        <th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>수량</th><th></th>
       </tr></thead><tbody id="inBody"></tbody></table></div>
-      <div class="row mt12"><button class="btn light" onclick="Logi.addRow('in')">+ 행 추가</button><span style="flex:1"></span><button class="btn ok" onclick="Logi.submit('in')">입고 저장</button></div>
+      <div class="row mt8"><button class="btn light" onclick="Logi.addRow('in')">+ 행 추가</button><span style="flex:1"></span><button class="btn ok" onclick="Logi.submit('in')">입고 저장</button></div>
     </div>
 
     <div data-subpane="out" class="hidden">
+      <div class="row mb8"><h3>출고 예정</h3><span id="outPlanDate"></span><label class="row muted"><input type="checkbox" id="outShowPlan"> 확정 전 예정 건도 표시</label></div>
       <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
-        <th style="min-width:150px">품명</th><th>출고일</th><th style="min-width:130px">소비기한</th><th>납품기한</th><th>본품</th><th>샘플</th><th style="min-width:110px">부대</th><th style="min-width:170px">연결할 출고 예정</th><th></th>
+        <th class="sel-col"><input type="checkbox" data-all="outPlan"></th><th style="min-width:150px">품명</th><th>부대</th><th>상태</th><th>예정 수량</th><th>본품</th><th>샘플</th><th style="min-width:150px">소비기한</th><th>납품기한</th>
+      </tr></thead><tbody id="outPlanBody"></tbody></table></div>
+      <div class="row mt8" style="justify-content:flex-end"><button class="btn ok" onclick="Logi.completePlans('out')">체크한 건 출고 완료</button></div>
+      <div class="row mt12 mb8"><h3>예정에 없던 출고</h3></div>
+      <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
+        <th style="min-width:150px">품명</th><th>출고일</th><th style="min-width:130px">소비기한</th><th>납품기한</th><th>본품</th><th>샘플</th><th style="min-width:110px">부대</th><th></th>
       </tr></thead><tbody id="outBody"></tbody></table></div>
-      <div class="row mt12"><button class="btn light" onclick="Logi.addRow('out')">+ 행 추가</button><span style="flex:1"></span><button class="btn ok" onclick="Logi.submit('out')">출고 저장</button></div>
+      <div class="row mt8"><button class="btn light" onclick="Logi.addRow('out')">+ 행 추가</button><span style="flex:1"></span><button class="btn ok" onclick="Logi.submit('out')">출고 저장</button></div>
     </div>
 
     <div data-subpane="print" class="hidden">
@@ -472,7 +486,8 @@ const DF = {
     return digits.length === 8;
   },
   init() {
-    document.addEventListener('focusin', e => { if (e.target.classList?.contains('dinput')) e.target.select(); });
+    document.addEventListener('focusin', e => { if (e.target.classList?.contains('dinput')) { e.target.select(); e.target.dataset.justFocused = '1'; } });
+    document.addEventListener('mouseup', e => { if (e.target.dataset?.justFocused) { e.preventDefault(); delete e.target.dataset.justFocused; } });
     document.addEventListener('input', e => {
       const t = e.target; if (!t.classList?.contains('dinput')) return;
       t.classList.remove('invalid');
@@ -524,10 +539,18 @@ const Store = {
 /* ---------- 서버 ---------- */
 const Api = {
   url(kind) { const c = window.APP_CONFIG || {}; return kind === 'ledger' ? c.LEDGER_WEBAPP_URL : c.HISTORY_WEBAPP_URL; },
-  async get(kind, params) {
+  async get(kind, params, timeoutMs = 90000) {
     const u = Api.url(kind); if (!u) throw new Error('config.js에 웹앱 주소가 없습니다.');
-    const res = await fetch(u + (u.includes('?') ? '&' : '?') + new URLSearchParams(params));
-    const json = JSON.parse(await res.text());
+    const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    let text;
+    try {
+      const res = await fetch(u + (u.includes('?') ? '&' : '?') + new URLSearchParams(params), { signal: ctl.signal });
+      text = await res.text();
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    } catch (e) { throw new Error(e.name === 'AbortError' ? '응답 시간 초과' : '접속 실패 (' + e.message + ')'); }
+    finally { clearTimeout(timer); }
+    let json;
+    try { json = JSON.parse(text); } catch { throw new Error('웹앱이 JSON이 아닌 응답을 보냈습니다. 배포 권한(모든 사용자)을 확인하세요: ' + text.slice(0, 80)); }
     if (json.error) throw new Error(json.error);
     return json;
   },
@@ -630,8 +653,8 @@ const AC = {
     const pick = i => { const it = list._items[i]; input.value = it.value ?? it.label; list.style.display = 'none'; onPick && onPick(it); };
     list.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
   },
-  units: () => Names.units.map(u => ({ label: u.name })),
-  products: () => Names.products.map(p => ({ label: p.name }))
+  units: () => [...new Set([...Names.units.map(u => u.name), ...Hist.units()])].sort().map(n => ({ label: n })),
+  products: () => [...new Set([...Names.products.map(p => p.name), ...Hist.names()])].sort().map(n => ({ label: n }))
 };
 
 /* ---------- 다중 선택 필터 ---------- */
@@ -728,7 +751,8 @@ const Hist = {
       (Hist.idxCat.get(k2) || Hist.idxCat.set(k2, []).get(k2)).push(r);
     }
   },
-  units() { return [...new Set(Hist.records.map(r => r.unit).filter(Boolean))].sort(); }
+  units() { return [...new Set(Hist.records.map(r => r.unit).filter(Boolean))].sort(); },
+  names() { return [...new Set(Hist.records.map(r => r.name).filter(Boolean))]; }
 };
 
 /* ---------- 재고수불대장 데이터 ---------- */
@@ -820,21 +844,37 @@ const App = {
   async reload(force) {
     const y = new Date().getFullYear();
     $('syncState').textContent = '구글시트에서 불러오는 중';
-    const [b, l] = await Promise.allSettled([
-      Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(',') }),
-      Api.get('ledger', { action: 'ledger', force: force ? '1' : '0' })
-    ]);
     const errs = [];
-    if (b.status === 'fulfilled') App.applyBoot(b.value); else errs.push('예정·확정 데이터: ' + b.reason.message);
-    if (l.status === 'fulfilled') App.applyLedger(l.value); else errs.push('재고수불대장: ' + l.reason.message);
-    if (b.status === 'fulfilled' && l.status !== 'fulfilled' && App.ledger) LedgerData.load(App.ledger);
+    const [b, l] = await Promise.allSettled([App.fetchBoot(y), Api.get('ledger', { action: 'ledger', force: force ? '1' : '0' })]);
+    try {
+      if (b.status !== 'fulfilled') throw b.reason;
+      App.applyBoot(b.value);
+    } catch (e) { errs.push('자동화시스템 시트: ' + e.message); }
+    try {
+      if (l.status !== 'fulfilled') throw l.reason;
+      if (!l.value || !Array.isArray(l.value.sheets)) throw new Error('재고수불대장 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
+      App.applyLedger(l.value);
+    } catch (e) { errs.push('재고수불대장 시트: ' + e.message); }
     const t = new Date();
-    $('syncState').textContent = errs.length ? '불러오기 실패, 마지막 저장본 표시 중' : `${D.pad(t.getHours())}:${D.pad(t.getMinutes())} 기준`;
-    if (errs.length) toast(errs.join('\n'), 6000);
+    $('syncState').textContent = errs.length ? '일부 불러오기 실패' : `${D.pad(t.getHours())}:${D.pad(t.getMinutes())} 기준`;
+    $('loadError').classList.toggle('hidden', !errs.length);
+    $('loadErrorText').innerHTML = errs.map(esc).join('<br>');
     App.refreshViews();
   },
+  async fetchBoot(y) {
+    const years = [y - 1, y, y + 1].join(',');
+    const boot = await Api.get('hist', { action: 'bootstrap', years });
+    if (Array.isArray(boot.products) && Array.isArray(boot.history)) return boot;
+    // bootstrap을 모르는 이전 버전 웹앱일 때 개별 요청으로 대체
+    const [u, p, h, hist, plan] = await Promise.all([
+      Api.get('hist', { action: 'getUnitInfo' }), Api.get('hist', { action: 'getProductInfo' }), Api.get('hist', { action: 'getHolidays', years }),
+      Api.get('hist', { action: 'read', sheet: '데이터' }), Api.get('hist', { action: 'read', sheet: 'DB_Master' })
+    ]);
+    const rows = j => j.values || j.data || j.rows || [];
+    return { units: u.units || [], products: (p.products || []).map(x => ({ aliases: [], ...x })), holidays: h.holidays || {}, history: rows(hist), plan: rows(plan) };
+  },
   async reloadLedger() {
-    try { App.applyLedger(await Api.get('ledger', { action: 'ledger', force: '1' })); } catch (e) { toast('재고수불대장 새로고침 실패: ' + e.message); }
+    try { const l = await Api.get('ledger', { action: 'ledger', force: '1' }); if (Array.isArray(l.sheets)) App.applyLedger(l); } catch (e) { toast('재고수불대장 새로고침 실패: ' + e.message); }
     App.refreshViews();
   },
   refreshViews() {
@@ -982,7 +1022,7 @@ const Predict = {
     body.addEventListener('paste', Predict.paste);
     document.querySelectorAll('input[name=calcMode]').forEach(r => r.addEventListener('change', Predict.applyMode));
     document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.calcAll(); }));
-    $('headcount').addEventListener('input', () => { $('headcount').dataset.user = '1'; Predict.calcAll(); });
+    $('headcount').addEventListener('input', () => { $('headcount').dataset.user = '1'; $('headcount').classList.remove('invalid'); Predict.calcAll(); });
     $('predictAll').addEventListener('change', e => body.querySelectorAll('.pick').forEach(c => { c.checked = e.target.checked; c.closest('tr').classList.toggle('picked', c.checked); }));
     AC.bind($('pickedUnit'), AC.units);
     $('statsPanel').addEventListener('toggle', () => { if ($('statsPanel').open) Predict.renderStats(); });
@@ -1065,14 +1105,16 @@ const Predict = {
     q('g-badge').innerHTML = Holidays.badge(date);
     const unit = normUnit(q('g-unit').value), name = q('g-name').value.trim();
     const utype = q('g-utype').value, spec = num(q('g-spec').value) || 1;
-    let req;
+    let req, needHc = false;
+    const set = (cls, v, title = '') => { const el = q(cls); el.textContent = v === null ? '-' : fmtN(v, cls === 'o-simple' ? 1 : 0); el.title = title; };
     if (Predict.mode() === 'person') {
       const base = num(q('g-base').value) || 0, hc = num($('headcount').value) || 0;
+      needHc = base > 0 && !hc;
       req = base * hc / (utype === 'kg' ? 1000 : 1);
       q('g-total').value = req ? Math.round(req * 100) / 100 : '';
     } else req = num(q('g-total').value) || 0;
-    const set = (cls, v, title = '') => { const el = q(cls); el.textContent = v === null ? '-' : fmtN(v, cls === 'o-simple' ? 1 : 0); el.title = title; };
     delete tr.dataset.ready;
+    if (needHc) { ['o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); q('o-simple').textContent = '인원 입력'; $('headcount').classList.add('invalid'); return; }
     if (!name || req <= 0) { ['o-simple', 'o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); return; }
     const div = utype === 'ea' ? 1 : spec;
     const simple = req / div;
@@ -1196,6 +1238,17 @@ const Predict = {
       rows.map(r => [r.date, r.unit, r.name, r.cat, r.total, r.utype, r.spec, r.simple, r.min, r.rec, r.max, r.qty]),
       [12, 14, 22, 10, 10, 6, 9, 11, 8, 8, 8, 8]);
   },
+  async renderChart(recs) {
+    const byCat = {};
+    recs.forEach(r => { if (!r.delDate) return; const m = r.delDate.slice(0, 7); ((byCat[r.cat] = byCat[r.cat] || {})[m] = byCat[r.cat][m] || []).push(Math.abs(r.rate)); });
+    const cats = Object.keys(byCat).sort((a, b) => Object.values(byCat[b]).flat().length - Object.values(byCat[a]).flat().length).slice(0, 6);
+    const months = [...new Set(recs.map(r => r.delDate && r.delDate.slice(0, 7)).filter(Boolean))].sort().slice(-12);
+    try { await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'); } catch (e) { $('statChartMsg').textContent = e.message; return; }
+    const colors = ['#2B3A55', '#B3261E', '#3F6B4A', '#9A6324', '#1D4ED8', '#8A8478'];
+    const data = { labels: months.map(m => m.slice(2).replace('-', '.')), datasets: cats.map((c, i) => ({ label: c, data: months.map(m => { const a = byCat[c][m]; return a ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : null; }), borderColor: colors[i], backgroundColor: colors[i], spanGaps: true, tension: .25, pointRadius: 3 })) };
+    if (Predict.chart) { Predict.chart.data = data; Predict.chart.update(); return; }
+    Predict.chart = new Chart($('statChart'), { type: 'line', data, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } } }, scales: { y: { beginAtZero: true, title: { display: true, text: '평균 오차율(%)' } } } } });
+  },
   renderStats() {
     const u = $('statUnit').value;
     const recs = Hist.records.filter(r => r.rate !== null && (!u || r.unit === u)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
@@ -1203,6 +1256,7 @@ const Predict = {
     const avg = used.length ? used.reduce((a, r) => a + Math.abs(r.rate), 0) / used.length : 0;
     const byCat = {}; used.forEach(r => (byCat[r.cat] = byCat[r.cat] || []).push(r.rate));
     const vol = Object.entries(byCat).map(([c, a]) => { const m = a.reduce((x, y) => x + y, 0) / a.length; return [c, Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length)]; }).sort((a, b) => b[1] - a[1]);
+    Predict.renderChart(used);
     $('statSummary').textContent = `분석 ${used.length.toLocaleString()}건 · 평균 오차 ${avg.toFixed(1)}%` + (vol.length ? ` · 변동 큰 구분: ${vol.slice(0, 3).map(([c, s]) => `${c}(${s.toFixed(0)})`).join(', ')}` : '');
     $('statBody').innerHTML = recs.slice(0, 200).map(r => `<tr><td><input type="checkbox" ${Hist.excluded.has(r.id) ? 'checked' : ''} onchange="Predict.toggleExclude('${esc(r.id)}', this.checked)"></td>
       <td>${r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td>${esc(r.cat)}</td><td style="text-align:left">${esc(r.name)}</td>
@@ -1340,15 +1394,15 @@ const Ledger = {
   },
   renderList() {
     document.querySelectorAll('#ledgerSheets .chip').forEach(c => c.classList.toggle('on', c.dataset.sheet === Ledger.sheet));
-    const kw = Names.norm($('ledgerSearch').value), { from, to } = Ledger.period(), t = D.today();
-    const inPeriod = o => { const d = [o.inDate, o.outDate].filter(Boolean); return !d.length || d.some(x => (!from || x >= from) && (!to || x <= to)); };
-    const list = LedgerData.products.filter(p => (!Ledger.sheet || p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))) && p.rows.some(inPeriod));
+    const kw = Names.norm($('ledgerSearch').value), t = D.today();
+    if (!LedgerData.raw) { $('ledgerProducts').innerHTML = '<div class="empty" style="grid-column:1/-1">재고수불대장을 불러오지 못했습니다. 상단 안내를 확인하세요.</div>'; return; }
+    const list = LedgerData.products.filter(p => (!Ledger.sheet || p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))));
     $('ledgerProducts').innerHTML = list.map(p => {
       const dl = p.nextDeadline ? D.diff(p.nextDeadline, t) : null;
       const tag = dl === null ? '' : dl < 0 ? '<span class="tag danger">납품기한 경과</span>' : dl <= 30 ? `<span class="tag warn">납품기한 ${dl}일</span>` : '';
       const stock = p.type === 'standard' ? `<div class="p-stock">${fmtN(p.stock)}</div><div class="p-sub">${p.planIn ? `입고예정 ${fmtN(p.planIn)} ` : ''}${p.planOut ? `출고예정 ${fmtN(p.planOut)}` : ''}</div>` : `<div class="p-sub mt8">출고 ${p.rows.length}건</div>`;
       return `<button class="prod-box ${Ledger.key === p.key ? 'on' : ''}" data-key="${esc(p.key)}"><div class="p-name">${esc(p.name)}</div><div class="p-sheet">${esc(p.sheet)}${p.company ? ' · ' + esc(p.company) : ''}</div>${stock}<div>${tag}</div></button>`;
-    }).join('') || '<div class="empty">조건에 맞는 품목이 없습니다</div>';
+    }).join('') || '<div class="empty" style="grid-column:1/-1">조건에 맞는 품목이 없습니다</div>';
   },
   openProduct(key) { Ledger.key = key; Ledger.editing = null; Ledger.renderList(); Ledger.renderDetail(); $('ledgerDetail').classList.remove('hidden'); $('ledgerDetail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   close() { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); },
@@ -1365,7 +1419,7 @@ const Ledger = {
       $('ldBody').innerHTML = rows.map(o => `<tr><td>${D.short(o.outDate)}</td><td class="num">${fmtN(o.qty)}</td><td class="num">${fmtN(o.sample)}</td><td>${esc(o.unit)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">기간 내 내역 없음</td></tr>';
       return;
     }
-    $('ldHead').innerHTML = '<tr><th>상태</th><th>입고일</th><th>수량</th><th>출고일</th><th>소계</th><th>본품</th><th>샘플</th><th>부대</th><th>재고</th><th>소비기한</th></tr>';
+    $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="2">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th rowspan="2">소비기한</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">일자</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th></tr>';
     let run = 0; const shown = [];
     const dateOf = o => o.inDate || o.outDate || '';
     let carry = 0;
@@ -1387,23 +1441,25 @@ const Ledger = {
     const rowHtml = ({ o, run, counted }, i) => {
       if (Ledger.editing === o) return Ledger.editRow(o, i);
       const cls = STATUS_CLASS[o.status] || '';
-      return `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${statusCell(o)}</td><td>${o.inDate ? D.short(o.inDate) : ''}</td><td class="num">${o.inQty ? fmtN(o.inQty) : ''}</td>
-        <td>${o.outDate ? D.short(o.outDate) : ''}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
-        <td>${esc(o.unit)}</td><td class="num">${counted ? fmtN(run) : ''}</td><td>${o.expiry ? D.short(o.expiry) : esc(o.note || '')}</td></tr>`;
+      const md = iso => iso ? `${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
+      return `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}</td><td class="num">${o.inQty ? fmtN(o.inQty) : ''}</td>
+        <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
+        <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td><td>${o.expiry ? o.expiry : esc(o.note || '')}</td><td>${statusCell(o)}</td></tr>`;
     };
     Ledger.shown = shown;
-    $('ldBody').innerHTML = (from ? `<tr class="carry"><td colspan="8" style="text-align:right">${D.short(from)} 이전 이월재고</td><td class="num">${fmtN(carry)}</td><td></td></tr>` : '') +
-      (shown.map(rowHtml).join('') || '<tr><td colspan="10" class="empty">기간 내 내역 없음</td></tr>');
+    $('ldBody').innerHTML = (from ? `<tr class="carry"><td colspan="9" style="text-align:right">${D.short(from)} 이전 이월재고</td><td class="num">${fmtN(carry)}</td><td colspan="2"></td></tr>` : '') +
+      (shown.map(rowHtml).join('') || '<tr><td colspan="12" class="empty">기간 내 내역 없음</td></tr>');
   },
   editRow(o, i) {
     const isIn = o.isIn && !o.isOut, isOut = o.isOut && !o.isIn;
     const sts = isIn ? IN_STATUS : isOut ? OUT_STATUS : [...IN_STATUS, ...OUT_STATUS];
     const cur = o.status || (o.inQty ? '입고완료' : '출고완료');
-    return `<tr class="edit-row" data-i="${i}" data-edit="1"><td><select class="e-status">${sts.map(s => `<option ${s === cur ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+    return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
       <td>${DF.html('e-inDate', o.inDate || '')}</td><td><input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:70px"></td>
       <td>${DF.html('e-outDate', o.outDate || '')}</td><td></td><td><input type="number" class="e-outMain num" value="${o.outMain || ''}" style="width:70px"></td><td><input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:50px"></td>
       <td class="ac-wrap"><input type="text" class="e-unit" value="${esc(o.unit || '')}" style="width:100px"><span class="ac-list"></span></td>
-      <td><button class="btn sm ok" data-act="save">저장</button></td><td>${DF.html('e-expiry', o.expiry || '', 'future')}<div class="row mt8"><button class="btn sm light" data-act="cancel">취소</button><button class="btn sm danger" data-act="delete">삭제</button></div></td></tr>`;
+      <td></td><td>${DF.html('e-expiry', o.expiry || '', 'future')}</td><td><select class="e-status">${sts.map(s => `<option ${s === cur ? 'selected' : ''}>${s}</option>`).join('')}</select>
+      <div class="row mt8" style="flex-wrap:nowrap"><button class="btn sm ok" data-act="save">저장</button><button class="btn sm light" data-act="cancel">취소</button><button class="btn sm danger" data-act="delete">삭제</button></div></td></tr>`;
   },
   onRowClick(e) {
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
@@ -1457,33 +1513,41 @@ const Logi = {
     });
     DF.mount($('printDate'), 'print-date', D.today());
     ['in', 'out'].forEach(k => {
+      DF.mount($(k + 'PlanDate'), k + '-plan-date', D.today()).addEventListener('datechange', () => Logi.renderPlans(k));
+      const pb = $(k + 'PlanBody');
+      pb.addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr && !e.target.classList.contains('pk')) tr.querySelector('.pk').checked = true; });
+      pb.addEventListener('datechange', e => { const tr = e.target.closest('tr'); tr.querySelector('.pk').checked = true; const it = Logi.plans[k][+tr.dataset.i]; tr.querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), it.p.product)); });
+      pb.addEventListener('change', e => { if (e.target.classList.contains('plot')) { const tr = e.target.closest('tr'); tr.querySelector('.pk').checked = true; const it = Logi.plans[k][+tr.dataset.i]; tr.querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(e.target.value, it.p.product)); } });
+    });
+    $('outShowPlan').addEventListener('change', () => Logi.renderPlans('out'));
+    document.querySelectorAll('[data-all]').forEach(c => c.addEventListener('change', () => $(c.dataset.all + 'Body').querySelectorAll('.pk').forEach(x => { x.checked = c.checked; })));
+    ['in', 'out'].forEach(k => {
       const body = $(k + 'Body');
       body.addEventListener('datechange', e => Logi.refreshRow(e.target.closest('tr')));
       body.addEventListener('change', e => { if (e.target.classList.contains('l-lot')) Logi.lotChanged(e.target.closest('tr')); });
-      body.addEventListener('input', e => { if (e.target.classList.contains('l-unit')) Logi.refreshLinks(e.target.closest('tr')); });
       body.addEventListener('click', e => { if (e.target.dataset.act === 'del') { e.target.closest('tr').remove(); } });
-      for (let i = 0; i < 3; i++) Logi.addRow(k, true);
+      for (let i = 0; i < 2; i++) Logi.addRow(k, true);
     });
     Logi.log = (await Store.get('logiLog')) || [];
   },
-  render() { Logi.renderToday(); document.querySelectorAll('#inBody tr, #outBody tr').forEach(Logi.refreshRow); },
+  render() { Logi.renderToday(); Logi.renderPlans('in'); Logi.renderPlans('out'); document.querySelectorAll('#inBody tr, #outBody tr').forEach(Logi.refreshRow); },
   productOptions: () => LedgerData.standard().map(p => ({ label: `${p.name} · ${p.sheet}`, value: p.name, key: p.key })),
   addRow(kind, silent) {
     const tr = document.createElement('tr');
     tr.innerHTML = kind === 'in'
       ? `<td class="ac-wrap"><input type="text" class="l-name" autocomplete="off" placeholder="품명 검색"><span class="ac-list"></span></td><td class="o-storage">-</td><td class="o-shelf">-</td>
          <td>${DF.html('l-date', D.today())}</td><td>${DF.html('l-exp', '', 'future')}</td><td class="o-deadline">-</td><td><input type="number" class="l-qty num" style="width:80px"></td>
-         <td><select class="l-link"><option value="">새 행으로 추가</option></select></td><td><button class="btn sm light" data-act="del">삭제</button></td>`
+         <td><button class="btn sm light" data-act="del">삭제</button></td>`
       : `<td class="ac-wrap"><input type="text" class="l-name" autocomplete="off" placeholder="품명 검색"><span class="ac-list"></span></td>
          <td>${DF.html('l-date', D.today())}</td><td><select class="l-lot"><option value="">소비기한 선택</option></select><span class="l-exp-wrap hidden">${DF.html('l-exp', '', 'future')}</span></td><td class="o-deadline">-</td>
          <td><input type="number" class="l-qty num" style="width:70px"></td><td><input type="number" class="l-sample num" value="0" style="width:50px"></td>
          <td class="ac-wrap"><input type="text" class="l-unit" autocomplete="off" placeholder="부대"><span class="ac-list"></span></td>
-         <td><select class="l-link"><option value="">새 행으로 추가</option></select></td><td><button class="btn sm light" data-act="del">삭제</button></td>`;
+         <td><button class="btn sm light" data-act="del">삭제</button></td>`;
     $(kind + 'Body').appendChild(tr);
     tr.dataset.kind = kind;
     AC.bind(tr.querySelector('.l-name'), Logi.productOptions, it => { tr.dataset.key = it.key; Logi.refreshRow(tr); });
     tr.querySelector('.l-name').addEventListener('change', () => { const m = Logi.productOptions().filter(x => Names.norm(x.value) === Names.norm(tr.querySelector('.l-name').value)); if (m.length === 1) tr.dataset.key = m[0].key; Logi.refreshRow(tr); });
-    if (kind === 'out') AC.bind(tr.querySelector('.l-unit'), AC.units, () => Logi.refreshLinks(tr));
+    if (kind === 'out') AC.bind(tr.querySelector('.l-unit'), AC.units);
     if (!silent) tr.querySelector('.l-name').focus();
   },
   prod: tr => LedgerData.byKey.get(tr.dataset.key || ''),
@@ -1501,9 +1565,9 @@ const Logi = {
     }
     const exp = Logi.expiry(tr);
     const dl = Names.deadline(exp, info);
-    tr.querySelector('.o-deadline').innerHTML = dl ? `${D.short(dl)}${D.diff(dl, D.today()) < 0 ? ' <span class="tag danger">경과</span>' : ''}` : '-';
-    Logi.refreshLinks(tr);
+    tr.querySelector('.o-deadline').innerHTML = Logi.deadlineHtml(dl);
   },
+  deadlineHtml: dl => dl ? `${D.short(dl)}${D.diff(dl, D.today()) < 0 ? ' <span class="tag danger">경과</span>' : ''}` : '-',
   lotChanged(tr, silent) {
     const manual = tr.querySelector('.l-lot').value === '__manual';
     tr.querySelector('.l-exp-wrap').classList.toggle('hidden', !manual);
@@ -1513,32 +1577,15 @@ const Logi = {
     if (tr.dataset.kind === 'in') return DF.get(tr.querySelector('.l-exp'));
     const v = tr.querySelector('.l-lot').value; return v === '__manual' ? DF.get(tr.querySelector('.l-exp')) : v;
   },
-  refreshLinks(tr) {
-    const p = Logi.prod(tr), sel = tr.querySelector('.l-link'), cur = sel.value;
-    if (!p) { sel.innerHTML = '<option value="">새 행으로 추가</option>'; return; }
-    const date = DF.get(tr.querySelector('.l-date')) || D.today();
-    let cands;
-    if (tr.dataset.kind === 'in') cands = p.rows.filter(o => PLAN_IN.has(o.status)).map(o => ({ o, d: o.inDate, label: `${o.inDate ? D.short(o.inDate) : '일자 미정'} ${fmtN(o.inQty)} (${o.status.slice(2)})` }));
-    else {
-      const unit = normUnit(tr.querySelector('.l-unit').value);
-      cands = p.rows.filter(o => ['출고예정', '출고확정'].includes(o.status) && (!unit || o.unit === unit)).map(o => ({ o, d: o.outDate, label: `${o.outDate ? D.short(o.outDate) : '일자 미정'} ${o.unit} ${fmtN(o.outMain)} (${o.status.slice(2)})` }));
-    }
-    cands.sort((a, b) => Math.abs(D.isIso(a.d) ? D.diff(a.d, date) : 999) - Math.abs(D.isIso(b.d) ? D.diff(b.d, date) : 999));
-    tr._cands = cands;
-    sel.innerHTML = '<option value="">새 행으로 추가</option>' + cands.map((c, i) => `<option value="${i}">${esc(c.label)}</option>`).join('');
-    if (cur && sel.querySelector(`option[value="${cur}"]`)) sel.value = cur;
-    else if (cands.length && cands[0].d && Math.abs(D.diff(cands[0].d, date)) <= 7) sel.value = '0';
-  },
   async submit(kind) {
     const trs = [...$(kind + 'Body').children].filter(tr => tr.querySelector('.l-name').value.trim());
     if (!trs.length) return toast('입력된 행이 없습니다');
-    const ops = [], entries = [], used = new Set(), errors = [];
+    const ops = [], entries = [], errors = [];
     trs.forEach((tr, i) => {
       const p = Logi.prod(tr); const name = tr.querySelector('.l-name').value.trim();
       if (!p) { errors.push(`${i + 1}행: '${name}'을 재고수불대장 품목에서 선택하세요`); return; }
       const date = DF.get(tr.querySelector('.l-date')), qty = num(tr.querySelector('.l-qty').value), exp = Logi.expiry(tr);
       if (!date || !qty) { errors.push(`${i + 1}행: 일자와 수량을 입력하세요`); return; }
-      const link = tr.querySelector('.l-link').value, cand = link !== '' ? tr._cands[+link] : null;
       let fields, status;
       if (kind === 'in') { fields = { inDate: date, inQty: qty, expiry: exp }; status = '입고완료'; }
       else {
@@ -1547,20 +1594,61 @@ const Logi = {
         fields = { outDate: date, outMain: qty, outSample: num(tr.querySelector('.l-sample').value) || 0, unit, expiry: exp }; status = '출고완료';
       }
       const id = 'L' + Date.now().toString(36).toUpperCase() + i;
-      if (cand && !used.has(cand.o)) { used.add(cand.o); ops.push({ ...Ledger.ref(cand.o), op: 'update', status, fields }); }
-      else ops.push({ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, id, status, fields });
-      entries.push({ ts: new Date().toISOString(), kind, sheet: p.sheet, name: p.name, company: p.company, date, qty, unit: fields.unit || '', expiry: exp, status, fields, id: cand ? (cand.o.id || '') : id });
+      ops.push({ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, id, status, fields });
+      entries.push({ ts: new Date().toISOString(), kind, sheet: p.sheet, name: p.name, company: p.company, date, qty, unit: fields.unit || '', expiry: exp, status, fields, id });
     });
     if (errors.length) return toast(errors.join('\n'), 6000);
+    const ok = await Logi.send(kind, ops, entries);
+    if (ok) { $(kind + 'Body').innerHTML = ''; for (let i = 0; i < 2; i++) Logi.addRow(kind, true); }
+  },
+  async send(kind, ops, entries) {
     try {
       const res = await Api.post('ledger', { action: 'ledgerSave', ops });
       res.results.forEach((r, i) => { entries[i].ok = r.ok; if (r.id) entries[i].id = r.id; entries[i].reason = r.reason || ''; });
       Logi.log.push(...entries); Store.set('logiLog', Logi.log);
       const fail = res.results.filter(r => !r.ok);
-      if (!fail.length) { $(kind + 'Body').innerHTML = ''; for (let i = 0; i < 3; i++) Logi.addRow(kind, true); }
       await App.reloadLedger();
       toast(`${kind === 'in' ? '입고' : '출고'} ${ops.length - fail.length}건 저장${fail.length ? `\n실패 ${fail.length}건: ${fail.map(f => f.reason).join(' / ')}` : ''}`, 5000);
-    } catch (e) { toast('저장 실패: ' + e.message, 6000); }
+      return !fail.length;
+    } catch (e) { toast('저장 실패: ' + e.message, 6000); return false; }
+  },
+  planDate: kind => DF.get(document.querySelector(`.${kind}-plan-date`)) || D.today(),
+  renderPlans(kind) {
+    const date = Logi.planDate(kind), body = $(kind + 'PlanBody');
+    const items = [];
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {
+      if (kind === 'in' && o.status === '입고결정' && (o.inDate === date || (!o.inDate && date === D.today()))) items.push({ p, o });
+      if (kind === 'out' && (o.status === '출고확정' || ($('outShowPlan').checked && o.status === '출고예정')) && o.outDate === date) items.push({ p, o });
+    }));
+    Logi.plans = Logi.plans || {}; Logi.plans[kind] = items;
+    if (!items.length) { body.innerHTML = `<tr><td colspan="9" class="empty">${D.short(date)} ${kind === 'in' ? '입고 결정된 예정이 없습니다' : '출고 확정된 예정이 없습니다'}</td></tr>`; return; }
+    body.innerHTML = items.map(({ p, o }, i) => {
+      const info = p.product;
+      if (kind === 'in') return `<tr data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"></td><td style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td>
+        <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td class="num">${fmtN(o.inQty)}</td>
+        <td><input type="number" class="pq num" value="${o.inQty || ''}" style="width:80px"></td><td>${DF.html('pexp', o.expiry || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(o.expiry, info))}</td></tr>`;
+      const lots = p.lots.filter(l => l.expiry);
+      return `<tr data-i="${i}" class="${o.status === '출고예정' ? 'c-plan' : ''}"><td class="sel-col"><input type="checkbox" class="pk"></td><td style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td>
+        <td>${esc(o.unit)}</td><td><span class="tag ${o.status === '출고예정' ? 'plan' : 'conf'}">${o.status.slice(2)}</span></td><td class="num">${fmtN(o.outMain)}${o.outSample ? ' + ' + fmtN(o.outSample) : ''}</td>
+        <td><input type="number" class="pq num" value="${o.outMain || ''}" style="width:70px"></td><td><input type="number" class="ps num" value="${o.outSample || 0}" style="width:50px"></td>
+        <td><select class="plot"><option value="">선택 안 함</option>${lots.map((l, k) => `<option value="${l.expiry}" ${(o.expiry ? o.expiry === l.expiry : k === 0) ? 'selected' : ''}>${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})</option>`).join('')}</select></td>
+        <td class="pdl">${Logi.deadlineHtml(Names.deadline(o.expiry || lots[0]?.expiry, info))}</td></tr>`;
+    }).join('');
+  },
+  async completePlans(kind) {
+    const trs = [...$(kind + 'PlanBody').querySelectorAll('tr[data-i]')].filter(tr => tr.querySelector('.pk').checked);
+    if (!trs.length) return toast('완료 처리할 건을 체크하세요');
+    const date = Logi.planDate(kind), ops = [], entries = [];
+    for (const tr of trs) {
+      const { p, o } = Logi.plans[kind][+tr.dataset.i]; const qty = num(tr.querySelector('.pq').value);
+      if (!qty) return toast(`${p.name}: 수량을 입력하세요`);
+      let fields, status;
+      if (kind === 'in') { fields = { inDate: o.inDate || date, inQty: qty, expiry: DF.get(tr.querySelector('.pexp')) }; status = '입고완료'; }
+      else { fields = { outDate: o.outDate || date, outMain: qty, outSample: num(tr.querySelector('.ps').value) || 0, unit: o.unit, expiry: tr.querySelector('.plot').value }; status = '출고완료'; }
+      ops.push({ ...Ledger.ref(o), op: 'update', status, fields });
+      entries.push({ ts: new Date().toISOString(), kind, sheet: p.sheet, name: p.name, company: p.company, date: fields.inDate || fields.outDate, qty, unit: fields.unit || '', expiry: fields.expiry, status, fields, id: o.id || '' });
+    }
+    if (await Logi.send(kind, ops, entries)) Logi.renderPlans(kind);
   },
   renderToday() {
     const t = D.today(); const today = Logi.log.filter(x => x.ts.slice(0, 10) === t || x.date === t).slice(-50).reverse();
