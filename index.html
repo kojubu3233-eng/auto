@@ -107,6 +107,7 @@ tr.picked td { background:#FFFBEB !important; }
 .empty { padding:14px; color:var(--muted-2); font-size:12px; text-align:center; }
 .tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; }
 .tag.plan { background:var(--danger-soft); color:var(--plan); } .tag.conf { background:#E8EEFB; color:var(--conf); } .tag.done { background:var(--ok-soft); color:var(--ok); }
+.tag.carry { background:#EEE; color:#000; } .prod-box.due-box.soon { border-color:var(--warn); } .prod-box.due-box.past { border-color:var(--danger); } .prod-box.due-box.on { box-shadow:0 0 0 2px var(--ink) inset; }
 .tag.warn { background:var(--warn-soft); color:var(--warn); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
 
 .prod-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
@@ -323,11 +324,18 @@ tr.edit-row td { background:#FFFBEB !important; }
 <section id="tab-ledger" class="hidden">
   <div class="panel">
     <div class="row between mb12"><h2>재고수불대장</h2>
-      <div class="row"><label class="lbl muted">기간</label><span id="ledgerFrom"></span><span>~</span><span id="ledgerTo"></span>
+      <div class="row"><select id="ledgerYear" title="연도 선택"></select><button class="btn light sm" onclick="Carry.open()">연도 이월</button><label class="lbl muted">기간</label><span id="ledgerFrom"></span><span>~</span><span id="ledgerTo"></span>
         <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월</button><button class="btn light sm" onclick="Ledger.allPeriod()">전체기간</button></div>
     </div>
+    <div id="ledgerYearBanner" class="banner hidden"></div>
     <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><h2 id="ledgerCrumb"></h2></div>
     <div class="prod-grid" id="ledgerProducts"></div>
+  </div>
+  <div class="panel hidden" id="ledgerDue">
+    <div class="row between mb12"><h2 id="ldDueTitle"></h2>
+      <div class="row"><span id="ldDueCfg" class="row"><label class="lbl muted">임박 기준</label><input type="number" id="ldDueDays" min="1" max="365" style="width:70px"><span class="muted">일</span><button class="btn sm" onclick="Ledger.saveDueDays()">저장</button></span><button class="btn light sm" onclick="Ledger.closeDue()">닫기</button></div></div>
+    <div class="table-wrap" style="max-height:480px"><table><thead><tr><th>대분류</th><th>품명</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>상태</th><th>잔량</th></tr></thead><tbody id="ldDueBody"></tbody></table></div>
+    <div class="hint mt8">홈 화면의 임박·경과 목록과 같은 기준입니다. 행을 누르면 해당 품목 상세로 이동합니다. 임박 기준은 서버에 저장되어 모든 기기에 적용됩니다.</div>
   </div>
   <div class="panel hidden" id="ledgerDetail">
     <div class="row between mb12">
@@ -853,12 +861,13 @@ const PLAN_IN = new Set(['입고예정', '입고결정']);
 const PLAN_OUT = new Set(['출고예정']);
 const ACTUAL_IN = { has: s => !PLAN_IN.has(s) };
 const ACTUAL_OUT = { has: s => !PLAN_OUT.has(s) };
-const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입고결정': 'c-conf', '출고확정': 'c-conf', '입고완료': 'c-done', '출고완료': 'c-done', '': 'c-done' };
+const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입고결정': 'c-conf', '출고확정': 'c-conf', '입고완료': 'c-done', '이월': 'c-done', '출고완료': 'c-done', '': 'c-done' };
 
-const LedgerData = {
+function makeLedgerData() {
+ const L = {
   raw: null, products: [], byKey: new Map(), byId: new Map(), simple: [],
   load(raw) {
-    LedgerData.raw = raw; LedgerData.products = []; LedgerData.byKey = new Map(); LedgerData.byId = new Map(); LedgerData.simple = [];
+    L.raw = raw; L.products = []; L.byKey = new Map(); L.byId = new Map(); L.simple = [];
     if (!raw || !raw.sheets) return;
     const F = raw.fields, SF = raw.simpleFields;
     raw.sheets.forEach(sh => {
@@ -868,19 +877,19 @@ const LedgerData = {
         if (sh.type === 'standard') { o.outTotal = o.outSub || ((o.outMain || 0) + (o.outSample || 0)); o.isIn = !!(o.inQty || o.inDate); o.isOut = !!(o.outTotal || o.outDate); if (o.stock === undefined) o.stock = ''; }
         else { o.outDate = o.date; o.outMain = o.qty; o.outSample = o.sample || 0; o.outTotal = o.qty + (o.sample || 0); o.isOut = true; o.status = ''; }
         const key = sh.sheet + '|' + o.name;
-        let p = LedgerData.byKey.get(key);
-        if (!p) { p = { key, sheet: sh.sheet, name: o.name, type: sh.type, company: '', rows: [] }; LedgerData.byKey.set(key, p); LedgerData.products.push(p); }
+        let p = L.byKey.get(key);
+        if (!p) { p = { key, sheet: sh.sheet, name: o.name, type: sh.type, company: '', rows: [] }; L.byKey.set(key, p); L.products.push(p); }
         if (o.company) p.company = o.company;
         p.rows.push(o);
-        if (o.id) LedgerData.byId.set(o.id, o);
+        if (o.id) L.byId.set(o.id, o);
       });
     });
-    LedgerData.products.forEach(LedgerData.compute);
+    L.products.forEach(L.compute);
   },
   link(p) { const r = Names.resolve(p.name); p.link = r; p.product = r.product; return p.product; },
   // 현재고는 시트 J열(재고) 마지막 값을 기준으로 한다. 예정 행이 J열에 반영돼 있으면 되돌려 실재고로 맞춘다.
   compute(p) {
-    LedgerData.link(p);
+    L.link(p);
     let last = -1; p.rows.forEach((o, i) => { if (o.stock !== '' && o.stock !== null && o.stock !== undefined) last = i; });
     let stock = 0, planIn = 0, planOut = 0;
     p.rows.forEach((o, i) => {
@@ -894,6 +903,14 @@ const LedgerData = {
     });
     if (last >= 0) stock += p.rows[last].stock;
     // 남은 재고는 최근 입고분부터 채워진 것으로 본다(선입선출)
+    const lots = L.allocate(p, stock).lots;
+    p.confirmedOut = p.rows.reduce((a, o) => a + (o.status === '출고확정' ? (o.outTotal || 0) : 0), 0);
+    p.stock = stock; p.planIn = planIn; p.planOut = planOut; p.lots = lots;
+    p.lots.forEach(l => { l.deadline = Names.deadline(l.expiry, p.product); });
+    const ds = p.lots.map(l => l.deadline).filter(Boolean).sort();
+    p.nextDeadline = ds[0] || '';
+  },
+  allocate(p, stock) {
     const lots = []; let need = Math.max(0, stock);
     for (let i = p.rows.length - 1; i >= 0 && need > 0; i--) {
       const o = p.rows[i];
@@ -902,19 +919,22 @@ const LedgerData = {
       lots.push({ inDate: o.inDate, qty: o.inQty, remain: take, expiry: o.expiry, row: o });
     }
     lots.reverse();
-    p.stock = stock; p.planIn = planIn; p.planOut = planOut; p.lots = lots;
-    p.lots.forEach(l => { l.deadline = Names.deadline(l.expiry, p.product); });
-    const ds = p.lots.map(l => l.deadline).filter(Boolean).sort();
-    p.nextDeadline = ds[0] || '';
+    return { lots, rest: need };
   },
-  standard: () => LedgerData.products.filter(p => p.type === 'standard'),
-  unresolved(skip) { return LedgerData.products.filter(p => !p.link.sure && !skip.has(p.name)); },
-  forProduct(name) { return LedgerData.standard().filter(p => p.product && p.product.name === name); }
+  standard: () => L.products.filter(p => p.type === 'standard'),
+  unresolved(skip) { return L.products.filter(p => !p.link.sure && !skip.has(p.name)); },
+  forProduct(name) { return L.standard().filter(p => p.product && p.product.name === name); }
 };
+ return L;
+}
+const LedgerData = makeLedgerData();
+const dueDays = () => (App.settings && App.settings.dueSoonDays) || 30;
+const CARRY_PENDING = new Set(['입고예정', '입고결정', '출고예정', '출고확정']);
+
 
 /* ---------- 앱 ---------- */
 const App = {
-  tab: 'home', rendered: {}, prefs: { spec: {}, unitType: {} }, linkSkip: new Set(),
+  tab: 'home', years: [], currentYear: String(new Date().getFullYear()), settings: { dueSoonDays: 30 }, rendered: {}, prefs: { spec: {}, unitType: {} }, linkSkip: new Set(),
   async init() {
     DF.init();
     $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) App.show(b.dataset.tab); });
@@ -938,6 +958,7 @@ const App = {
   },
   applyLedger(ledger, fromCache) {
     App.ledger = ledger;
+    App.years = ledger.years || []; App.currentYear = ledger.currentYear || String(new Date().getFullYear()); App.settings = ledger.settings || { dueSoonDays: 30 };
     LedgerData.load(ledger);
     if (!fromCache) Store.set('ledger', ledger);
   },
@@ -1078,11 +1099,11 @@ const Home = {
     $('outToday').innerHTML = outRows.length ? outRows.map(({ p, o }) => `<div class="list-row"><div><div class="l-name">${esc(p.name)}</div><div class="l-sub">${esc(o.unit || '')}</div></div>
       <div class="num"><b>${fmtN(o.outTotal)}</b><div class="l-sub">${tagOf(o.status)}</div></div></div>`).join('') : '<div class="empty">오늘 출고가 없습니다</div>';
 
-    const soon = lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) >= 0 && D.diff(x.l.deadline, t) <= 30).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
+    const soon = lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) >= 0 && D.diff(x.l.deadline, t) <= dueDays()).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
     const past = lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) < 0).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
     const dueRow = (x, cls) => `<div class="list-row"><div><div class="l-name">${esc(x.p.name)}</div><div class="l-sub">소비기한 ${D.short(x.l.expiry)} · 납품기한 ${D.short(x.l.deadline)}</div></div>
       <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${D.diff(x.l.deadline, t) < 0 ? D.diff(t, x.l.deadline) + '일 경과' : D.diff(x.l.deadline, t) + '일 남음'}</span></div></div></div>`;
-    $('dueSoon').innerHTML = soon.length ? soon.map(x => dueRow(x, 'warn')).join('') : '<div class="empty">30일 이내 납품기한 재고가 없습니다</div>';
+    $('dueSoon').innerHTML = soon.length ? soon.map(x => dueRow(x, 'warn')).join('') : `<div class="empty">${dueDays()}일 이내 납품기한 재고가 없습니다</div>`;
     $('duePast').innerHTML = past.length ? past.map(x => dueRow(x, 'danger')).join('') : '<div class="empty">납품기한이 지난 재고가 없습니다</div>';
   },
   detail(kind, i, keep) {
@@ -1482,20 +1503,29 @@ const Confirm = {
 };
 
 /* ---------- 재고수불대장 ---------- */
-const IN_STATUS = ['입고예정', '입고결정', '입고완료'];
+const IN_STATUS = ['입고예정', '입고결정', '입고완료', '이월'];
 const OUT_STATUS = ['출고예정', '출고확정', '출고완료'];
 const Ledger = {
-  sheet: '', key: null, editing: null,
+  sheet: '', key: null, editing: null, year: null, archive: null, due: null,
+  // 화면에 보여 줄 데이터: 현재 연도는 LedgerData, 과거 연도를 고르면 그 연도 파일 데이터
+  d() { return Ledger.year && Ledger.archive && Ledger.archive.year === Ledger.year ? Ledger.archive.data : LedgerData; },
   init() {
     const from = DF.mount($('ledgerFrom'), 'l-from', D.addMonths(D.today(), -3));
     const to = DF.mount($('ledgerTo'), 'l-to', '');
     to.placeholder = '이후 전체';
     [from, to].forEach(i => i.addEventListener('datechange', () => { Ledger.renderList(); if (Ledger.key) Ledger.renderDetail(); }));
-    $('ledgerSearch').addEventListener('input', debounce(() => { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); }, 150));
+    $('ledgerSearch').addEventListener('input', debounce(() => { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.closeDue(true); Ledger.renderList(); }, 150));
     $('ledgerProducts').addEventListener('click', e => {
       const b = e.target.closest('.prod-box'); if (!b) return;
-      if (b.dataset.sheet !== undefined) { Ledger.sheet = b.dataset.sheet; $('ledgerSearch').value = ''; Ledger.close(); }
+      if (b.dataset.due) return Ledger.openDue(b.dataset.due);
+      if (b.dataset.sheet !== undefined) { Ledger.sheet = b.dataset.sheet; $('ledgerSearch').value = ''; Ledger.closeDue(true); Ledger.close(); }
       else Ledger.openProduct(b.dataset.key);
+    });
+    $('ledgerYear').addEventListener('change', e => Ledger.setYear(e.target.value));
+    $('ldDueBody').addEventListener('click', e => {
+      const tr = e.target.closest('tr[data-key]'); if (!tr) return;
+      const p = Ledger.d().byKey.get(tr.dataset.key); if (!p) return;
+      Ledger.closeDue(true); Ledger.sheet = p.sheet; Ledger.key = null; Ledger.openProduct(p.key);
     });
     DF.mount($('ldAddDate'), 'ld-add-date', '');
     DF.mount($('ldAddExp'), 'ld-add-exp', '', 'future');
@@ -1504,38 +1534,118 @@ const Ledger = {
     $('ldBody').addEventListener('click', Ledger.onRowClick);
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape' || App.tab !== 'ledger' || e.target.classList?.contains('dinput')) return;
-      if (Ledger.editing) { Ledger.editing = null; Ledger.renderDetail(); } else if (Ledger.key) Ledger.close();
+      if (Ledger.editing) { Ledger.editing = null; Ledger.renderDetail(); } else if (Ledger.key) Ledger.close(); else if (Ledger.due) Ledger.closeDue();
     });
   },
+  setPeriod(from, to) { DF.set(document.querySelector('.l-from'), from, true); DF.set(document.querySelector('.l-to'), to, true); },
   allPeriod() { DF.set(document.querySelector('.l-from'), ''); DF.set(document.querySelector('.l-to'), ''); },
   resetPeriod() { DF.set(document.querySelector('.l-from'), D.addMonths(D.today(), -3)); DF.set(document.querySelector('.l-to'), ''); },
   period() { return { from: DF.get(document.querySelector('.l-from')), to: DF.get(document.querySelector('.l-to')) }; },
-  goSheets() { Ledger.sheet = ''; $('ledgerSearch').value = ''; Ledger.close(); },
-  render() {
-    Ledger.renderList();
-    if (Ledger.key) { if (LedgerData.byKey.has(Ledger.key)) Ledger.renderDetail(); else Ledger.close(); }
+  goSheets() { Ledger.sheet = ''; $('ledgerSearch').value = ''; Ledger.closeDue(true); Ledger.close(); },
+
+  /* --- 연도 선택 --- */
+  renderYears() {
+    const years = App.years.length ? App.years : [App.currentYear], cur = Ledger.year || App.currentYear;
+    $('ledgerYear').innerHTML = [...years].reverse().map(y => `<option value="${y}" ${y === cur ? 'selected' : ''}>${y}년${y === App.currentYear ? ' (현재)' : ''}</option>`).join('');
+    const b = $('ledgerYearBanner');
+    b.classList.toggle('hidden', !Ledger.year);
+    if (Ledger.year) b.innerHTML = `<span>${Ledger.year}년 파일을 조회·수정 중입니다. 홈과 물류관리는 현재 연도(${App.currentYear}년) 기준입니다.</span><button class="btn sm" onclick="Ledger.setYear('${App.currentYear}')">현재 연도로 돌아가기</button>`;
   },
+  async loadArchive(y, force) {
+    const raw = await Api.get('ledger', { action: 'ledger', year: y, force: force ? '1' : '0' });
+    if (!Array.isArray(raw.sheets)) throw new Error('재고수불대장 웹앱이 새 코드로 배포되지 않았습니다.');
+    const data = makeLedgerData(); data.load(raw);
+    Ledger.archive = { year: y, raw, data };
+  },
+  async setYear(y) {
+    const toCurrent = !y || y === App.currentYear;
+    if (!toCurrent) {
+      $('ledgerYear').disabled = true;
+      try { await Ledger.loadArchive(y); }
+      catch (e) { toast('연도 파일을 불러오지 못했습니다: ' + e.message, 5000); $('ledgerYear').disabled = false; Ledger.renderYears(); return; }
+      $('ledgerYear').disabled = false;
+    }
+    Ledger.year = toCurrent ? null : y;
+    if (toCurrent) Ledger.archive = null;
+    Ledger.key = null; Ledger.sheet = ''; Ledger.due = null; Ledger.editing = null;
+    $('ledgerSearch').value = ''; $('ledgerDetail').classList.add('hidden'); $('ledgerDue').classList.add('hidden');
+    if (toCurrent) Ledger.setPeriod(D.addMonths(D.today(), -3), ''); else Ledger.setPeriod('', '');
+    Ledger.render();
+  },
+
+  render() {
+    Ledger.renderYears();
+    Ledger.renderList();
+    if (Ledger.due) Ledger.renderDue();
+    if (Ledger.key) { if (Ledger.d().byKey.has(Ledger.key)) Ledger.renderDetail(); else Ledger.close(); }
+  },
+
+  /* --- 납품기한 임박·경과 --- */
+  dueLots() {
+    const t = D.today(), days = dueDays(), soon = [], past = [];
+    Ledger.d().standard().forEach(p => p.lots.forEach(l => {
+      if (!l.deadline) return;
+      const left = D.diff(l.deadline, t), x = { p, l, left };
+      if (left < 0) past.push(x); else if (left <= days) soon.push(x);
+    }));
+    const by = (a, b) => a.left - b.left;
+    return { soon: soon.sort(by), past: past.sort(by) };
+  },
+  openDue(kind) {
+    if (Ledger.due === kind) return Ledger.closeDue();
+    Ledger.due = kind; Ledger.key = null; $('ledgerDetail').classList.add('hidden');
+    Ledger.renderDue(); $('ledgerDue').classList.remove('hidden'); Ledger.renderList();
+    $('ledgerDue').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+  closeDue(silent) {
+    Ledger.due = null; $('ledgerDue').classList.add('hidden');
+    if (!silent) Ledger.renderList();
+  },
+  renderDue() {
+    const kind = Ledger.due, list = Ledger.dueLots()[kind], days = dueDays();
+    const qty = list.reduce((s, x) => s + x.l.remain, 0);
+    $('ldDueTitle').textContent = (kind === 'soon' ? `납품기한 임박 (${days}일 이내)` : '납품기한 경과') + ` · ${list.length}건 · ${fmtN(qty)}개`;
+    $('ldDueCfg').classList.toggle('hidden', kind !== 'soon');
+    $('ldDueDays').value = days;
+    $('ldDueBody').innerHTML = list.map(({ p, l, left }) => `<tr class="editable" data-key="${esc(p.key)}"><td>${esc(p.sheet)}</td><td style="text-align:left;font-weight:600">${esc(p.name)}</td><td>${l.inDate ? D.short(l.inDate) : '-'}</td><td>${D.short(l.expiry)}</td><td>${D.short(l.deadline)}</td>
+      <td><span class="tag ${left < 0 ? 'danger' : 'warn'}">${left < 0 ? -left + '일 경과' : left + '일 남음'}</span></td><td class="num">${fmtN(l.remain)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 재고가 없습니다</td></tr>';
+  },
+  async saveDueDays() {
+    const n = Math.round(Number($('ldDueDays').value));
+    if (!(n >= 1 && n <= 365)) return toast('임박 기준은 1~365일 사이로 입력하세요');
+    try {
+      const r = await Api.post('ledger', { action: 'saveSettings', dueSoonDays: n });
+      App.settings = r.settings || { dueSoonDays: n };
+      App.rendered.home = false;
+      Ledger.render();
+      toast(`납품기한 임박 기준을 ${n}일로 저장했습니다`);
+    } catch (e) { toast('저장 실패: ' + e.message, 5000); }
+  },
+
   renderList() {
-    const kw = Names.norm($('ledgerSearch').value), t = D.today();
-    if (!LedgerData.raw) { $('ledgerProducts').innerHTML = '<div class="empty" style="grid-column:1/-1">재고수불대장을 불러오지 못했습니다. 상단 안내를 확인하세요.</div>'; return; }
+    const kw = Names.norm($('ledgerSearch').value), t = D.today(), days = dueDays(), data = Ledger.d();
+    if (!data.raw) { $('ledgerProducts').innerHTML = '<div class="empty" style="grid-column:1/-1">재고수불대장을 불러오지 못했습니다. 상단 안내를 확인하세요.</div>'; return; }
     const showSheets = !Ledger.sheet && !kw;
     $('ledgerBack').classList.toggle('hidden', showSheets);
     $('ledgerCrumb').textContent = kw ? '검색 결과' : Ledger.sheet;
     if (showSheets) {
-      const sheets = LedgerData.raw.sheets.map(s => s.sheet);
-      $('ledgerProducts').innerHTML = sheets.map(s => {
-        const ps = LedgerData.products.filter(p => p.sheet === s);
-        const warn = ps.filter(p => p.nextDeadline && D.diff(p.nextDeadline, t) <= 30).length;
+      const due = Ledger.dueLots(), sum = a => a.reduce((s, x) => s + x.l.remain, 0);
+      const dueBoxes = `<button class="prod-box cat-box due-box soon ${Ledger.due === 'soon' ? 'on' : ''}" data-due="soon"><div class="p-name">납품기한 임박</div><div class="p-stock">${due.soon.length}건</div><div class="p-sub">${days}일 이내 · ${fmtN(sum(due.soon))}개</div></button>
+        <button class="prod-box cat-box due-box past ${Ledger.due === 'past' ? 'on' : ''}" data-due="past"><div class="p-name">납품기한 경과</div><div class="p-stock">${due.past.length}건</div><div class="p-sub">${fmtN(sum(due.past))}개</div></button>`;
+      const sheets = data.raw.sheets.map(s => s.sheet);
+      $('ledgerProducts').innerHTML = dueBoxes + sheets.map(s => {
+        const ps = data.products.filter(p => p.sheet === s);
+        const warn = ps.filter(p => p.nextDeadline && D.diff(p.nextDeadline, t) <= days).length;
         const planIn = ps.filter(p => p.planIn).length, planOut = ps.filter(p => p.planOut).length;
         return `<button class="prod-box cat-box" data-sheet="${esc(s)}"><div class="p-name">${esc(s)}</div><div class="p-stock">품목 ${ps.length}개</div>
-          <div class="p-sub">${planIn ? `입고예정 ${planIn}품목 ` : ''}${planOut ? `출고예정 ${planOut}품목` : ''}</div>${warn ? `<span class="tag warn">납품기한 30일 이내 ${warn}품목</span>` : ''}</button>`;
+          <div class="p-sub">${planIn ? `입고예정 ${planIn}품목 ` : ''}${planOut ? `출고예정 ${planOut}품목` : ''}</div>${warn ? `<span class="tag warn">납품기한 ${days}일 이내 ${warn}품목</span>` : ''}</button>`;
       }).join('') || '<div class="empty" style="grid-column:1/-1">탭이 없습니다</div>';
       return;
     }
-    const list = LedgerData.products.filter(p => (kw ? true : p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))));
+    const list = data.products.filter(p => (kw ? true : p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))));
     $('ledgerProducts').innerHTML = list.map(p => {
       const dl = p.nextDeadline ? D.diff(p.nextDeadline, t) : null;
-      const tag = dl === null ? '' : dl < 0 ? '<span class="tag danger">납품기한 경과</span>' : dl <= 30 ? `<span class="tag warn">납품기한 ${dl}일</span>` : '';
+      const tag = dl === null ? '' : dl < 0 ? '<span class="tag danger">납품기한 경과</span>' : dl <= days ? `<span class="tag warn">납품기한 ${dl}일</span>` : '';
       const stock = p.type === 'standard' ? `<div class="p-stock">${fmtN(p.stock)}</div><div class="p-sub">${p.planIn ? `입고예정 ${fmtN(p.planIn)} ` : ''}${p.planOut ? `출고예정 ${fmtN(p.planOut)}` : ''}</div>` : `<div class="p-sub mt8">출고 ${p.rows.length}건</div>`;
       return `<button class="prod-box ${Ledger.key === p.key ? 'on' : ''}" data-key="${esc(p.key)}"><div class="p-name">${esc(p.name)}</div><div class="p-sheet">${kw ? esc(p.sheet) + ' · ' : ''}${esc(p.company || '')}</div>${stock}<div>${tag}</div></button>`;
     }).join('') || '<div class="empty" style="grid-column:1/-1">조건에 맞는 품목이 없습니다</div>';
@@ -1543,8 +1653,8 @@ const Ledger = {
   openProduct(key) { if (Ledger.key === key && !$('ledgerDetail').classList.contains('hidden')) return Ledger.close(); Ledger.key = key; Ledger.editing = null; Ledger.renderList(); Ledger.renderDetail(); $('ledgerDetail').classList.remove('hidden'); $('ledgerDetail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   close() { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); },
   renderDetail() {
-    const p = LedgerData.byKey.get(Ledger.key); if (!p) return;
-    const { from, to } = Ledger.period();
+    const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
+    const { from, to } = Ledger.period(), today = D.today();
     const info = p.product ? `${p.product.name}${p.product.storage ? ' · ' + p.product.storage : ''}${p.product.shelfMonths ? ' · 소비기한 ' + p.product.shelfMonths + '개월' : ''}` : '품목정보 미연결';
     $('ldTitle').textContent = p.name;
     $('ldSub').textContent = `${p.sheet}${p.company ? ' · ' + p.company : ''} · ${info}${p.type === 'standard' ? ` · 현재고 ${fmtN(p.stock)}` : ''}`;
@@ -1558,6 +1668,7 @@ const Ledger = {
     $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="2">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th rowspan="2">소비기한</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">일자</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th></tr>';
     const shown = [];
     const dateOf = o => o.inDate || o.outDate || '';
+    const lotOf = new Map(p.lots.map(l => [l.row, l]));
     let carry = '';
     p.rows.forEach(o => {
       const d = dateOf(o);
@@ -1567,9 +1678,13 @@ const Ledger = {
     });
     const statusCell = o => {
       const s = o.status || (o.inQty ? '입고완료' : '');
-      const tag = s.endsWith('예정') ? 'plan' : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
+      const tag = s === '이월' ? 'carry' : s.endsWith('예정') ? 'plan' : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
       const decide = o.status === '입고예정' ? ` <label class="hint"><input type="checkbox" data-decide="1"> 결정</label>` : '';
       return s ? `<span class="tag ${tag}">${s.replace(/^(입고|출고)/, '')}</span>${decide}` : '<span class="hint">기존</span>';
+    };
+    const expiryCell = o => {
+      const l = lotOf.get(o), over = l && l.deadline && D.diff(l.deadline, today) < 0 ? ' <span class="tag danger">경과</span>' : '';
+      return (o.expiry ? o.expiry : esc(o.note || '')) + over;
     };
     const rowHtml = ({ o, run, counted }, i) => {
       if (Ledger.editing === o) return Ledger.editRow(o, i);
@@ -1577,7 +1692,7 @@ const Ledger = {
       const md = iso => iso ? `${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
       return `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}</td><td class="num">${o.inQty ? fmtN(o.inQty) : ''}</td>
         <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
-        <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td><td>${o.expiry ? o.expiry : esc(o.note || '')}</td><td>${statusCell(o)}</td></tr>`;
+        <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td><td>${expiryCell(o)}</td><td>${statusCell(o)}</td></tr>`;
     };
     Ledger.shown = shown;
     $('ldBody').innerHTML = (from && carry !== '' ? `<tr class="carry"><td colspan="9" style="text-align:right">${D.short(from)} 이전 재고</td><td class="num">${fmtN(carry)}</td><td colspan="2"></td></tr>` : '') +
@@ -1614,23 +1729,126 @@ const Ledger = {
     const ed = $('ldBody').querySelector('[data-edit] .e-unit'); if (ed) AC.bind(ed, AC.units);
   },
   ref(o) { return { id: o.id || '', sheet: o.sheet, row: o.row, name: o.name }; },
-  async saveOps(ops, okMsg) {
+  // 과거 연도 파일에서 이미 이월된 품목을 고쳤을 때 안내
+  carriedNote(ops) {
+    const c = Ledger.archive && Ledger.archive.raw.carried; if (!c) return '';
+    const ids = new Set(c.ids || []), prods = new Set(c.products || []);
+    return ops.some(op => (op.id && ids.has(op.id)) || prods.has(op.sheet + '|' + op.name))
+      ? `\n※ 이미 ${App.currentYear}년으로 이월된 품목입니다. 변경분은 [연도 이월]에서 갱신하세요` : '';
+  },
+  // year를 생략하면 지금 보고 있는 연도 파일, null을 넘기면 현재 연도 파일에 저장
+  async saveOps(ops, okMsg, year = Ledger.year) {
     try {
-      const res = await Api.post('ledger', { action: 'ledgerSave', ops });
+      const res = await Api.post('ledger', year ? { action: 'ledgerSave', ops, year } : { action: 'ledgerSave', ops });
       const fail = res.results.filter(r => !r.ok), warn = res.results.flatMap(r => r.warn || []);
       Ledger.editing = null;
-      await App.reloadLedger();
-      toast(fail.length ? '실패: ' + fail.map(f => f.reason).join(' / ') : okMsg + (warn.length ? '\n' + warn.join('\n') : ''), 5000);
+      if (year) { await Ledger.loadArchive(year, true); Ledger.render(); } else await App.reloadLedger();
+      const note = year ? Ledger.carriedNote(ops) : '';
+      toast(fail.length ? '실패: ' + fail.map(f => f.reason).join(' / ') : okMsg + (warn.length ? '\n' + warn.join('\n') : '') + note, note ? 8000 : 5000);
       return res;
     } catch (e) { toast('저장 실패: ' + e.message, 6000); }
   },
   async addInbound() {
-    const p = LedgerData.byKey.get(Ledger.key); if (!p) return;
+    const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
     const date = DF.get(document.querySelector('.ld-add-date')), qty = num($('ldAddQty').value), exp = DF.get(document.querySelector('.ld-add-exp'));
     if (!qty) return toast('수량을 입력하세요');
     const status = $('ldAddDecide').checked ? '입고결정' : '입고예정';
     const res = await Ledger.saveOps([{ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, status, fields: { inDate: date, inQty: qty, expiry: exp } }], `${status}으로 추가했습니다`);
     if (res) { $('ldAddQty').value = ''; DF.set(document.querySelector('.ld-add-date'), '', true); DF.set(document.querySelector('.ld-add-exp'), '', true); $('ldAddDecide').checked = false; }
+  }
+};
+
+/* ---------- 연도 이월 ---------- */
+// 원본 연도 파일의 남은 재고(소비기한별 잔량)와 미완료 예정 건을 현재 연도 파일로 옮긴다.
+// 이미 이월된 건은 다시 만들지 않으며, 원래 입고일·소비기한을 그대로 유지한다.
+const Carry = {
+  items: [], from: '',
+  open() {
+    const cur = App.currentYear, froms = (App.years || []).filter(y => y < cur).reverse();
+    if (!froms.length) return toast('이월할 이전 연도 파일이 없습니다. Apps Script에서 연도 파일을 등록하세요');
+    $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Carry.close()"><div class="modal" style="max-width:980px">
+      <div class="row between mb12"><h2>연도 이월</h2><button class="btn light sm" onclick="Carry.close()">닫기</button></div>
+      <div class="muted mb12">원본 연도 파일에 남은 재고와 미완료 입고·출고 예정 건을 현재 연도(${cur}년) 파일로 옮깁니다. 원래 입고일과 소비기한이 그대로 유지되고, 이미 이월한 건은 다시 만들지 않습니다.</div>
+      <div class="controls"><label class="lbl" for="carryFrom">원본 연도</label><select id="carryFrom">${froms.map(y => `<option value="${y}">${y}년</option>`).join('')}</select><span class="hint">대상: ${cur}년(현재 연도) 파일</span></div>
+      <div id="carrySummary" class="muted mb8">불러오는 중</div>
+      <div class="table-wrap" style="max-height:48vh"><table><thead><tr><th class="sel-col"></th><th>상태</th><th>대분류</th><th>품명</th><th>구분</th><th>입고일</th><th>소비기한</th><th>수량</th><th>비고</th></tr></thead><tbody id="carryBody"></tbody></table></div>
+      <label class="row muted mt8"><input type="checkbox" id="carryResync"> 이미 이월된 건 중 수량이 달라진 건도 원본 기준으로 갱신 (새 파일에서 직접 고친 수량은 덮어씁니다)</label>
+      <div class="row mt12" style="justify-content:flex-end"><button class="btn ok" id="carrySave" disabled>이월 저장</button></div></div></div>`;
+    $('carryFrom').onchange = () => Carry.load($('carryFrom').value);
+    $('carrySave').onclick = Carry.save;
+    Carry.load(froms[0]);
+  },
+  close() { $('modalRoot').innerHTML = ''; },
+  async load(year) {
+    Carry.from = year; Carry.items = [];
+    $('carrySummary').textContent = `${year}년 파일을 불러오는 중`; $('carrySave').disabled = true; $('carryBody').innerHTML = '';
+    try {
+      const raw = await Api.get('ledger', { action: 'ledger', year, force: '1' });
+      if (!Array.isArray(raw.sheets)) throw new Error('재고수불대장 웹앱이 새 코드로 배포되지 않았습니다');
+      if (Carry.from !== year) return;
+      const data = makeLedgerData(); data.load(raw);
+      Carry.items = Carry.build(data, raw);
+      Carry.render();
+    } catch (e) { if (Carry.from === year) $('carrySummary').textContent = '불러오지 못했습니다: ' + e.message; }
+  },
+  build(data, raw) {
+    const compact = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== null && v !== undefined && v !== 0));
+    const items = [];
+    data.standard().forEach(p => {
+      // 출고확정 건은 새 파일에서 다시 완료 처리하므로, 이월 잔량에는 그만큼을 되돌려 계산한다
+      const a = data.allocate(p, Math.max(0, p.stock + p.confirmedOut));
+      a.lots.forEach(l => items.push({ kind: 'lot', sheet: p.sheet, name: p.name, company: l.row.company || p.company, srcId: l.row.id || '', row: l.row.row, qty: l.remain, inDate: l.inDate, expiry: l.expiry, status: '이월', fields: compact({ inDate: l.inDate, inQty: l.remain, expiry: l.expiry }) }));
+      if (a.rest > 0) items.push({ kind: 'lot', rest: true, sheet: p.sheet, name: p.name, company: p.company, srcId: 'REST|' + p.sheet + '|' + p.name, qty: a.rest, inDate: '', expiry: '', status: '이월', fields: compact({ inQty: a.rest }) });
+      p.rows.filter(o => CARRY_PENDING.has(o.status)).forEach(o => items.push({ kind: 'plan', sheet: p.sheet, name: p.name, company: o.company || p.company, srcId: o.id || '', row: o.row, qty: o.inQty || o.outTotal || 0, inDate: o.inDate, expiry: o.expiry, status: o.status,
+        fields: compact({ inDate: o.inDate, inQty: o.inQty, outDate: o.outDate, outMain: o.outMain, outSample: o.outSample, unit: o.unit, expiry: o.expiry }) }));
+    });
+    items.forEach(it => {
+      it.newId = it.srcId ? (it.kind === 'lot' ? 'C' + it.srcId : it.srcId) : '';
+      const ex = it.newId ? LedgerData.byId.get(it.newId) : null;
+      if (!ex) it.state = 'new';
+      else if (it.kind === 'lot' && (ex.inQty || 0) !== it.qty) { it.state = 'diff'; it.prevQty = ex.inQty || 0; }
+      else it.state = 'done';
+    });
+    // 원본 잔량이 사라졌는데 새 파일에는 이월 행이 남아 있는 건(원본 수정으로 잔량이 0이 된 경우)
+    const seen = new Set(items.map(i => i.srcId).filter(Boolean));
+    Object.entries((raw.carried && raw.carried.map) || {}).forEach(([srcId, newId]) => {
+      if (seen.has(srcId) || newId !== 'C' + srcId) return;
+      const ex = LedgerData.byId.get(newId);
+      if (ex && ex.status === '이월' && (ex.inQty || 0) > 0) items.push({ kind: 'lot', orphan: true, sheet: ex.sheet, name: ex.name, srcId, qty: 0, inDate: ex.inDate, expiry: ex.expiry, newId, state: 'diff', prevQty: ex.inQty });
+    });
+    return items;
+  },
+  render() {
+    const n = s => Carry.items.filter(i => i.state === s).length;
+    $('carrySummary').textContent = `${Carry.from}년 → ${App.currentYear}년 · 신규 ${n('new')}건 · 수량 변경 ${n('diff')}건 · 이미 이월됨 ${n('done')}건`;
+    const label = { new: '<span class="tag plan">신규</span>', diff: '<span class="tag warn">변경</span>', done: '<span class="tag done">이월됨</span>' };
+    $('carryBody').innerHTML = Carry.items.map((it, i) => {
+      const note = it.orphan ? `원본 잔량 없음 (새 파일 ${fmtN(it.prevQty)} → 0)` : it.rest ? '입고일 미상 잔량' : it.state === 'diff' ? `새 파일 ${fmtN(it.prevQty)} → 원본 ${fmtN(it.qty)}` : it.kind === 'plan' ? '미완료 예정 건' : '';
+      return `<tr class="${it.state === 'done' ? 'carry' : ''}"><td>${it.state === 'done' ? '' : `<input type="checkbox" class="cp-pick" data-i="${i}" ${it.state === 'new' ? 'checked' : ''}>`}</td><td>${label[it.state]}</td><td>${esc(it.sheet)}</td><td style="text-align:left">${esc(it.name)}</td>
+        <td>${it.kind === 'plan' ? esc(it.status) : '잔량'}</td><td>${it.inDate ? D.short(it.inDate) : '-'}</td><td>${it.expiry ? D.short(it.expiry) : '-'}</td><td class="num">${fmtN(it.qty)}</td><td style="text-align:left">${note}</td></tr>`;
+    }).join('') || '<tr><td colspan="9" class="empty">이월할 재고나 예정 건이 없습니다</td></tr>';
+    $('carrySave').disabled = !Carry.items.some(i => i.state !== 'done');
+  },
+  payload: it => ({ kind: it.kind, sheet: it.sheet, name: it.name, company: it.company || '', srcId: it.srcId || '', row: it.row || 0, qty: it.qty || 0, inDate: it.inDate || '', expiry: it.expiry || '', status: it.status || '', fields: it.fields || {} }),
+  async save() {
+    const resync = $('carryResync').checked;
+    const picked = new Set([...document.querySelectorAll('#carryBody .cp-pick:checked')].map(c => +c.dataset.i));
+    const send = Carry.items.filter((it, i) => picked.has(i) && (it.state === 'new' || (it.state === 'diff' && resync)));
+    if (!send.length) return toast('이월할 건이 없습니다. 수량이 달라진 건을 반영하려면 갱신 옵션을 체크하세요');
+    if (!confirm(`${send.length}건을 ${App.currentYear}년 파일로 이월합니다. 계속할까요?`)) return;
+    const btn = $('carrySave'); btn.disabled = true;
+    let ok = 0, skip = 0; const fail = [];
+    try {
+      for (let k = 0; k < send.length; k += 25) {
+        btn.textContent = `저장 중 ${Math.min(k + 25, send.length)}/${send.length}`;
+        const res = await Api.post('ledger', { action: 'carryOver', fromYear: Carry.from, toYear: App.currentYear, resync, items: send.slice(k, k + 25).map(Carry.payload) });
+        res.results.forEach((r, j) => { if (r.ok) { if (r.skipped) skip++; else ok++; } else fail.push(`${send[k + j].name}: ${r.reason}`); });
+      }
+    } catch (e) { fail.push(e.message); }
+    btn.textContent = '이월 저장';
+    await App.reloadLedger();
+    const msg = `이월 ${ok}건 완료${skip ? `, 건너뜀 ${skip}건` : ''}${fail.length ? `\n실패 ${fail.length}건: ${fail.slice(0, 3).join(' / ')}` : ''}`;
+    if (fail.length) { toast(msg, 9000); Carry.load(Carry.from); } else { Carry.close(); toast(msg, 6000); }
   }
 };
 
@@ -1808,8 +2026,9 @@ const Logi = {
     if (!o) return toast('재고수불대장에서 해당 행을 찾지 못했습니다. 새로고침 후 다시 시도하거나 재고수불대장 탭에서 수정하세요');
     RowEdit.open(`${x.kind === 'in' ? '입고' : '출고'} 수정 · ${x.name}`, [o], LedgerData.byKey.get(o.sheet + '|' + o.name));
   },
+  inYear: x => String(x.date || x.ts).slice(0, 4) === App.currentYear,
   renderLog() {
-    $('logBody').innerHTML = Logi.log.slice().reverse().slice(0, 300).map(x => `<tr><td>${x.ts.slice(0, 16).replace('T', ' ')}</td><td>${x.kind === 'in' ? '입고' : '출고'}</td><td style="text-align:left">${esc(x.name)}</td><td>${D.short(x.date)}</td><td class="num">${fmtN(x.qty)}</td><td>${esc(x.unit || '')}</td><td>${x.id && LedgerData.byId.has(x.id) ? '있음' : '<span class="tag warn">없음</span>'}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">저장된 기록이 없습니다</td></tr>';
+    $('logBody').innerHTML = Logi.log.slice().reverse().slice(0, 300).map(x => `<tr><td>${x.ts.slice(0, 16).replace('T', ' ')}</td><td>${x.kind === 'in' ? '입고' : '출고'}</td><td style="text-align:left">${esc(x.name)}</td><td>${D.short(x.date)}</td><td class="num">${fmtN(x.qty)}</td><td>${esc(x.unit || '')}</td><td>${x.id && LedgerData.byId.has(x.id) ? '있음' : Logi.inYear(x) ? '<span class="tag warn">없음</span>' : '<span class="hint">이전 연도</span>'}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">저장된 기록이 없습니다</td></tr>';
   },
   backup() {
     const blob = new Blob([JSON.stringify({ app: '자동화시스템', version: 2, savedAt: new Date().toISOString(), log: Logi.log }, null, 1)], { type: 'application/json' });
@@ -1827,7 +2046,7 @@ const Logi = {
     e.target.value = '';
   },
   async resendMissing() {
-    const miss = Logi.log.filter(x => !(x.id && LedgerData.byId.has(x.id)));
+    const miss = Logi.log.filter(x => Logi.inYear(x) && !(x.id && LedgerData.byId.has(x.id)));
     if (!miss.length) return toast('시트에 없는 기록이 없습니다');
     if (!confirm(`시트에서 찾을 수 없는 ${miss.length}건을 새 행으로 다시 반영합니다. 계속할까요?`)) return;
     try {
@@ -1841,7 +2060,7 @@ const Logi = {
     const date = DF.get(document.querySelector('.print-date')); if (!date) return toast('일자를 입력하세요');
     const groups = [];
     LedgerData.standard().forEach(p => {
-      const rows = p.rows.filter(o => kind === 'in' ? (o.inDate === date && o.inQty && ACTUAL_IN.has(o.status)) : (o.outDate === date && o.outTotal && ACTUAL_OUT.has(o.status)));
+      const rows = p.rows.filter(o => kind === 'in' ? (o.inDate === date && o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.status)) : (o.outDate === date && o.outTotal && ACTUAL_OUT.has(o.status)));
       if (rows.length) groups.push({ p, rows });
     });
     if (!groups.length) return toast(`${D.short(date)} ${kind === 'in' ? '입고' : '출고'} 완료 내역이 없습니다`);
@@ -1918,7 +2137,7 @@ const Report = {
     const day = Report.date(), prevDay = D.add(day, -1), out = [];
     LedgerData.standard().forEach(p => {
       const end = Report.stockAt(p, day), prev = Report.stockAt(p, prevDay);
-      const ins = p.rows.filter(o => o.inQty && ACTUAL_IN.has(o.status) && o.inDate === day);
+      const ins = p.rows.filter(o => o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.status) && o.inDate === day);
       const outs = p.rows.filter(o => o.outTotal && ACTUAL_OUT.has(o.status) && o.outDate === day);
       const inQty = ins.reduce((a, o) => a + o.inQty, 0), outQty = outs.reduce((a, o) => a + o.outTotal, 0);
       if ($('reportHideZero').checked && !end && !prev && !inQty && !outQty) return;
