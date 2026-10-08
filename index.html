@@ -1187,6 +1187,12 @@ const Predict = {
     if (!silent) tr.querySelector('.g-date').focus();
     return tr;
   },
+  // 샘플 자동 반영 규칙: 국·탕류는 샘플 없음, 그 외에는 1kg 제품만 샘플 1
+  sample(lp, name) {
+    const p = Names.product(name) || lp.product;
+    if (/국.?탕/.test(lp.sheet) || /국.?탕/.test((p && p.category) || '')) return 0;
+    return p && Number(p.pack) === 1 ? 1 : 0;
+  },
   baseHint(tr) { tr.querySelector('.g-base').placeholder = tr.querySelector('.g-utype').value === 'kg' ? 'g' : 'ea'; },
   onUnit(tr) {
     const inp = tr.querySelector('.g-unit'); inp.value = Names.matchUnit(inp.value);
@@ -1346,7 +1352,7 @@ const Predict = {
       const cands = LedgerData.forProduct(x.r.name);
       if (!cands.length) { noLedger.push(x.r.name); return; }
       const lp = cands.sort((a, b) => b.rows.length - a.rows.length)[0];
-      ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: x.id, status: '출고예정', fields: { outDate: x.del || x.r.date, outMain: x.r.qty, outSample: 1, unit: x.r.unit } });
+      ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: x.id, status: '출고예정', fields: { outDate: x.del || x.r.date, outMain: x.r.qty, outSample: Predict.sample(lp, x.r.name), unit: x.r.unit } });
     });
     if (alsoLedger) msg += `\n재고수불대장 출고 예정 ${ledgerOps.length}건${noLedger.length ? `\n(재고수불대장에서 찾지 못한 품목 제외: ${[...new Set(noLedger)].join(', ')})` : ''}`;
     if (!confirm(msg + '\n\n계속할까요?')) return;
