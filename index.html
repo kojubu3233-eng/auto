@@ -648,23 +648,27 @@ const Names = {
   load(products, units) {
     Names.products = products || []; Names.byName = new Map(); Names.aliasIdx = new Map();
     Names.products.forEach(p => {
-      Names.byName.set(Names.norm(p.name), p);
+      Names.byName.set(Names.norm(p.name), p); p._f = Names.feat(p.name);
       (p.aliases || []).forEach(a => { const k = Names.norm(a); if (!Names.aliasIdx.has(k)) Names.aliasIdx.set(k, []); Names.aliasIdx.get(k).push(p); });
     });
     Names.units = units || []; Names.unitMap = new Map(Names.units.map(u => [u.name, u]));
     Names.cache = new Map();
   },
   product: name => Names.byName.get(Names.norm(name)) || null,
-  tokens(s) { const n = Names.norm(s); return [n.replace(/\(.*?\)/g, ''), ...[...n.matchAll(/\((.*?)\)/g)].map(m => m[1])].filter(Boolean); },
-  score(raw, cand) {
-    const a = Names.norm(raw).replace(/[()]/g, ''), b = Names.norm(cand).replace(/[()]/g, '');
-    const ta = Names.tokens(raw), tb = Names.tokens(cand);
+  // 품명 비교용 특징(정규화 문자열·괄호 분리 토큰·용량 표기·구분 단어 포함 여부)을 한 번만 계산해 둔다
+  feat(s) {
+    const n = Names.norm(s), a = n.replace(/[()]/g, '');
+    const t = [n.replace(/\(.*?\)/g, ''), ...[...n.matchAll(/\((.*?)\)/g)].map(m => m[1])].filter(Boolean);
+    const u = a.match(/\d+(g|kg)/);
+    return { a, t, tj: t.join(''), u: u ? u[0] : null, w: DISTINCT_WORDS.map(w => a.includes(w)) };
+  },
+  score(fa, fb) {
     let s = 0;
-    if (tb.every(t => a.includes(t))) s = tb.join('').length;
-    else if (ta.every(t => b.includes(t))) s = ta.join('').length;
+    if (fb.t.every(t => fa.a.includes(t))) s = fb.tj.length;
+    else if (fa.t.every(t => fb.a.includes(t))) s = fa.tj.length;
     if (!s) return 0;
-    if (/\d+(g|kg)/.test(a) && /\d+(g|kg)/.test(b) && a.match(/\d+(g|kg)/)[0] !== b.match(/\d+(g|kg)/)[0]) return 0;
-    DISTINCT_WORDS.forEach(w => { if (a.includes(w) !== b.includes(w)) s -= 50; });
+    if (fa.u && fb.u && fa.u !== fb.u) return 0;
+    for (let i = 0; i < fa.w.length; i++) if (fa.w[i] !== fb.w[i]) s -= 50;
     return s;
   },
   // 재고수불대장 등 외부 품명 → 품목정보 제품. sure=true는 별칭·정확일치
@@ -676,7 +680,7 @@ const Names = {
     else if (al && al.length > 1) r = { product: null, sure: false, dup: true, candidates: al };
     else if (Names.byName.has(n)) r = { product: Names.byName.get(n), sure: true };
     else {
-      const c = Names.products.map(p => ({ p, s: Names.score(raw, p.name) })).filter(x => x.s > 0).sort((x, y) => y.s - x.s).map(x => x.p);
+      const fr = Names.feat(raw), c = Names.products.map(p => ({ p, s: Names.score(fr, p._f) })).filter(x => x.s > 0).sort((x, y) => y.s - x.s).map(x => x.p);
       r = { product: null, sure: false, candidates: c };
     }
     Names.cache.set(raw, r); return r;
@@ -864,9 +868,9 @@ const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입�
 
 function makeLedgerData() {
  const L = {
-  raw: null, products: [], byKey: new Map(), byId: new Map(), simple: [],
+  raw: null, products: [], byKey: new Map(), byId: new Map(),
   load(raw) {
-    L.raw = raw; L.products = []; L.byKey = new Map(); L.byId = new Map(); L.simple = [];
+    L.raw = raw; L.products = []; L.byKey = new Map(); L.byId = new Map();
     if (!raw || !raw.sheets) return;
     const F = raw.fields, SF = raw.simpleFields;
     raw.sheets.forEach(sh => {
@@ -965,7 +969,7 @@ const App = {
     const y = new Date().getFullYear();
     $('syncState').textContent = '구글시트에서 불러오는 중';
     const errs = [];
-    const [b, l] = await Promise.allSettled([App.fetchBoot(y), Api.get('ledger', { action: 'ledger', force: force ? '1' : '0' })]);
+    const [b, l] = await Promise.allSettled([App.fetchBoot(y, force), Api.get('ledger', { action: 'ledger', force: force ? '1' : '0' })]);
     try {
       if (b.status !== 'fulfilled') throw b.reason;
       App.applyBoot(b.value);
@@ -981,17 +985,10 @@ const App = {
     $('loadErrorText').innerHTML = errs.map(esc).join('<br>');
     App.refreshViews();
   },
-  async fetchBoot(y) {
-    const years = [y - 1, y, y + 1].join(',');
-    const boot = await Api.get('hist', { action: 'bootstrap', years });
-    if (Array.isArray(boot.products) && Array.isArray(boot.history)) return boot;
-    // bootstrap을 모르는 이전 버전 웹앱일 때 개별 요청으로 대체
-    const [u, p, h, hist, plan] = await Promise.all([
-      Api.get('hist', { action: 'getUnitInfo' }), Api.get('hist', { action: 'getProductInfo' }), Api.get('hist', { action: 'getHolidays', years }),
-      Api.get('hist', { action: 'read', sheet: '데이터' }), Api.get('hist', { action: 'read', sheet: 'DB_Master' })
-    ]);
-    const rows = j => j.values || j.data || j.rows || [];
-    return { units: u.units || [], products: (p.products || []).map(x => ({ aliases: [], ...x })), holidays: h.holidays || {}, history: rows(hist), plan: rows(plan) };
+  async fetchBoot(y, force) {
+    const boot = await Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' });
+    if (!Array.isArray(boot.products) || !Array.isArray(boot.history)) throw new Error('자동화시스템 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
+    return boot;
   },
   async reloadLedger() {
     try { const l = await Api.get('ledger', { action: 'ledger', force: '1' }); if (Array.isArray(l.sheets)) App.applyLedger(l); } catch (e) { toast('재고수불대장 새로고침 실패: ' + e.message); }
