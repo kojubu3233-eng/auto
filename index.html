@@ -1694,14 +1694,17 @@ const Ledger = {
     const rowHtml = ({ o, run, counted }, i) => {
       if (Ledger.editing === o) return Ledger.editRow(o, i);
       const cls = STATUS_CLASS[o.status] || '';
-      const md = iso => iso ? `${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
+      const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
       return `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}</td><td class="num">${o.inQty ? fmtN(o.inQty) : ''}</td>
         <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
         <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td><td>${expiryCell(o)}</td><td>${statusCell(o)}</td></tr>`;
     };
-    Ledger.shown = shown;
+    Ledger.shown = shown; let lastYear = '';
     $('ldBody').innerHTML = (from && carry !== '' ? `<tr class="carry"><td colspan="9" style="text-align:right">${D.short(from)} 이전 재고</td><td class="num">${fmtN(carry)}</td><td colspan="2"></td></tr>` : '') +
-      (shown.map(rowHtml).join('') || '<tr><td colspan="12" class="empty">기간 내 내역 없음</td></tr>');
+      (shown.map((x, i) => {
+        const y = (dateOf(x.o) || '').slice(0, 4), head = y && y !== lastYear ? (lastYear = y, `<tr class="carry"><td colspan="12" style="text-align:left">${y}년</td></tr>`) : '';
+        return head + rowHtml(x, i);
+      }).join('') || '<tr><td colspan="12" class="empty">기간 내 내역 없음</td></tr>');
   },
   editRow(o, i) {
     const isIn = o.isIn && !o.isOut, isOut = o.isOut && !o.isIn;
