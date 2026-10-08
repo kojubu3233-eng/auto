@@ -395,9 +395,8 @@ tr.edit-row td { background:#FFFBEB !important; }
 
     <div data-subpane="print" class="hidden">
       <div class="row mb12"><label class="lbl muted">일자</label><span id="printDate"></span>
-        <button class="btn" onclick="Logi.printJournal('in')">입고 일지 엑셀</button>
-        <button class="btn" onclick="Logi.printJournal('out')">출고 일지 엑셀</button></div>
-      <div class="muted">해당 일자에 입고 완료·출고 완료로 저장된 내역을 첨부 서식(입고 일지 / 상차 출고일지) 형태로 내려받습니다.</div>
+        <button class="btn" onclick="Logi.printJournal()">입출고 일지 엑셀</button></div>
+      <div class="muted">해당 일자에 입고 완료·출고 완료로 저장된 내역을 한 장의 입출고 일지(입고 / 출고 구분)로 내려받습니다.</div>
     </div>
 
     <div data-subpane="backup" class="hidden">
@@ -2056,48 +2055,58 @@ const Logi = {
       toast(`${res.results.filter(r => r.ok).length}건 반영`);
     } catch (e) { toast('반영 실패: ' + e.message); }
   },
-  async printJournal(kind) {
+  // 입고·출고를 한 장(시트 1개)에 모은 입출고일지
+  async printJournal() {
     const date = DF.get(document.querySelector('.print-date')); if (!date) return toast('일자를 입력하세요');
-    const groups = [];
+    const ins = [], outs = [];
     LedgerData.standard().forEach(p => {
-      const rows = p.rows.filter(o => kind === 'in' ? (o.inDate === date && o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.status)) : (o.outDate === date && o.outTotal && ACTUAL_OUT.has(o.status)));
-      if (rows.length) groups.push({ p, rows });
+      const i = p.rows.filter(o => o.inDate === date && o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.status));
+      const o = p.rows.filter(o => o.outDate === date && o.outTotal && ACTUAL_OUT.has(o.status));
+      if (i.length) ins.push({ p, rows: i });
+      if (o.length) outs.push({ p, rows: o });
     });
-    if (!groups.length) return toast(`${D.short(date)} ${kind === 'in' ? '입고' : '출고'} 완료 내역이 없습니다`);
+    if (!ins.length && !outs.length) return toast(`${D.short(date)} 입고·출고 완료 내역이 없습니다`);
     await loadExcel();
     const [, m, d] = date.split('-');
-    const title = kind === 'in' ? `${m}월 ${d}일 군납 OEM상품 입고  일지` : `${m}월 ${d}일 군납 상품 출고 일지`;
-    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet(kind === 'in' ? `군납OEM ${m}월 ${d}일 입고 일지` : `군납 ${m}월 ${d}일 (상차)출고일지`);
+    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet(`${m}월 ${d}일 입출고일지`);
     ws.columns = [{ width: 13 }, { width: 26 }, { width: 13 }, { width: 9 }, { width: 9 }, { width: 22 }];
-    ws.mergeCells('A1:F2'); ws.getCell('A1').value = title; ws.getCell('A1').font = { bold: true, size: 16 }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
-    const h = kind === 'in' ? ['입  고 일 ', '제 품 명 ', '소비 기한', '입 고 량', '', ' 비  고'] : ['출  고  일 ', '제 품 명 ', '소비 기한', '출 고 량', '', '부대명 / 총계'];
+    ws.mergeCells('A1:F2'); ws.getCell('A1').value = `${m}월 ${d}일 입출고 일지`; ws.getCell('A1').font = { bold: true, size: 16 }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
     const put = (r, arr) => arr.forEach((v, i) => { ws.getCell(r, i + 1).value = v === '' ? null : v; });
-    put(3, h); put(4, ['', '', '', '박스', 'ea', '']);
-    ['A3:A4', 'B3:B4', 'C3:C4', 'D3:E3', 'F3:F4'].forEach(r => ws.mergeCells(r));
-    let r = 5;
-    groups.forEach(({ p, rows }) => {
-      const start = r;
-      const lines = kind === 'in' ? rows.map(o => [o.expiry, o.inQty, '']) : rows.map(o => [o.expiry, o.outTotal, o.unit]);
-      lines.forEach(([exp, qty, unit], i) => {
-        put(r, [i === 0 ? D.toDate(date) : '', i === 0 ? p.name : '', exp ? D.toDate(exp) : '', '', qty, kind === 'out' ? unit : '']);
-        r++;
+    const border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    let r = 4;
+    const section = (kind, groups) => {
+      const isIn = kind === 'in', top = r;
+      ws.mergeCells(`A${r}:F${r}`); ws.getCell(`A${r}`).value = isIn ? '■ 입고' : '■ 출고'; ws.getCell(`A${r}`).font = { bold: true, size: 12 }; ws.getCell(`A${r}`).alignment = { horizontal: 'left', vertical: 'middle' }; r++;
+      const head = r;
+      put(r, [isIn ? '입  고 일 ' : '출  고  일 ', '제 품 명 ', '소비 기한', isIn ? '입 고 량' : '출 고 량', '', isIn ? ' 비  고' : '부대명 / 총계']);
+      put(r + 1, ['', '', '', '박스', 'ea', '']);
+      ['A', 'B', 'C', 'F'].forEach(c => ws.mergeCells(`${c}${r}:${c}${r + 1}`)); ws.mergeCells(`D${r}:E${r}`);
+      r += 2;
+      const bodyStart = r;
+      if (!groups.length) { ws.mergeCells(`A${r}:F${r}`); ws.getCell(`A${r}`).value = '내역 없음'; r++; }
+      groups.forEach(({ p, rows }) => {
+        const start = r;
+        const lines = isIn ? rows.map(o => [o.expiry, o.inQty, '']) : rows.map(o => [o.expiry, o.outTotal, o.unit]);
+        lines.forEach(([exp, qty, unit], i) => {
+          put(r, [i === 0 ? D.toDate(date) : '', i === 0 ? p.name : '', exp ? D.toDate(exp) : '', '', qty, isIn ? '' : unit]);
+          r++;
+        });
+        if (!isIn && lines.length > 1) {
+          const total = lines.reduce((a, x) => a + (x[1] || 0), 0);
+          ws.getCell(`F${start}`).value = `${[...new Set(lines.map(x => x[2]).filter(Boolean))].join(', ')} / 총 ${total.toLocaleString()}`;
+        }
+        if (r - 1 > start) { ws.mergeCells(`A${start}:A${r - 1}`); ws.mergeCells(`B${start}:B${r - 1}`); if (!isIn) ws.mergeCells(`F${start}:F${r - 1}`); }
       });
-      if (kind === 'out') {
-        const total = lines.reduce((a, x) => a + (x[1] || 0), 0);
-        const units = [...new Set(lines.map(x => x[2]).filter(Boolean))].join(', ');
-        if (lines.length > 1) { ws.getCell(`F${start}`).value = `${units} / 총 ${total.toLocaleString()}`; }
+      for (let i = head; i < r; i++) for (let c = 1; c <= 6; c++) {
+        const cell = ws.getCell(i, c);
+        cell.border = border; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        if (i < bodyStart) cell.font = { bold: true };
+        else if (groups.length) { if (c === 1) cell.numFmt = 'mm"월" dd"일"'; if (c === 3) cell.numFmt = 'yyyy-mm-dd'; if (c === 5) cell.numFmt = '#,##0'; }
       }
-      if (r - 1 > start) { ws.mergeCells(`A${start}:A${r - 1}`); ws.mergeCells(`B${start}:B${r - 1}`); if (kind === 'out' && lines.length > 1) ws.mergeCells(`F${start}:F${r - 1}`); }
-    });
-    for (let i = 3; i < r; i++) for (let c = 1; c <= 6; c++) {
-      const cell = ws.getCell(i, c);
-      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      if (i <= 4) cell.font = { bold: true };
-      if ((c === 1 || c === 3) && i > 4) cell.numFmt = c === 1 ? 'mm"월" dd"일"' : 'yyyy-mm-dd';
-      if (c === 5 && i > 4) cell.numFmt = '#,##0';
-    }
-    await downloadWorkbook(wb, `${kind === 'in' ? '입고일지' : '출고일지'}_${date}.xlsx`);
+      r++;
+    };
+    section('in', ins); section('out', outs);
+    await downloadWorkbook(wb, `입출고일지_${date}.xlsx`);
   }
 };
 
