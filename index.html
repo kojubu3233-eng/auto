@@ -58,8 +58,12 @@ td { padding:4px; border:1px solid var(--border); background:var(--surface); ver
 .grid input, .grid select { width:100%; border:none; border-radius:0; background:transparent; }
 .num { text-align:right; font-variant-numeric:tabular-nums; }
 .c-plan { color:var(--plan); } .c-conf { color:var(--conf); } .c-done { color:var(--ink); }
-.res-min { color:var(--muted); font-weight:700; } .res-rec { color:var(--accent); font-weight:700; font-size:14px; background:var(--accent-soft) !important; } .res-max { color:var(--warn); font-weight:700; }
-.res-simple { color:var(--ink); font-weight:600; background:var(--surface-alt) !important; }
+.res-min { color:var(--muted); font-weight:700; font-size:14px; } .res-rec { color:var(--accent); font-weight:700; font-size:15px; background:var(--accent-soft) !important; } .res-max { color:var(--warn); font-weight:700; font-size:14px; }
+.res-simple { color:var(--ink); background:var(--surface-alt) !important; line-height:1.3; }
+.res-simple .s-ea { font-size:15px; font-weight:700; } .res-simple .s-kg { font-size:13px; color:var(--muted); font-weight:600; }
+.res-simple .u { font-size:11px; font-weight:500; color:var(--muted-2); margin-left:2px; }
+#predictTable { table-layout:auto; min-width:1250px; }
+#predictTable td.res-simple, #predictTable td.res-min, #predictTable td.res-rec, #predictTable td.res-max { padding:4px 10px; }
 .sel-col { width:28px; }
 tr.picked td { background:#FFFBEB !important; }
 
@@ -134,12 +138,48 @@ tr.edit-row td { background:#FFFBEB !important; }
 .toast { position:fixed; right:16px; bottom:16px; background:var(--ink); color:#fff; padding:10px 14px; border-radius:8px; font-size:13px; z-index:300; max-width:420px; white-space:pre-line; }
 .banner { background:var(--warn-soft); border:1px solid #F0DFC4; color:var(--warn); padding:8px 12px; border-radius:8px; font-size:12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
 .loading { color:var(--muted-2); font-size:12px; }
+.editable { cursor:pointer; } tr.editable:hover td, .list-row.editable:hover { background:var(--accent-soft); }
+.re-card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--surface); }
+.re-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+.re-grid label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); font-weight:600; }
+.re-grid input[type=text], .re-grid input[type=number] { width:100%; }
+.re-grid .dfield input.dinput { width:100%; }
 
 @media (max-width:760px) {
-  body { padding:8px; font-size:12px; }
-  .panel { padding:12px; }
-  .home-grid { grid-template-columns:1fr; }
-  .controls { flex-direction:column; align-items:stretch; }
+  body { padding:6px; font-size:13px; }
+  h1 { font-size:16px; } h2 { font-size:14px; }
+  .panel { padding:12px; border-radius:8px; margin-bottom:10px; }
+  .header { position:sticky; top:0; z-index:20; }
+  .tab-bar { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; position:sticky; top:52px; z-index:19; background:var(--paper); margin-bottom:10px; scrollbar-width:none; }
+  .tab-bar::-webkit-scrollbar { display:none; }
+  .tab-btn { white-space:nowrap; padding:10px 12px; font-size:13px; flex-shrink:0; }
+  .sub-tabs { overflow-x:auto; flex-wrap:nowrap; }
+  .home-grid { grid-template-columns:1fr; gap:10px; }
+  .buckets { grid-template-columns:repeat(3,1fr); gap:6px; }
+  .bucket { padding:8px; } .bucket .b-val { font-size:17px; }
+  .controls { flex-direction:column; align-items:stretch; gap:8px; }
+  .controls .row, .controls .radio-group { flex-wrap:wrap; }
+  .row.between { flex-wrap:wrap; }
+  /* 입력칸 16px: 아이폰 확대 방지, 손가락 터치 영역 확보 */
+  input[type=text], input[type=number], input[type=date], input[type=month], select { font-size:16px; min-height:36px; }
+  .grid input, .grid select { min-height:36px; }
+  .btn { padding:10px 14px; font-size:14px; } .btn.sm { padding:7px 10px; font-size:13px; }
+  .dfield .dpick { padding:6px 7px; } .dfield .dpick svg { width:18px; height:18px; }
+  .dfield input.dinput, .grid .dfield input.dinput { width:104px; }
+  .table-wrap { max-height:none !important; -webkit-overflow-scrolling:touch; }
+  table { font-size:12px; }
+  th, td { padding:6px 4px; }
+  .prod-grid { grid-template-columns:repeat(2,1fr); gap:6px; }
+  .prod-box { padding:8px; } .prod-box .p-stock { font-size:16px; }
+  #ledgerSearch { width:100% !important; }
+  /* 재고현황·수불대장 표: 품명 열 고정, 가로 스크롤 */
+  #reportTable td.pname { position:sticky; left:0; z-index:2; background:var(--surface); max-width:120px; white-space:normal; }
+  #reportTable td.grp { font-size:11px; writing-mode:vertical-rl; }
+  .modal { max-height:94vh; padding:14px; border-radius:12px 12px 0 0; }
+  .overlay { align-items:flex-end; padding:0; }
+  .re-grid { grid-template-columns:1fr 1fr; }
+  .toast { left:10px; right:10px; bottom:10px; max-width:none; }
+  .list-row { padding:10px; }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 </style>
@@ -223,9 +263,9 @@ tr.edit-row td { background:#FFFBEB !important; }
       <table class="grid" id="predictTable">
         <thead><tr>
           <th class="sel-col"><input type="checkbox" id="predictAll"></th>
-          <th id="dateHead">납품일</th><th>부대</th><th style="min-width:130px">품명</th><th>구분</th>
-          <th class="person-only hidden">기준량</th><th class="person-only hidden">급식인원</th><th class="total-only">총소요량</th><th>단위</th><th>포장규격</th>
-          <th>단순산술값</th><th>최소</th><th>권장</th><th>최대</th><th>저장기준</th><th>발주량(직접)</th>
+          <th id="dateHead" style="width:150px">납품일</th><th style="width:130px">부대</th><th style="min-width:170px">품명</th><th style="width:100px">구분</th>
+          <th class="person-only hidden" style="width:80px">기준량</th><th class="person-only hidden" style="width:85px">급식인원</th><th class="total-only" style="width:95px">총소요량</th><th style="width:70px">단위</th><th style="width:75px">포장규격</th>
+          <th style="width:110px">단순산술값</th><th style="width:85px">최소</th><th style="width:90px">권장</th><th style="width:85px">최대</th><th style="width:90px">저장기준</th><th style="width:95px">발주량(직접)</th>
         </tr></thead>
         <tbody id="predictBody"></tbody>
       </table>
@@ -1210,7 +1250,7 @@ const Predict = {
     const note = fallback ? ` · '${cat}' 구분 이력으로 대체` : '';
     tr.dataset.simple = simple; tr.dataset.simpleKg = simpleKg ?? ''; tr.dataset.min = v(minP); tr.dataset.rec = v(recP); tr.dataset.max = v(maxP); tr.dataset.ready = '1';
     const os = q('o-simple');
-    os.innerHTML = `${fmtN(simple)}<span class="hint">ea</span><br><span class="hint">${simpleKg === null ? '-' : fmtN(simpleKg) + 'kg'}</span>`;
+    os.innerHTML = `<div class="s-ea">${fmtN(simple)}<span class="u">ea</span></div><div class="s-kg">${simpleKg === null ? '-' : fmtN(simpleKg) + '<span class="u">kg</span>'}</div>`;
     os.title = `${utype === 'kg' ? `총소요량 ${fmtN(req, 2)}kg ÷ 포장규격 ${spec}kg` : `총소요량 ${fmtN(req)}ea`} (반올림)` + (hcNote ? ' · ' + hcNote : '');
     set('o-min', v(minP), `과거 평균 오차 ${mean.toFixed(1)}% (이력 ${n}건)${note}`);
     set('o-rec', v(recP), `평균 + 안전마진 (이력 ${n}건)${note}`);
@@ -1598,6 +1638,7 @@ const Ledger = {
 const Logi = {
   log: [],
   async init() {
+    $('logiToday').addEventListener('click', e => { const r = e.target.closest('[data-t]'); if (r) Logi.editToday(+r.dataset.t); });
     $('logiTabs').addEventListener('click', e => {
       const b = e.target.closest('[data-sub]'); if (!b) return;
       document.querySelectorAll('#logiTabs .tab-btn').forEach(x => x.classList.toggle('active', x === b));
@@ -1754,7 +1795,18 @@ const Logi = {
   },
   renderToday() {
     const t = D.today(); const today = Logi.log.filter(x => x.ts.slice(0, 10) === t || x.date === t).slice(-50).reverse();
-    $('logiToday').innerHTML = today.length ? today.map(x => `<div class="list-row"><div><div class="l-name">${x.kind === 'in' ? '입고' : '출고'} · ${esc(x.name)}</div><div class="l-sub">${D.short(x.date)} ${esc(x.unit || '')} ${x.expiry ? '소비기한 ' + D.short(x.expiry) : ''}</div></div><div class="num"><b>${fmtN(x.qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag done">반영</span>'}</div></div></div>`).join('') : '<div class="empty">오늘 저장한 입출고가 없습니다</div>';
+    Logi.todayItems = today;
+    $('logiToday').innerHTML = today.length ? today.map((x, i) => `<div class="list-row editable" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">${x.kind === 'in' ? '입고' : '출고'} · ${esc(x.name)}</div><div class="l-sub">${D.short(x.date)} ${esc(x.unit || '')} ${x.expiry ? '소비기한 ' + D.short(x.expiry) : ''}</div></div><div class="num"><b>${fmtN(x.qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag done">반영</span>'}</div></div></div>`).join('') : '<div class="empty">오늘 저장한 입출고가 없습니다</div>';
+  },
+  findRow(x) {
+    if (x.id && LedgerData.byId.has(x.id)) return LedgerData.byId.get(x.id);
+    const p = LedgerData.byKey.get(x.sheet + '|' + x.name); if (!p) return null;
+    return p.rows.find(o => x.kind === 'in' ? (o.inDate === x.date && o.inQty === x.qty) : (o.outDate === x.date && o.outMain === x.qty)) || null;
+  },
+  editToday(i) {
+    const x = Logi.todayItems[i], o = Logi.findRow(x);
+    if (!o) return toast('재고수불대장에서 해당 행을 찾지 못했습니다. 새로고침 후 다시 시도하거나 재고수불대장 탭에서 수정하세요');
+    RowEdit.open(`${x.kind === 'in' ? '입고' : '출고'} 수정 · ${x.name}`, [o], LedgerData.byKey.get(o.sheet + '|' + o.name));
   },
   renderLog() {
     $('logBody').innerHTML = Logi.log.slice().reverse().slice(0, 300).map(x => `<tr><td>${x.ts.slice(0, 16).replace('T', ' ')}</td><td>${x.kind === 'in' ? '입고' : '출고'}</td><td style="text-align:left">${esc(x.name)}</td><td>${D.short(x.date)}</td><td class="num">${fmtN(x.qty)}</td><td>${esc(x.unit || '')}</td><td>${x.id && LedgerData.byId.has(x.id) ? '있음' : '<span class="tag warn">없음</span>'}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">저장된 기록이 없습니다</td></tr>';
@@ -1835,6 +1887,11 @@ const Report = {
   inited: false,
   init() {
     if (Report.inited) return; Report.inited = true;
+    $('reportBody').addEventListener('click', e => {
+      const tr = e.target.closest('tr[data-k]'); if (!tr) return;
+      const it = Report.items[+tr.dataset.k];
+      RowEdit.open(`${it.p.name} · ${D.short(Report.date())} 기준`, it.editRows, it.p);
+    });
     DF.mount($('reportDate'), 'report-date', D.today()).addEventListener('datechange', Report.render);
     $('reportHideZero').addEventListener('change', Report.render);
   },
@@ -1869,25 +1926,27 @@ const Report = {
       const keys = [...new Set([...lp.keys(), ...le.keys(), ...ins])].sort((a, b) => String(a.expiry || a.inDate || '').localeCompare(String(b.expiry || b.inDate || '')));
       const lots = keys.map(o => {
         const pr = lp.get(o) || 0, en = le.get(o) || 0, inn = ins.includes(o) ? o.inQty : 0;
-        return { expiry: o.expiry, deadline: Names.deadline(o.expiry, p.product), prev: pr, in: inn, out: Math.max(0, pr + inn - en), end: en };
+        return { row: o, expiry: o.expiry, deadline: Names.deadline(o.expiry, p.product), prev: pr, in: inn, out: Math.max(0, pr + inn - en), end: en };
       });
       if (!lots.length) lots.push({ expiry: '', deadline: '', prev: Math.max(prev, 0), in: 0, out: outQty, end: Math.max(end, 0) });
       const units = [...new Set(outs.map(o => o.unit).filter(Boolean))].map(u => `${u} ${fmtN(outs.filter(o => o.unit === u).reduce((a, o) => a + o.outTotal, 0))}`).join(', ');
-      out.push({ p, lots, prev, end, inQty, outQty, units, changed: !!(inQty || outQty) });
+      const editRows = [...new Set([...ins, ...outs, ...keys])];
+      out.push({ p, lots, prev, end, inQty, outQty, units, editRows, changed: !!(inQty || outQty) });
     });
     return { day, items: out };
   },
   render() {
     Report.init();
     const { items } = Report.build();
+    Report.items = items;
     let html = '', lastSheet = null;
     const sheetCount = {}; items.forEach(it => { sheetCount[it.p.sheet] = (sheetCount[it.p.sheet] || 0) + it.lots.length; });
-    items.forEach(it => {
+    items.forEach((it, k) => {
       const n = it.lots.length, sh = it.p.sheet;
       it.lots.forEach((l, i) => {
-        html += `<tr class="${it.changed ? 'chg' : ''}">`;
+        html += `<tr class="${it.changed ? 'chg' : ''} editable" data-k="${k}" title="누르면 이 품목의 입출고를 수정할 수 있습니다">`;
         if (sh !== lastSheet) { html += `<td class="grp" rowspan="${sheetCount[sh]}">${esc(sh)}</td>`; lastSheet = sh; }
-        if (i === 0) html += `<td rowspan="${n}" style="text-align:left;font-weight:600">${esc(it.p.name)}</td><td rowspan="${n}">${it.p.product?.shelfMonths || '-'}</td>`;
+        if (i === 0) html += `<td rowspan="${n}" class="pname" style="text-align:left;font-weight:600">${esc(it.p.name)}</td><td rowspan="${n}">${it.p.product?.shelfMonths || '-'}</td>`;
         html += `<td>${l.expiry || '-'}</td><td>${l.deadline || '-'}</td><td class="num">${fmtN(l.prev)}</td>`;
         if (i === 0) html += `<td rowspan="${n}" class="num"><b>${fmtN(it.prev)}</b></td>`;
         html += `<td>${l.in ? (l.expiry || '-') : ''}</td><td class="num">${l.in ? fmtN(l.in) : ''}</td><td class="num">${l.out ? fmtN(l.out) : ''}</td>`;
@@ -1937,6 +1996,49 @@ const Report = {
     ws.views = [{ state: 'frozen', ySplit: 4 }];
     await downloadWorkbook(wb, `입출고및재고현황_${day}.xlsx`);
   }
+};
+
+/* ---------- 재고수불대장 행 수정 창 (재고현황·오늘 입출고에서 사용) ---------- */
+const RowEdit = {
+  open(title, rows, p) {
+    rows = rows.filter(Boolean);
+    if (!rows.length) return toast('수정할 입출고 행이 없습니다');
+    RowEdit.rows = rows;
+    const st = o => o.status || (o.inQty ? '입고완료' : '출고완료');
+    const opts = o => (o.isIn && !o.isOut ? IN_STATUS : o.isOut && !o.isIn ? OUT_STATUS : [...IN_STATUS, ...OUT_STATUS]).map(s => `<option ${s === st(o) ? 'selected' : ''}>${s}</option>`).join('');
+    const card = (o, i) => `<div class="re-card ${STATUS_CLASS[o.status] || ''}" data-i="${i}">
+      <div class="row between mb8"><b>${o.isIn && !o.isOut ? '입고' : o.isOut && !o.isIn ? '출고' : '입고·출고'}</b><select class="r-status">${opts(o)}</select></div>
+      <div class="re-grid">
+        ${o.isIn ? `<label>입고일${DF.html('r-inDate', o.inDate || '')}</label><label>입고 수량<input type="number" class="r-inQty num" value="${o.inQty || ''}"></label>` : ''}
+        ${o.isOut ? `<label>출고일${DF.html('r-outDate', o.outDate || '')}</label><label>본품<input type="number" class="r-outMain num" value="${o.outMain || ''}"></label><label>샘플<input type="number" class="r-outSample num" value="${o.outSample || ''}"></label><label>부대<input type="text" class="r-unit" value="${esc(o.unit || '')}"></label>` : ''}
+        <label>소비기한${DF.html('r-expiry', o.expiry || '', 'future')}</label>
+      </div>
+      <div class="row mt8" style="justify-content:flex-end"><button class="btn sm danger" data-act="del">삭제</button><button class="btn sm ok" data-act="save">저장</button></div></div>`;
+    $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)RowEdit.close()"><div class="modal">
+      <div class="row between mb12"><div><h2>${esc(title)}</h2><div class="hint">${esc(p ? p.sheet + (p.company ? ' · ' + p.company : '') : '')} · 저장하면 재고수불대장 시트에 바로 반영됩니다</div></div><button class="btn light sm" onclick="RowEdit.close()">닫기</button></div>
+      ${rows.map(card).join('')}</div></div>`;
+    $('modalRoot').querySelector('.modal').addEventListener('click', RowEdit.onClick);
+  },
+  async onClick(e) {
+    const act = e.target.dataset?.act; if (!act) return;
+    const c = e.target.closest('.re-card'), o = RowEdit.rows[+c.dataset.i];
+    const q = k => c.querySelector('.' + k);
+    if (act === 'del') {
+      if (!confirm('이 행을 재고수불대장에서 삭제합니다. 계속할까요?')) return;
+      RowEdit.close(); return Ledger.saveOps([{ ...Ledger.ref(o), op: 'delete' }], '삭제했습니다');
+    }
+    const f = { expiry: DF.get(q('r-expiry')) };
+    if (q('r-inDate')) { f.inDate = DF.get(q('r-inDate')); f.inQty = num(q('r-inQty').value) ?? ''; }
+    if (q('r-outDate')) { f.outDate = DF.get(q('r-outDate')); f.outMain = num(q('r-outMain').value) ?? ''; f.outSample = num(q('r-outSample').value) ?? ''; f.unit = normUnit(q('r-unit').value); }
+    e.target.disabled = true;
+    const res = await Ledger.saveOps([{ ...Ledger.ref(o), op: 'update', status: q('r-status').value, fields: f }], '수정했습니다');
+    if (res) {
+      Logi.log.forEach(x => { if ((x.id && x.id === o.id) || Logi.findRow(x) === o) { x.date = f.inDate || f.outDate || x.date; x.qty = f.inQty || f.outMain || x.qty; x.expiry = f.expiry; x.unit = f.unit ?? x.unit; } });
+      Store.set('logiLog', Logi.log);
+      RowEdit.close();
+    } else e.target.disabled = false;
+  },
+  close() { $('modalRoot').innerHTML = ''; }
 };
 
 document.addEventListener('DOMContentLoaded', () => App.init());
