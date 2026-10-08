@@ -1187,11 +1187,11 @@ const Predict = {
     if (!silent) tr.querySelector('.g-date').focus();
     return tr;
   },
-  // 샘플 자동 반영 규칙: 국·탕류는 샘플 없음, 그 외에는 1kg 제품만 샘플 1
+  // 샘플 기본값: 국·탕류는 0, 그 외 1kg 이하 제품은 1, 1kg 초과는 0 (출고 입력 시 직접 바꿀 수 있음)
   sample(lp, name) {
     const p = Names.product(name) || lp.product;
     if (/국.?탕/.test(lp.sheet) || /국.?탕/.test((p && p.category) || '')) return 0;
-    return p && Number(p.pack) === 1 ? 1 : 0;
+    return p && Number(p.pack) <= 1 ? 1 : 0;
   },
   baseHint(tr) { tr.querySelector('.g-base').placeholder = tr.querySelector('.g-utype').value === 'kg' ? 'g' : 'ea'; },
   onUnit(tr) {
@@ -1876,6 +1876,7 @@ const Logi = {
       pb.addEventListener('datechange', e => { const tr = e.target.closest('tr'); tr.querySelector('.pk').checked = true; const it = Logi.plans[k][+tr.dataset.i]; tr.querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), it.p.product)); });
       pb.addEventListener('change', e => { if (e.target.classList.contains('plot')) { const tr = e.target.closest('tr'); tr.querySelector('.pk').checked = true; const it = Logi.plans[k][+tr.dataset.i]; tr.querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(e.target.value, it.p.product)); } });
     });
+    ['outBody', 'outPlanBody'].forEach(id => $(id).addEventListener('change', e => { if (e.target.classList.contains('s-yn')) Logi.onSampleToggle(e.target); }));
     $('outShowPlan').addEventListener('change', () => Logi.renderPlans('out'));
     document.querySelectorAll('[data-all]').forEach(c => c.addEventListener('change', () => $(c.dataset.all + 'Body').querySelectorAll('.pk').forEach(x => { x.checked = c.checked; })));
     ['in', 'out'].forEach(k => {
@@ -1888,6 +1889,20 @@ const Logi = {
     Logi.log = (await Store.get('logiLog')) || [];
   },
   render() { Report.render(); Logi.renderToday(); Logi.renderPlans('in'); Logi.renderPlans('out'); document.querySelectorAll('#inBody tr, #outBody tr').forEach(Logi.refreshRow); },
+  // 샘플 입력: '없음/있음' 선택 + 나간 개수. 없음이면 개수는 0으로 저장된다.
+  sampleHtml: (cls, n) => `<span class="row" style="flex-wrap:nowrap;gap:4px"><select class="s-yn"><option value="0">없음</option><option value="1" ${n > 0 ? 'selected' : ''}>있음</option></select><input type="number" class="${cls} num" min="0" value="${n || 0}" style="width:50px" ${n > 0 ? '' : 'disabled'} title="나간 샘플 개수"></span>`,
+  onSampleToggle(sel) {
+    sel.closest('tr').dataset.sampleSet = '1';
+    const inp = sel.parentElement.querySelector('input'), on = sel.value === '1';
+    const pk = sel.closest('tr').querySelector('.pk'); if (pk) pk.checked = true;
+    inp.disabled = !on;
+    if (on) {
+      const tr = sel.closest('tr'); let n = 1;
+      const p = tr.dataset.kind === 'out' ? Logi.prod(tr) : (Logi.plans.out[+tr.dataset.i] || {}).p;
+      if (p) n = Predict.sample(p, p.name) || 1;
+      inp.value = n; inp.focus(); inp.select();
+    } else inp.value = 0;
+  },
   productOptions: () => LedgerData.standard().map(p => ({ label: `${p.name} · ${p.sheet}`, value: p.name, key: p.key })),
   addRow(kind, silent) {
     const tr = document.createElement('tr');
@@ -1897,7 +1912,7 @@ const Logi = {
          <td><button class="btn sm light" data-act="del">삭제</button></td>`
       : `<td class="ac-wrap"><input type="text" class="l-name" autocomplete="off" placeholder="품명 검색"><span class="ac-list"></span></td>
          <td>${DF.html('l-date', D.today())}</td><td><select class="l-lot"><option value="">소비기한 선택</option></select><span class="l-exp-wrap hidden">${DF.html('l-exp', '', 'future')}</span></td><td class="o-deadline">-</td>
-         <td><input type="number" class="l-qty num" style="width:70px"></td><td><input type="number" class="l-sample num" value="0" style="width:50px"></td>
+         <td><input type="number" class="l-qty num" style="width:70px"></td><td>${Logi.sampleHtml('l-sample', 0)}</td>
          <td class="ac-wrap"><input type="text" class="l-unit" autocomplete="off" placeholder="부대"><span class="ac-list"></span></td>
          <td><button class="btn sm light" data-act="del">삭제</button></td>`;
     $(kind + 'Body').appendChild(tr);
@@ -1928,6 +1943,10 @@ const Logi = {
       if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
       else { const first = p.lots.find(l => l.expiry); if (first) sel.value = first.expiry; }
       Logi.lotChanged(tr, true);
+      if (!tr.dataset.sampleSet) {   // 품목을 고르면 규칙에 따른 샘플 기본값을 채운다(직접 바꾸면 유지)
+        const n = Predict.sample(p, p.name), yn = tr.querySelector('.s-yn'), inp = tr.querySelector('.l-sample');
+        if (yn && inp) { yn.value = n > 0 ? '1' : '0'; inp.disabled = n <= 0; inp.value = n; }
+      }
     }
     const exp = Logi.expiry(tr);
     const dl = Names.deadline(exp, info);
@@ -1996,7 +2015,7 @@ const Logi = {
       const lots = p.lots.filter(l => l.expiry);
       return `<tr data-i="${i}" class="${o.status === '출고예정' ? 'c-plan' : ''}"><td class="sel-col"><input type="checkbox" class="pk"></td><td style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(o.unit)}</td><td><span class="tag ${o.status === '출고예정' ? 'plan' : 'conf'}">${o.status.slice(2)}</span></td><td class="num">${fmtN(o.outMain)}${o.outSample ? ' + ' + fmtN(o.outSample) : ''}</td>
-        <td><input type="number" class="pq num" value="${o.outMain || ''}" style="width:70px"></td><td><input type="number" class="ps num" value="${o.outSample || 0}" style="width:50px"></td>
+        <td><input type="number" class="pq num" value="${o.outMain || ''}" style="width:70px"></td><td>${Logi.sampleHtml('ps', o.outSample || 0)}</td>
         <td><select class="plot"><option value="">선택 안 함</option>${lots.map((l, k) => `<option value="${l.expiry}" ${(o.expiry ? o.expiry === l.expiry : k === 0) ? 'selected' : ''}>${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})</option>`).join('')}</select></td>
         <td class="pdl">${Logi.deadlineHtml(Names.deadline(o.expiry || lots[0]?.expiry, info))}</td></tr>`;
     }).join('');
