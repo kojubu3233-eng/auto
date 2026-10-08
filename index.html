@@ -320,7 +320,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
 
     <div data-subpane="in">
-      <div class="row mb8"><h3>입고 예정</h3><span id="inPlanDate"></span><span class="hint">재고수불대장에서 입고 결정된 건. 실제 수량·소비기한을 확인하고 체크 후 저장</span></div>
+      <div class="row mb8"><h3>입고 예정</h3><span id="inPlanDate"></span><span class="hint">재고수불대장의 입고 예정·결정 건. 실제 입고 수량·소비기한을 확인하고 체크 후 '입고 완료'</span></div>
       <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
         <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>예정 수량</th><th>입고 수량</th><th>소비기한</th><th>납품기한</th>
       </tr></thead><tbody id="inPlanBody"></tbody></table></div>
@@ -1719,14 +1719,14 @@ const Logi = {
     const date = Logi.planDate(kind), body = $(kind + 'PlanBody');
     const items = [];
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
-      if (kind === 'in' && o.status === '입고결정' && (o.inDate === date || (!o.inDate && date === D.today()))) items.push({ p, o });
+      if (kind === 'in' && o.inQty && (PLAN_IN.has(o.status) || (!o.status && o.inDate >= D.today())) && (o.inDate === date || (!o.inDate && date === D.today()))) items.push({ p, o });
       if (kind === 'out' && (o.status === '출고확정' || ($('outShowPlan').checked && o.status === '출고예정')) && o.outDate === date) items.push({ p, o });
     }));
     Logi.plans = Logi.plans || {}; Logi.plans[kind] = items;
-    if (!items.length) { body.innerHTML = `<tr><td colspan="9" class="empty">${D.short(date)} ${kind === 'in' ? '입고 결정된 예정이 없습니다' : '출고 확정된 예정이 없습니다'}</td></tr>`; return; }
+    if (!items.length) { body.innerHTML = `<tr><td colspan="9" class="empty">${D.short(date)} ${kind === 'in' ? '입고 예정이 없습니다' : '출고 확정된 예정이 없습니다'}</td></tr>`; return; }
     body.innerHTML = items.map(({ p, o }, i) => {
       const info = p.product;
-      if (kind === 'in') return `<tr data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"></td><td style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td>
+      if (kind === 'in') return `<tr data-i="${i}" class="${o.status === '입고결정' ? '' : 'c-plan'}"><td class="sel-col"><input type="checkbox" class="pk"></td><td style="text-align:left">${esc(p.name)} <span class="tag ${o.status === '입고결정' ? 'conf' : 'plan'}">${o.status === '입고결정' ? '결정' : '예정'}</span><div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td class="num">${fmtN(o.inQty)}</td>
         <td><input type="number" class="pq num" value="${o.inQty || ''}" style="width:80px"></td><td>${DF.html('pexp', o.expiry || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(o.expiry, info))}</td></tr>`;
       const lots = p.lots.filter(l => l.expiry);
