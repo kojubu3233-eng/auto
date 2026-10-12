@@ -280,6 +280,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="row mt12">
       <button class="btn light" onclick="Predict.addRow()">+ 행 추가</button>
       <button class="btn light" onclick="Predict.removePicked()">선택 행 삭제</button>
+      <button class="btn light" onclick="Predict.clearAll()">전체 지우기</button>
       <span style="flex:1"></span>
       <label class="row muted"><input type="checkbox" id="alsoLedger" checked> 재고수불대장에 출고 예정 등록</label>
       <button class="btn ok" onclick="Predict.save()">구글시트에 저장</button>
@@ -950,7 +951,8 @@ const App = {
     DF.init();
     $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) App.show(b.dataset.tab); });
     await Store.open();
-    const [boot, ledger, prefs, skip] = await Promise.all(['boot', 'ledger', 'prefs', 'linkSkip'].map(Store.get));
+    const [boot, ledger, prefs, skip, draft] = await Promise.all(['boot', 'ledger', 'prefs', 'linkSkip', 'predictDraft'].map(Store.get));
+    App.draft = draft || null;
     if (prefs) App.prefs = prefs;
     if (skip) App.linkSkip = new Set(skip);
     Predict.init(); Confirm.init(); Ledger.init(); Logi.init();
@@ -1142,17 +1144,21 @@ const Predict = {
   basis: () => document.querySelector('input[name=dateBasis]:checked').value,
   init() {
     const body = $('predictBody');
-    Predict.addRow(true);
+    if (Predict.restoreDraft(App.draft)) Predict.applyMode(); else Predict.addRow(true);
+    App.draft = null;
     body.addEventListener('input', e => {
+      Predict.saveDraft();
       const tr = e.target.closest('tr'); if (!tr || e.target.classList.contains('pick')) return;
       if (e.target.classList.contains('g-hc')) { const m = e.target.value.trim() !== ''; e.target.dataset.manual = m ? '1' : ''; e.target.classList.toggle('manual', m); }
       Predict.queue(tr);
     });
-    body.addEventListener('change', e => { const tr = e.target.closest('tr'); if (!tr) return; if (e.target.classList.contains('pick')) tr.classList.toggle('picked', e.target.checked); else Predict.queue(tr); });
-    body.addEventListener('datechange', e => Predict.queue(e.target.closest('tr')));
+    body.addEventListener('change', e => { Predict.saveDraft(); const tr = e.target.closest('tr'); if (!tr) return; if (e.target.classList.contains('pick')) tr.classList.toggle('picked', e.target.checked); else Predict.queue(tr); });
+    body.addEventListener('datechange', e => { Predict.saveDraft(); Predict.queue(e.target.closest('tr')); });
     body.addEventListener('paste', Predict.paste);
     document.querySelectorAll('input[name=calcMode]').forEach(r => r.addEventListener('change', Predict.applyMode));
-    document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.calcAll(); }));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) Predict.saveDraft(true); });
+    window.addEventListener('pagehide', () => Predict.saveDraft(true));
+    document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.calcAll(); Predict.saveDraft(); }));
     $('predictAll').addEventListener('change', e => body.querySelectorAll('.pick').forEach(c => { c.checked = e.target.checked; c.closest('tr').classList.toggle('picked', c.checked); }));
     AC.bind($('pickedUnit'), AC.units);
   },
@@ -1184,7 +1190,7 @@ const Predict = {
     tr.querySelector('.g-name').addEventListener('change', () => Predict.onName(tr));
     tr.querySelector('.g-utype').addEventListener('change', () => { const n = tr.querySelector('.g-name').value.trim(); if (n) { App.prefs.unitType[n] = tr.querySelector('.g-utype').value; App.savePrefs(); } Predict.baseHint(tr); });
     tr.querySelector('.g-spec').addEventListener('change', () => { const n = tr.querySelector('.g-name').value.trim(); if (n) { App.prefs.spec[n] = num(tr.querySelector('.g-spec').value) || 1; App.savePrefs(); } });
-    if (!silent) tr.querySelector('.g-date').focus();
+    if (!silent) { tr.querySelector('.g-date').focus(); Predict.saveDraft(); }
     return tr;
   },
   // 샘플 기본값: 국·탕류는 0, 그 외 1kg 이하 제품은 1, 1kg 초과는 0 (출고 입력 시 직접 바꿀 수 있음)
@@ -1216,7 +1222,7 @@ const Predict = {
     const person = Predict.mode() === 'person';
     document.querySelectorAll('.person-only').forEach(el => el.classList.toggle('hidden', !person));
     document.querySelectorAll('.total-only').forEach(el => el.classList.toggle('hidden', person));
-    Predict.calcAll();
+    Predict.calcAll(); Predict.saveDraft();
   },
   pending: new Set(),
   queue(tr) {
@@ -1273,6 +1279,44 @@ const Predict = {
       simple: num(tr.dataset.simple), simpleKg: num(tr.dataset.simpleKg), qty
     };
   },
+  // 입력한 내용 전체 지우기 (임시저장도 함께 삭제)
+  clearAll() {
+    const filled = [...document.querySelectorAll('#predictBody tr')].some(tr => tr.querySelector('.g-name').value.trim() || tr.querySelector('.g-total').value || tr.querySelector('.g-base').value);
+    if (!filled) return toast('지울 입력 내용이 없습니다');
+    if (!confirm('입력한 예정량 내용을 모두 지울까요?\n(저장하지 않은 내용은 복구할 수 없습니다)')) return;
+    Predict.resetForm(); toast('입력 내용을 모두 지웠습니다');
+  },
+  // 입력 중인 행 임시저장 (저장·삭제 전에는 새로고침·탭 이동 후에도 유지)
+  saveDraft(now) {
+    clearTimeout(Predict.draftTimer);
+    const run = () => {
+      const q = (tr, c) => tr.querySelector('.' + c);
+      const rows = [...document.querySelectorAll('#predictBody tr')].map(tr => ({
+        date: DF.get(q(tr, 'g-date')), unit: q(tr, 'g-unit').value, name: q(tr, 'g-name').value, cat: q(tr, 'g-cat').value, catAuto: q(tr, 'g-cat').dataset.auto === '1',
+        base: q(tr, 'g-base').value, hc: q(tr, 'g-hc').value, hcManual: q(tr, 'g-hc').dataset.manual === '1', total: q(tr, 'g-total').value, utype: q(tr, 'g-utype').value, spec: q(tr, 'g-spec').value
+      }));
+      const empty = rows.every(r => !r.name.trim() && !r.total && !r.base && !r.hc);
+      Store.set('predictDraft', empty ? null : { mode: Predict.mode(), basis: Predict.basis(), rows });
+    };
+    now ? run() : (Predict.draftTimer = setTimeout(run, 400));
+  },
+  restoreDraft(d) {
+    if (!d || !Array.isArray(d.rows) || !d.rows.length) return false;
+    const mode = document.querySelector(`input[name=calcMode][value="${d.mode}"]`); if (mode) mode.checked = true;
+    const basis = document.querySelector(`input[name=dateBasis][value="${d.basis}"]`); if (basis) basis.checked = true;
+    $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일';
+    $('predictBody').innerHTML = '';
+    d.rows.forEach(r => {
+      const tr = Predict.addRow(true), q = c => tr.querySelector('.' + c);
+      DF.set(q('g-date'), r.date, true); q('g-unit').value = r.unit || ''; q('g-name').value = r.name || '';
+      q('g-cat').value = r.cat || ''; if (r.catAuto) q('g-cat').dataset.auto = '1';
+      q('g-base').value = r.base || ''; q('g-hc').value = r.hc || ''; if (r.hcManual) { q('g-hc').dataset.manual = '1'; q('g-hc').classList.add('manual'); }
+      q('g-total').value = r.total || ''; q('g-utype').value = r.utype || 'kg'; q('g-spec').value = r.spec || 1;
+      Predict.baseHint(tr);
+    });
+    toast('저장하지 않은 예정량 입력 내용을 불러왔습니다', 4000);
+    return true;
+  },
   applyUnitToPicked() {
     const u = Names.matchUnit($('pickedUnit').value); if (!u) return toast('적용할 부대명을 입력하세요');
     const picked = [...document.querySelectorAll('#predictBody .pick:checked')];
@@ -1286,6 +1330,7 @@ const Predict = {
     picked.forEach(c => c.closest('tr').remove());
     $('predictAll').checked = false;
     if (!$('predictBody').children.length) Predict.addRow(true);
+    Predict.saveDraft();
   },
   paste(e) {
     const t = e.target; const col = COLS_EDIT.find(c => t.classList.contains(c)); if (!col) return;
@@ -1308,6 +1353,7 @@ const Predict = {
       Predict.queue(tr);
       tr = tr.nextElementSibling;
     });
+    Predict.saveDraft();
   },
   async save() {
     const rows = [...document.querySelectorAll('#predictBody tr')].map(Predict.rowData).filter(Boolean);
@@ -1357,6 +1403,7 @@ const Predict = {
   resetForm() {
     $('predictBody').innerHTML = ''; $('predictAll').checked = false;
     Predict.addRow(true);
+    Predict.saveDraft(true);
   },
   async exportExcel() {
     const rows = [...document.querySelectorAll('#predictBody tr')].map(Predict.rowData).filter(Boolean);
