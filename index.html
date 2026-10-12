@@ -2755,7 +2755,7 @@ const Report = {
 /* ---------- 일별 입출고·재고현황 백업 ---------- */
 // 날짜별로 '입출고 및 재고현황'을 이 기기(IndexedDB)에 저장하고, 달력의 색상 점으로 백업이 있는 날을 보여 준다.
 const Snap = {
-  data: {}, month: '', timer: null,
+  data: {}, month: '', timer: null, open: false,   // open: 달력에서 날짜를 눌렀을 때만 표를 보여 준다
   async load() { Snap.data = (await Store.get('reportSnaps')) || {}; },
   persist() { Store.set('reportSnaps', Snap.data); },
   make(day) {
@@ -2794,11 +2794,13 @@ const Snap = {
   },
   date: () => DF.get(document.querySelector('.snap-date')) || D.today(),
   init() {
-    DF.mount($('snapDate'), 'snap-date', D.today()).addEventListener('datechange', () => { Snap.month = Snap.date().slice(0, 7); Snap.render(); });
+    DF.mount($('snapDate'), 'snap-date', D.today()).addEventListener('datechange', () => { Snap.month = Snap.date().slice(0, 7); Snap.open = true; Snap.render(); });
     $('snapName').addEventListener('input', Snap.render);
     $('snapCal').addEventListener('click', e => {
       const m = e.target.closest('[data-m]'); if (m) { Snap.month = D.addMonths(Snap.month + '-01', +m.dataset.m).slice(0, 7); return Snap.render(); }
-      const d = e.target.closest('[data-d]'); if (d) { DF.set(document.querySelector('.snap-date'), d.dataset.d, true); Snap.render(); }
+      const d = e.target.closest('[data-d]'); if (!d) return;
+      Snap.open = !(Snap.open && Snap.date() === d.dataset.d);   // 같은 날짜를 다시 누르면 닫는다
+      DF.set(document.querySelector('.snap-date'), d.dataset.d, true); Snap.render();
     });
     Snap.month = D.today().slice(0, 7);
   },
@@ -2815,11 +2817,12 @@ const Snap = {
         const hasIn = items.some(x => x.inQty), hasOut = items.some(x => x.outQty);
         dots = (hasIn ? '<span class="dot in"></span>' : '') + (hasOut ? '<span class="dot out"></span>' : '') + (!hasIn && !hasOut && items.length ? '<span class="dot stock"></span>' : '');
       }
-      cells += `<button type="button" class="cal-day ${iso === sel ? 'sel' : ''} ${iso === t ? 'today' : ''}" data-d="${iso}"><span class="n">${d}</span><span class="dots">${dots}</span></button>`;
+      cells += `<button type="button" class="cal-day ${Snap.open && iso === sel ? 'sel' : ''} ${iso === t ? 'today' : ''}" data-d="${iso}"><span class="n">${d}</span><span class="dots">${dots}</span></button>`;
     }
     $('snapCal').innerHTML = `<div class="cal-head"><button type="button" class="btn light sm" data-m="-1">◀</button><b>${y}년 ${m}월</b><button type="button" class="btn light sm" data-m="1">▶</button></div>
       <div class="cal-grid">${['일', '월', '화', '수', '목', '금', '토'].map(x => `<div class="cal-dow">${x}</div>`).join('')}${cells}</div>
-      <div class="snap-legend"><span class="dot" style="background:#2563eb"></span>입고 <span class="dot" style="background:#dc2626"></span>출고 <span class="dot" style="background:#9ca3af"></span>재고만 · 점이 없는 날은 백업 없음</div>`;
+      <div class="snap-legend"><span class="dot" style="background:#2563eb"></span>입고 <span class="dot" style="background:#dc2626"></span>출고 <span class="dot" style="background:#9ca3af"></span>재고만 · 점이 없는 날은 백업 없음 · 날짜를 다시 누르면 닫힙니다</div>`;
+    if (!Snap.open) { $('snapView').innerHTML = '<div class="hint">달력의 날짜를 누르면 그날의 입출고 및 재고현황이 나옵니다.</div>'; return; }
     const snap = Snap.data[sel], head = `<h3>${D.short(sel)} 입출고 및 재고현황 <span class="hint">(백업 기준)</span></h3>`;
     if (!snap) { $('snapView').innerHTML = `${head}<div class="empty">이 날짜의 백업이 없습니다.${sel <= t ? ' <button type="button" class="btn light sm" onclick="Snap.makeDay()">현재 시트 기준으로 만들기</button>' : ''}</div>`; return; }
     $('snapView').innerHTML = `${head}<div class="table-wrap" style="max-height:560px"><table id="snapTable"><thead>
