@@ -2140,19 +2140,24 @@ const Ledger = {
     const est = [...byUnit.entries()].map(([u, x]) => { plannedTotal += x.total; return { u, x, r: rateFor(u) }; });
     const fixedOut = p.planOut - plannedTotal;
     const outBy = m => fixedOut + est.reduce((a, e) => a + e.x.total + Math.round(e.x.main * e.r[m]), 0);
-    const recBy = m => Math.max(0, Math.ceil(outBy(m) - p.stock - p.planIn));
-    const MODES = [['low', '적게', '하위 25%'], ['mid', '중앙값 (권장)', '재고 0에 수렴'], ['high', '많게', '상위 25%']];
-    const mode = Ledger.recoMode || 'mid', expectedOut = outBy(mode), need = expectedOut - p.stock - p.planIn, rec = recBy(mode);
+    // 추천 발주량 = 선택한 부대가 출고할 때 필요한 전체 수량 (현재고·입고예정은 빼지 않는다)
+    // 부대가 아직 출고예정에 없으면 그 부대의 가장 최근 확정량을 기준으로 한다. 부대를 고르지 않으면 전체 예상 출고
+    const unitEst = unit ? est.find(e => e.u === unit) : null;
+    const lastConf = unit ? ((Hist.records.filter(r => r.name === pname && r.unit === unit && hasConf(r)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)))[0] || {}).confEa || 0) : 0;
+    const outFor = m => unit ? (unitEst ? unitEst.x.total + Math.round(unitEst.x.main * unitEst.r[m]) : lastConf) : outBy(m);
+    const recBy = m => Math.max(0, Math.ceil(outFor(m)));
+    const MODES = [['low', '적게'], ['mid', '중앙값 (권장)'], ['high', '많게']];
+    const mode = Ledger.recoMode || 'mid', rec = recBy(mode);
+    const shown = unit ? est.filter(e => e.u === unit) : est;
     const unitOut = unit ? p.rows.reduce((a, o) => a + (o.unit === unit && o.outTotal ? plannedOut(o, today) : 0), 0) : 0;
     const pc = v => (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
     // 화면 위에 계속 보이는 요약줄 (입력·수정 중에도 현재 보유고와 해당 부대 발주량을 볼 수 있다)
     $('ldSticky').innerHTML = `<span><b>${esc(p.name)}</b></span><span>현재 보유고 <b>${fmtN(p.stock)}</b></span><span>입고예정 <b>${fmtN(p.planIn)}</b></span><span>출고예정·확정 <b>${fmtN(p.planOut)}</b></span>${unit ? `<span>${esc(unit)} 발주량 <b>${fmtN(unitOut)}</b></span>` : ''}<span>예상재고 <b>${fmtN(p.stock + p.planIn - p.planOut)}</b></span><span>추천 발주량 <b class="${rec ? 'rec-b' : ''}">${fmtN(rec)}</b></span>`;
     const head = `<div class="reco-now">현재 보유고 <b>${fmtN(p.stock)}</b>개 · 입고예정 <b>${fmtN(p.planIn)}</b>개 · 출고예정·확정 합계 <b>${fmtN(p.planOut)}</b>개${unit ? ` · <b>${esc(unit)}</b> 발주량 <b>${fmtN(unitOut)}</b>개` : ''}</div>
-      <div class="rec-modes">${MODES.map(([m, t, sub]) => `<button type="button" class="rec-mode ${m === mode ? 'on' : ''}" onclick="Ledger.setRecoMode('${m}')"><div class="hint">${t} · ${sub}</div><b>${fmtN(recBy(m))}개</b></button>`).join('')}</div>
-      <div class="reco-rec ${rec ? 'need' : ''}"><span>추천 발주량</span> <b>${fmtN(rec)}개</b> <span class="hint">${rec ? `예상 출고 ${fmtN(expectedOut)} − (현재고 ${fmtN(p.stock)} + 입고예정 ${fmtN(p.planIn)}) = 부족 ${fmtN(need)}개` : `재고가 충분합니다 (예상 출고 ${fmtN(expectedOut)}, 여유 ${fmtN(-need)}개)`}</span></div>
-      ${est.length ? `<div class="table-wrap" style="max-height:200px"><table><thead><tr><th>부대</th><th>출고예정</th><th>적용 증감율</th><th>예상 구간</th><th>근거(확정 이력)</th><th>예상 출고</th></tr></thead><tbody>${est.map(e => `<tr><td>${esc(e.u)}</td><td class="num">${fmtN(e.x.total)}</td><td class="num">${e.r.n ? pc(e.r[mode]) : '-'}</td><td class="num">${e.r.n ? `${pc(e.r.low)} ~ ${pc(e.r.high)}` : '-'}</td><td style="text-align:left">${esc(e.r.label)}${e.r.n ? ` · ${e.r.n}건${e.r.out ? ` (이례적 ${e.r.out}건 제외)` : ''}` : ''}</td><td class="num"><b>${fmtN(e.x.total + Math.round(e.x.main * e.r[mode]))}</b></td></tr>`).join('')}${fixedOut ? `<tr><td>확정분</td><td class="num">${fmtN(fixedOut)}</td><td class="num">-</td><td class="num">-</td><td style="text-align:left">이미 확정 (보정 없음)</td><td class="num"><b>${fmtN(fixedOut)}</b></td></tr>` : ''}</tbody></table></div>` : ''}
-      <div class="hint mb8">추천 발주량 = (확정분 + 출고예정 × (1 + 이 부대 과거 증감율)) − (현재고 + 입고예정). 안전재고는 더하지 않았습니다.</div>`;
-    if (!unit) { box.innerHTML = head + '<div class="hint">부대를 선택하면 해당 부대의 과거 납품이력을 보여 줍니다.</div>'; return; }
+      <div class="rec-modes">${MODES.map(([m, t]) => `<button type="button" class="rec-mode ${m === mode ? 'on' : ''}" onclick="Ledger.setRecoMode('${m}')"><div>${t}</div><b>${fmtN(recBy(m))}개</b></button>`).join('')}</div>
+      <div class="reco-rec ${rec ? 'need' : ''}"><span>추천 발주량</span> <b>${fmtN(rec)}개</b></div>
+      ${shown.length ? `<div class="table-wrap" style="max-height:200px"><table><thead><tr><th>부대</th><th>출고예정</th><th>적용 증감율</th><th>예상 구간</th><th>근거(확정 이력)</th><th>예상 출고</th></tr></thead><tbody>${shown.map(e => `<tr><td>${esc(e.u)}</td><td class="num">${fmtN(e.x.total)}</td><td class="num">${e.r.n ? pc(e.r[mode]) : '-'}</td><td class="num">${e.r.n ? `${pc(e.r.low)} ~ ${pc(e.r.high)}` : '-'}</td><td style="text-align:left">${esc(e.r.label)}${e.r.n ? ` · ${e.r.n}건${e.r.out ? ` (이례적 ${e.r.out}건 제외)` : ''}` : ''}</td><td class="num"><b>${fmtN(e.x.total + Math.round(e.x.main * e.r[mode]))}</b></td></tr>`).join('')}${fixedOut && !unit ? `<tr><td>확정분</td><td class="num">${fmtN(fixedOut)}</td><td class="num">-</td><td class="num">-</td><td style="text-align:left">이미 확정 (보정 없음)</td><td class="num"><b>${fmtN(fixedOut)}</b></td></tr>` : ''}</tbody></table></div>` : ''}`;
+    if (!unit) { box.innerHTML = head; return; }
     // 이 부대·이 품목의 과거 납품이력 (없으면 표시하지 않음)
     const hasC = hasConf, rateP = rateOf;
     const same = Hist.records.filter(r => r.name === pname && r.planEa != null && r.unit === unit);
@@ -2160,7 +2165,7 @@ const Ledger = {
     const fmtRate = v => v === null ? '-' : `<span style="color:${v > 0 ? 'var(--warn)' : 'var(--conf)'}">${v > 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
     const done = past.filter(hasC);
     let html = head;
-    if (past.length) html += `<div class="reco-title">${esc(unit)}의 ${esc(pname)} 과거 납품이력 <span class="hint">(확정 ${done.length}건)</span></div>
+    if (past.length) html += `<div class="reco-title">${esc(unit)}의 ${esc(pname)} 과거 납품이력</div>
       <div class="table-wrap" style="max-height:220px"><table><thead><tr><th>납품일</th><th>예정(개)</th><th>확정(개)</th><th>증감율</th></tr></thead><tbody>${past.slice(0, 12).map(r => `<tr><td>${r.delDate ? D.short(r.delDate) : '-'}</td><td class="num">${fmtN(r.planEa)}</td><td class="num">${r.confEa === null || r.confEa === undefined ? '-' : fmtN(r.confEa)}</td><td class="num">${hasC(r) ? fmtRate(rateP(r.planEa, r.confEa)) : '-'}</td></tr>`).join('')}</tbody></table></div>`;
     // 이 품목 이력이 2건 미만이면 같은 구분의 다른 품목 이력이 증감율 근거가 되므로 함께 보여 준다
     if (done.length < 2) {
@@ -2169,7 +2174,7 @@ const Ledger = {
         const x = peers.get(r.name) || { n: 0, plan: 0, conf: 0 }; x.n++; x.plan += r.planEa; x.conf += r.confEa; peers.set(r.name, x);
       });
       const list = [...peers.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 10);
-      if (list.length) html += `<div class="reco-title mt12">${esc(unit)}의 같은 구분(${esc(cat)}) 다른 품목 이력 <span class="hint">(이 품목 이력이 부족해 증감율 근거로 사용)</span></div>
+      if (list.length) html += `<div class="reco-title mt12">${esc(unit)}의 같은 구분(${esc(cat)}) 다른 품목 이력</div>
         <div class="table-wrap" style="max-height:240px"><table><thead><tr><th>품명</th><th>확정 건수</th><th>예정 합계</th><th>확정 합계</th><th>증감율</th></tr></thead><tbody>${list.map(([n, x]) => `<tr><td style="text-align:left">${esc(n)}</td><td class="num">${x.n}</td><td class="num">${fmtN(x.plan)}</td><td class="num">${fmtN(x.conf)}</td><td class="num">${fmtRate(rateP(x.plan, x.conf))}</td></tr>`).join('')}</tbody></table></div>`;
     }
     box.innerHTML = html;
