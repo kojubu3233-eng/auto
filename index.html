@@ -424,6 +424,18 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="row mb12"><label class="lbl muted">일자</label><span id="printDate"></span>
         <button class="btn" onclick="Logi.printJournal()">입출고 일지 엑셀</button></div>
       <div class="muted">해당 일자에 입고 완료·출고 완료로 저장된 내역을 한 장의 입출고 일지(입고 / 출고 구분)로 내려받습니다.</div>
+      <div class="mt12">
+    <div class="row between mb12">
+      <div class="row"><h2>입출고 및 재고현황</h2><span id="reportDate"></span><label class="row muted"><input type="checkbox" id="reportHideZero" checked> 재고·입출고 없는 품목 숨기기</label></div>
+      <button class="btn light" onclick="Report.exportExcel()">엑셀 다운로드</button>
+    </div>
+    <div class="hint mb8">빨간색 글씨는 해당 일자에 입출고 변화가 있는 품목입니다. 부대 사용기한 = 소비기한 − 제품 소비기한(개월) × 2/3 (냉장·상온 1/2)</div>
+    <div class="table-wrap" style="max-height:640px"><table id="reportTable"><thead>
+      <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">부대 사용기한</th><th rowspan="2">전일재고</th><th rowspan="2">총계</th><th colspan="2">금일 입고내역</th><th colspan="2">금일 출고내역</th><th colspan="2">금일 재고현황</th></tr>
+      <tr><th style="top:33px">소비기한</th><th style="top:33px">입고량</th><th style="top:33px">출고량</th><th style="top:33px">출고 부대</th><th style="top:33px">재고</th><th style="top:33px">총계</th></tr>
+    </thead><tbody id="reportBody"></tbody></table></div>
+  
+      </div>
     </div>
 
     <div data-subpane="backup" class="hidden">
@@ -435,17 +447,6 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="table-wrap"><table><thead><tr><th>저장시각</th><th>구분</th><th>품명</th><th>일자</th><th>수량</th><th>부대</th><th>시트 반영</th></tr></thead><tbody id="logBody"></tbody></table></div>
       <div class="row mt8"><button class="btn light sm" onclick="Logi.resendMissing()">시트에 없는 건 다시 반영</button></div>
     </div>
-  </div>
-  <div class="panel">
-    <div class="row between mb12">
-      <div class="row"><h2>입출고 및 재고현황</h2><span id="reportDate"></span><label class="row muted"><input type="checkbox" id="reportHideZero" checked> 재고·입출고 없는 품목 숨기기</label></div>
-      <button class="btn light" onclick="Report.exportExcel()">엑셀 다운로드</button>
-    </div>
-    <div class="hint mb8">빨간색 글씨는 해당 일자에 입출고 변화가 있는 품목입니다. 부대 사용기한 = 소비기한 − 제품 소비기한(개월) × 2/3 (냉장·상온 1/2)</div>
-    <div class="table-wrap" style="max-height:640px"><table id="reportTable"><thead>
-      <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">부대 사용기한</th><th rowspan="2">전일재고</th><th rowspan="2">총계</th><th colspan="2">금일 입고내역</th><th colspan="2">금일 출고내역</th><th colspan="2">금일 재고현황</th></tr>
-      <tr><th style="top:33px">소비기한</th><th style="top:33px">입고량</th><th style="top:33px">출고량</th><th style="top:33px">출고 부대</th><th style="top:33px">재고</th><th style="top:33px">총계</th></tr>
-    </thead><tbody id="reportBody"></tbody></table></div>
   </div>
   <div class="panel">
     <div class="row between mb8"><h2>오늘 저장한 입출고</h2></div>
