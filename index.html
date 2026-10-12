@@ -111,7 +111,9 @@ tr.picked td { background:#FFFBEB !important; }
 .tag.warn { background:var(--warn-soft); color:var(--warn); }
 tr.row-grey td { background:#F1F1EF !important; color:#9A9A94 !important; } tr.row-grey .tag { opacity:.6; }
 .over-btn { border:1px solid var(--danger); background:var(--danger-soft); color:var(--danger); border-radius:6px; padding:2px 8px; font-weight:700; cursor:pointer; font-size:12px; } .over-btn:hover { background:var(--danger); color:#fff; }
-td.warn-cell { color:var(--warn); font-weight:700; } .reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
+td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap;cursor:pointer;margin-left:4px}
+.alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
+.reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
 
 .prod-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
 .prod-box { border:1px solid var(--border); border-radius:8px; padding:10px; cursor:pointer; background:var(--surface); text-align:left; }
@@ -327,7 +329,7 @@ tr.edit-row td { background:#FFFBEB !important; }
   <div class="panel">
     <div class="row between mb12"><h2>재고수불대장</h2>
       <div class="row"><select id="ledgerYear" title="연도 선택"></select><button class="btn light sm" onclick="Carry.open()">연도 이월</button><label class="lbl muted">기간</label><span id="ledgerFrom"></span><span>~</span><span id="ledgerTo"></span>
-        <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월</button><button class="btn light sm" onclick="Ledger.allPeriod()">전체기간</button></div>
+        <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월만</button><button class="btn light sm" onclick="Ledger.allPeriod()">전체기간</button></div>
     </div>
     <div id="ledgerYearBanner" class="banner hidden"></div>
     <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><button class="btn light sm" onclick="Ledger.exportStock()">재고현황 엑셀</button><h2 id="ledgerCrumb"></h2></div>
@@ -345,6 +347,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="row"><button class="btn light sm" onclick="Ledger.exportDetail()">엑셀 다운로드</button><button class="btn light sm" onclick="Ledger.close()">닫기</button></div>
     </div>
     <div class="buckets mb12" id="ldStats"></div>
+    <div class="alert-lines mb12" id="ldAlert"></div>
     <div class="controls" id="ldAddBox">
       <label class="lbl">입고(발주) 추가</label>
       <span id="ldAddDate"></span>
@@ -1703,7 +1706,7 @@ const Ledger = {
   // 화면에 보여 줄 데이터: 현재 연도는 LedgerData, 과거 연도를 고르면 그 연도 파일 데이터
   d() { return Ledger.year && Ledger.archive && Ledger.archive.year === Ledger.year ? Ledger.archive.data : LedgerData; },
   init() {
-    const from = DF.mount($('ledgerFrom'), 'l-from', D.addMonths(D.today(), -3));
+    const from = DF.mount($('ledgerFrom'), 'l-from', '');
     const to = DF.mount($('ledgerTo'), 'l-to', '');
     to.placeholder = '이후 전체';
     [from, to].forEach(i => i.addEventListener('datechange', () => { Ledger.renderList(); if (Ledger.key) Ledger.renderDetail(); }));
@@ -1764,7 +1767,7 @@ const Ledger = {
     if (toCurrent) Ledger.archive = null;
     Ledger.key = null; Ledger.sheet = ''; Ledger.due = null; Ledger.editing = null;
     $('ledgerSearch').value = ''; $('ledgerDetail').classList.add('hidden'); $('ledgerDue').classList.add('hidden');
-    if (toCurrent) Ledger.setPeriod(D.addMonths(D.today(), -3), ''); else Ledger.setPeriod('', '');
+    Ledger.setPeriod('', '');
     Ledger.render();
   },
 
@@ -1839,8 +1842,12 @@ const Ledger = {
     }
     const list = data.products.filter(p => (kw ? true : p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))));
     $('ledgerProducts').innerHTML = list.map(p => {
-      const dl = p.nextDeadline ? D.diff(p.nextDeadline, t) : null;
-      const tag = dl === null ? '' : dl < 0 ? '<span class="tag danger">납품기한 초과</span>' : dl <= days ? `<span class="tag warn">납품기한 ${dl}일</span>` : '';
+      let tag = '';
+      if (p.type === 'standard') {
+        const q = f => p.lots.filter(f).reduce((a, l) => a + l.remain, 0);
+        const over = q(l => l.deadline && D.diff(l.deadline, t) < 0), soon = q(l => l.deadline && D.diff(l.deadline, t) >= 0 && D.diff(l.deadline, t) <= days), lack = p.planOut - p.stock - p.planIn;
+        tag = (lack > 0 ? `<span class="tag danger">부족 ${fmtN(lack)}개</span> ` : '') + (over ? `<span class="tag danger">납품기한 초과 ${fmtN(over)}개</span> ` : '') + (soon ? `<span class="tag warn">납품기한 임박 ${fmtN(soon)}개</span>` : '');
+      }
       const stock = p.type === 'standard' ? `<div class="p-stock">${fmtN(p.stock)}</div><div class="p-sub">${p.planIn ? `입고예정 ${fmtN(p.planIn)} ` : ''}${p.planOut ? `출고예정 ${fmtN(p.planOut)}` : ''}</div>` : `<div class="p-sub mt8">출고 ${p.rows.length}건</div>`;
       return `<button class="prod-box ${Ledger.key === p.key ? 'on' : ''}" data-key="${esc(p.key)}"><div class="p-name">${esc(p.name)}</div><div class="p-sheet">${kw ? esc(p.sheet) + ' · ' : ''}${esc(p.company || '')}</div>${stock}<div>${tag}</div></button>`;
     }).join('') || '<div class="empty" style="grid-column:1/-1">조건에 맞는 품목이 없습니다</div>';
@@ -1856,7 +1863,7 @@ const Ledger = {
     $('ldAddBox').classList.toggle('hidden', p.type !== 'standard');
     $('ldReco').classList.toggle('hidden', p.type !== 'standard');
     if (p.type !== 'standard') {
-      $('ldStats').innerHTML = '';
+      $('ldStats').innerHTML = ''; $('ldAlert').innerHTML = '';
       $('ldHead').innerHTML = '<tr><th>납품일</th><th>수량</th><th>샘플</th><th>부대</th></tr>';
       const rows = p.rows.filter(o => (!from || o.outDate >= from) && (!to || o.outDate <= to));
       $('ldBody').innerHTML = rows.map(o => `<tr><td>${D.short(o.outDate)}</td><td class="num">${fmtN(o.qty)}</td><td class="num">${fmtN(o.sample)}</td><td>${esc(o.unit)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">기간 내 내역 없음</td></tr>';
@@ -1867,7 +1874,13 @@ const Ledger = {
     const soonQ = sumOf(l => l.deadline && D.diff(l.deadline, today) >= 0 && D.diff(l.deadline, today) <= days), overQ = sumOf(l => l.deadline && D.diff(l.deadline, today) < 0);
     const box = (label, val, sub, cls = '') => `<div class="stat-box ${cls}"><div class="b-label">${label}</div><div class="b-val">${val}</div><div class="b-sub">${sub}</div></div>`;
     $('ldStats').innerHTML = box('현재고', fmtN(p.stock), '오늘 기준 (예정 제외)') + box('입고예정', fmtN(p.planIn), '예정·결정 합계') + box('출고예정', fmtN(p.planOut), '예정·확정(납품 전) 합계') +
-      box('예상재고', fmtN(p.stock + p.planIn - p.planOut), '입출고 예정 모두 반영 시') + box('납품기한 임박', fmtN(soonQ) + '<span class="hint"> 개</span>', `${days}일 이내`, soonQ ? 'warn' : '') + box('납품기한 초과', fmtN(overQ) + '<span class="hint"> 개</span>', '숫자를 눌러 출고 처리', overQ ? 'danger' : '');
+      box('예상재고', fmtN(p.stock + p.planIn - p.planOut), p.stock + p.planIn - p.planOut < 0 ? '부족 ' + fmtN(p.planOut - p.stock - p.planIn) + '개 (발주 필요)' : '입출고 예정 모두 반영 시', p.stock + p.planIn - p.planOut < 0 ? 'danger' : '') + box('납품기한 임박', fmtN(soonQ) + '<span class="hint"> 개</span>', `${days}일 이내`, soonQ ? 'warn' : '') + box('납품기한 초과', fmtN(overQ) + '<span class="hint"> 개</span>', '숫자를 눌러 출고 처리', overQ ? 'danger' : '');
+    const lack = p.planOut - p.stock - p.planIn, alerts = [];
+    if (lack > 0) alerts.push(`<span class="tag danger">부족 ${fmtN(lack)}개</span> 출고예정·확정 ${fmtN(p.planOut)}개 − (현재고 ${fmtN(p.stock)}개 + 입고예정 ${fmtN(p.planIn)}개) → <b>${fmtN(lack)}개 발주(입고) 필요</b>`);
+    else if (p.planOut) alerts.push(`<span class="tag done">여유 ${fmtN(-lack)}개</span> 출고예정·확정을 모두 내보내고도 ${fmtN(-lack)}개 남습니다`);
+    if (overQ) alerts.push(`<span class="tag danger">초과 ${fmtN(overQ)}개</span> 납품기한이 지난 재고입니다. 표의 '초과' 칸 숫자를 누르면 출고 처리합니다`);
+    if (soonQ) alerts.push(`<span class="tag warn">임박 ${fmtN(soonQ)}개</span> ${days}일 이내에 납품기한이 닿는 재고입니다`);
+    $('ldAlert').innerHTML = alerts.map(a => `<div>${a}</div>`).join('');
     $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="2">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th colspan="2">납품기한 주의</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">납품일</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th><th style="top:33px">임박</th><th style="top:33px">초과</th></tr>';
     const shown = [];
     const dateOf = o => o.inDate || o.outDate || '';
@@ -1883,7 +1896,7 @@ const Ledger = {
       if (o.unit === EXPIRED_UNIT) return '<span class="tag danger">초과처리</span> <button type="button" class="btn sm light" data-undo="1">되돌리기</button>';
       const s = o.status || (o.inQty ? '입고완료' : '');
       const tag = s === '이월' ? 'carry' : s.endsWith('예정') ? 'plan' : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
-      const decide = o.status === '입고예정' ? ' <button type="button" class="btn sm ok" data-decide="1">입고결정</button>' : '';
+      const decide = (o.status === '입고예정' || o.status === '입고결정') ? ` <label class="dec-cb" title="체크하면 입고결정, 해제하면 입고예정"><input type="checkbox" data-dec="1"${o.status === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
       return s ? `<span class="tag ${tag}">${s.replace(/^(입고|출고)/, '')}</span>${decide}` : '<span class="hint">기존</span>';
     };
     const rowHtml = (item, i) => {
@@ -1916,7 +1929,7 @@ const Ledger = {
   editRow(item, i) {
     const o = item.o, inEd = o.isIn || !o.isOut, outEd = o.isOut;
     const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
-    const decide = o.status === '입고예정' ? '<button type="button" class="btn sm ok" data-decide="1">입고결정</button>' : o.status === '입고결정' ? '<button type="button" class="btn sm light" data-undecide="1">결정 취소</button>' : '';
+    const decide = (o.status === '입고예정' || o.status === '입고결정') ? `<label class="dec-cb"><input type="checkbox" data-dec="1"${o.status === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
       <td>${inEd ? `${DF.html('e-inDate', o.inDate || '')}<div class="hint">소비기한</div>${DF.html('e-expiry', o.expiry || '', 'future')}` : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` : ''}</td>
       <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
@@ -1927,8 +1940,7 @@ const Ledger = {
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
     const item = Ledger.shown[+tr.dataset.i]; if (!item) return;
     const ds = e.target.dataset || {};
-    if (ds.decide) { e.stopPropagation(); return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: '입고결정', fields: {} }], '입고 결정으로 변경했습니다'); }
-    if (ds.undecide) { e.stopPropagation(); return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: '입고예정', fields: {} }], '입고 결정을 취소했습니다'); }
+    if (ds.dec) { e.stopPropagation(); const on = e.target.checked; return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: on ? '입고결정' : '입고예정', fields: {} }], on ? '입고 결정으로 변경했습니다' : '입고 결정을 취소했습니다'); }
     if (ds.over) { e.stopPropagation(); return Ledger.expireLot(item.o); }
     if (ds.undo) { e.stopPropagation(); return Ledger.undoExpire(item.o); }
     if (tr.dataset.edit) {
