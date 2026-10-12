@@ -58,12 +58,12 @@ td { padding:4px; border:1px solid var(--border); background:var(--surface); ver
 .grid input, .grid select { width:100%; border:none; border-radius:0; background:transparent; }
 .num { text-align:right; font-variant-numeric:tabular-nums; }
 .c-plan { color:var(--plan); } .c-conf { color:var(--conf); } .c-done { color:var(--ink); }
-.res-min { color:var(--muted); font-weight:700; font-size:14px; } .res-rec { color:var(--accent); font-weight:700; font-size:15px; background:var(--accent-soft) !important; } .res-max { color:var(--warn); font-weight:700; font-size:14px; }
+
 .res-simple { color:var(--ink); background:var(--surface-alt) !important; line-height:1.3; }
 .res-simple .s-ea { font-size:15px; font-weight:700; } .res-simple .s-kg { font-size:13px; color:var(--muted); font-weight:600; }
 .res-simple .u { font-size:11px; font-weight:500; color:var(--muted-2); margin-left:2px; }
-#predictTable { table-layout:auto; min-width:1250px; }
-#predictTable td.res-simple, #predictTable td.res-min, #predictTable td.res-rec, #predictTable td.res-max { padding:4px 10px; }
+#predictTable { table-layout:auto; min-width:1000px; }
+#predictTable td.res-simple { padding:4px 10px; }
 .sel-col { width:28px; }
 tr.picked td { background:#FFFBEB !important; }
 
@@ -87,7 +87,7 @@ tr.picked td { background:#FFFBEB !important; }
 .dfield input[type=date].dnative.open { opacity:1; pointer-events:auto; width:150px; z-index:40; background:var(--surface); }
 
 .ac-wrap { position:relative; }
-.ac-list { position:absolute; z-index:50; top:100%; left:0; right:0; min-width:160px; background:var(--surface); border:1px solid var(--border); max-height:200px; overflow-y:auto; display:none; box-shadow:0 4px 10px rgba(29,27,24,.08); }
+.ac-list { position:fixed; z-index:1000; min-width:160px; background:var(--surface); border:1px solid var(--border); max-height:200px; overflow-y:auto; display:none; box-shadow:0 4px 10px rgba(29,27,24,.08); }
 .ac-list div { padding:6px 8px; font-size:12px; text-align:left; cursor:pointer; }
 .ac-list div:hover, .ac-list div.on { background:var(--accent-soft); }
 
@@ -134,6 +134,12 @@ tr.edit-row td { background:#FFFBEB !important; }
 .ms-panel { position:absolute; z-index:60; top:100%; left:0; margin-top:2px; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 10px rgba(29,27,24,.1); max-height:260px; overflow:auto; min-width:160px; padding:4px 0; }
 .ms-panel label { display:flex; gap:6px; align-items:center; padding:5px 10px; font-size:12px; cursor:pointer; white-space:nowrap; }
 
+#busy { position:fixed; inset:0; z-index:500; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; cursor:progress; }
+#busy .busy-box { background:var(--ink); color:#fff; padding:14px 22px; border-radius:10px; font-weight:700; display:flex; align-items:center; gap:12px; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+#busy .spin { width:18px; height:18px; border:3px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:busyspin .8s linear infinite; }
+@keyframes busyspin { to { transform:rotate(360deg); } }
+.stat-box { border:1px solid var(--border); border-radius:8px; padding:10px; background:var(--surface); }
+.stat-box .b-label { font-size:12px; color:var(--muted); font-weight:600; } .stat-box .b-val { font-size:20px; font-weight:700; margin-top:2px; } .stat-box .b-sub { font-size:12px; color:var(--muted-2); }
 .overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:200; display:flex; align-items:center; justify-content:center; padding:16px; }
 .modal { background:var(--surface); border-radius:12px; max-width:760px; width:100%; max-height:88vh; overflow:auto; padding:20px; }
 .toast { position:fixed; right:16px; bottom:16px; background:var(--ink); color:#fff; padding:10px 14px; border-radius:8px; font-size:13px; z-index:300; max-width:420px; white-space:pre-line; }
@@ -266,7 +272,7 @@ tr.edit-row td { background:#FFFBEB !important; }
           <th class="sel-col"><input type="checkbox" id="predictAll"></th>
           <th id="dateHead" style="width:150px">납품일</th><th style="width:130px">부대</th><th style="min-width:170px">품명</th><th style="width:100px">구분</th>
           <th class="person-only hidden" style="width:80px">기준량</th><th class="person-only hidden" style="width:85px">급식인원</th><th class="total-only" style="width:95px">총소요량</th><th style="width:70px">단위</th><th style="width:75px">포장규격</th>
-          <th style="width:110px">단순산술값</th><th style="width:85px">최소</th><th style="width:90px">권장</th><th style="width:85px">최대</th><th style="width:90px">저장기준</th><th style="width:95px">발주량(직접)</th>
+          <th style="width:110px">예정량(산술값)</th>
         </tr></thead>
         <tbody id="predictBody"></tbody>
       </table>
@@ -296,8 +302,9 @@ tr.edit-row td { background:#FFFBEB !important; }
   <div class="panel">
     <div class="row between mb12">
       <h2>확정량 입력</h2>
-      <div class="row"><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
+      <div class="row"><button class="btn light" onclick="Confirm.openAdd()">+ 행 추가 (급발주 등)</button><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
     </div>
+    <div class="buckets mb12" id="confirmStats"></div>
     <div class="controls">
       <input type="month" id="confirmMonth">
       <div class="ms-wrap" data-ms="del"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
@@ -311,7 +318,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <thead><tr>
           <th data-sort="delDate">납품일</th><th data-sort="unit">부대</th><th data-sort="name">품명</th><th data-sort="cat">구분</th><th>단위</th>
           <th>단순산술값</th><th>예정(개)</th><th>예정(kg)</th><th>확정(개)</th><th>확정(kg)</th>
-          <th>단가</th><th>예정매출</th><th>확정매출</th><th data-sort="rate">오차율</th><th data-sort="mealDate">급식일</th>
+          <th>단가</th><th>예정매출</th><th>확정매출</th><th data-sort="rate">오차율</th><th data-sort="mealDate">급식일</th><th>관리</th>
         </tr></thead>
         <tbody id="confirmBody"></tbody>
       </table>
@@ -427,6 +434,7 @@ tr.edit-row td { background:#FFFBEB !important; }
 </section>
 
 <div id="modalRoot"></div>
+<div id="busy" class="hidden"><div class="busy-box"><span class="spin"></span><span id="busyText">저장 중입니다</span></div></div>
 <div id="toast" class="toast hidden"></div>
 <script>
 'use strict';
@@ -440,6 +448,17 @@ function toast(msg, ms = 3200) {
   const el = $('toast'); el.textContent = msg; el.classList.remove('hidden');
   clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.add('hidden'), ms);
 }
+
+// 저장 중 표시: 화면 전체를 잠가 두 번 눌림·탭 이동을 막는다
+const Busy = {
+  depth: 0,
+  start(label) { if (!Busy.depth) { $('busyText').textContent = label || '저장 중입니다'; $('busy').classList.remove('hidden'); } Busy.depth++; },
+  end() { Busy.depth = Math.max(0, Busy.depth - 1); if (!Busy.depth) $('busy').classList.add('hidden'); },
+  wrap(obj, name, label) {
+    const f = obj[name];
+    obj[name] = async function (...a) { Busy.start(label); try { return await f.apply(obj, a); } finally { Busy.end(); } };
+  }
+};
 
 const scriptCache = {};
 function loadScript(src) {
@@ -734,6 +753,7 @@ const UNIT_ALIAS = { '7사단 8여단': '7사단/8여단', '7사단 5여단': '7
 const normUnit = s => { const t = String(s || '').trim().replace(/\s+/g, ' '); return UNIT_ALIAS[t] || t; };
 
 /* ---------- 자동완성 ---------- */
+document.addEventListener('scroll', e => { if (!(e.target.closest && e.target.closest('.ac-list'))) document.querySelectorAll('.ac-list').forEach(l => { l.style.display = 'none'; }); }, true);
 const AC = {
   bind(input, source, onPick) {
     const list = input.parentElement.querySelector('.ac-list');
@@ -743,6 +763,11 @@ const AC = {
       if (!items.length || document.activeElement !== input) { list.style.display = 'none'; return; }
       list.innerHTML = items.map((x, i) => `<div data-i="${i}">${esc(x.label)}</div>`).join('');
       list._items = items; list.style.display = 'block';
+      // 표나 입력 영역에 가려지지 않도록 화면 기준 위치로 띄운다 (아래 공간이 모자라면 위로)
+      const r = input.getBoundingClientRect(), h = Math.min(200, items.length * 28 + 4);
+      list.style.left = r.left + 'px'; list.style.minWidth = Math.max(160, r.width) + 'px'; list.style.right = 'auto';
+      if (r.bottom + h > window.innerHeight && r.top > h) { list.style.top = 'auto'; list.style.bottom = (window.innerHeight - r.top) + 'px'; }
+      else { list.style.bottom = 'auto'; list.style.top = r.bottom + 'px'; }
     };
     input.addEventListener('input', show);
     input.addEventListener('focus', show);
@@ -777,7 +802,7 @@ document.addEventListener('click', () => document.querySelectorAll('.ms-panel').
 
 /* ---------- 예정량·확정량 데이터 ---------- */
 const Hist = {
-  records: [], byId: new Map(), idxName: new Map(), idxCat: new Map(), excluded: new Set(),
+  records: [], byId: new Map(), excluded: new Set(),
   parseSheet(values, src) {
     const out = [];
     if (!values || !values.length) return out;
@@ -846,14 +871,6 @@ const Hist = {
   },
   reindex() {
     Hist.byId = new Map(Hist.records.map(r => [r.id, r]));
-    Hist.idxName = new Map(); Hist.idxCat = new Map();
-    for (const r of Hist.records) {
-      r.dayDel = Holidays.kind(r.delDate); r.dayMeal = Holidays.kind(r.mealDate);
-      if (r.rate === null || Hist.excluded.has(r.id)) continue;
-      const k1 = r.unit + '|' + r.name, k2 = r.unit + '|' + r.cat;
-      (Hist.idxName.get(k1) || Hist.idxName.set(k1, []).get(k1)).push(r);
-      (Hist.idxCat.get(k2) || Hist.idxCat.set(k2, []).get(k2)).push(r);
-    }
   },
   units() { return [...new Set(Hist.records.map(r => r.unit).filter(Boolean))].sort(); },
   names() { return [...new Set(Hist.records.map(r => r.name).filter(Boolean))]; }
@@ -990,6 +1007,10 @@ const App = {
     if (!Array.isArray(boot.products) || !Array.isArray(boot.history)) throw new Error('자동화시스템 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
     return boot;
   },
+  async reloadBoot() {
+    try { App.applyBoot(await App.fetchBoot(new Date().getFullYear(), true)); } catch (e) { toast('자동화시스템 새로고침 실패: ' + e.message); }
+    App.refreshViews();
+  },
   async reloadLedger() {
     try { const l = await Api.get('ledger', { action: 'ledger', force: '1' }); if (Array.isArray(l.sheets)) App.applyLedger(l); } catch (e) { toast('재고수불대장 새로고침 실패: ' + e.message); }
     App.refreshViews();
@@ -1125,14 +1146,13 @@ const Home = {
 };
 
 /* ---------- 예정량 입력 ---------- */
-const REC_Z = 1.28, MAX_Z = 2.33;
 const COLS_EDIT = ['g-date', 'g-unit', 'g-name', 'g-cat', 'g-base', 'g-hc', 'g-total', 'g-utype', 'g-spec'];
 const Predict = {
   mode: () => document.querySelector('input[name=calcMode]:checked').value,
   basis: () => document.querySelector('input[name=dateBasis]:checked').value,
   init() {
     const body = $('predictBody');
-    for (let i = 0; i < 8; i++) Predict.addRow(true);
+    Predict.addRow(true);
     body.addEventListener('input', e => {
       const tr = e.target.closest('tr'); if (!tr || e.target.classList.contains('pick')) return;
       if (e.target.classList.contains('g-hc')) { const m = e.target.value.trim() !== ''; e.target.dataset.manual = m ? '1' : ''; e.target.classList.toggle('manual', m); }
@@ -1171,9 +1191,7 @@ const Predict = {
       <td class="total-only ${person ? 'hidden' : ''}"><input type="number" class="g-total num"></td>
       <td><select class="g-utype"><option value="kg">kg</option><option value="ea">ea</option></select></td>
       <td><input type="number" class="g-spec num" value="1" step="any"></td>
-      <td class="res-simple num o-simple">-</td><td class="res-min num o-min">-</td><td class="res-rec num o-rec">-</td><td class="res-max num o-max">-</td>
-      <td><select class="g-basis"><option value="simple">산술값</option><option value="min">최소</option><option value="rec" selected>권장</option><option value="max">최대</option></select></td>
-      <td><input type="number" class="g-order num" placeholder="직접"></td>`;
+      <td class="res-simple num o-simple">-</td>`;
     body.appendChild(tr);
     AC.bind(tr.querySelector('.g-unit'), AC.units, () => Predict.onUnit(tr));
     tr.querySelector('.g-unit').addEventListener('change', () => Predict.onUnit(tr));
@@ -1229,7 +1247,7 @@ const Predict = {
     const unit = normUnit(q('g-unit').value), name = q('g-name').value.trim();
     const utype = q('g-utype').value, spec = num(q('g-spec').value) || 1;
     let req, needHc = false, hcNote = '';
-    const set = (cls, v, title = '') => { const el = q(cls); el.textContent = v === null ? '-' : fmtN(v, cls === 'o-simple' ? 1 : 0); el.title = title; };
+    const set = (cls, v) => { const el = q(cls); el.textContent = v === null ? '-' : fmtN(v, 1); el.title = ''; };
     if (Predict.mode() === 'person') {
       const hcIn = q('g-hc');
       const meal = Predict.basis() === 'meal' ? date : (Names.counterpart(unit, date, 'delivery') || date);
@@ -1249,46 +1267,25 @@ const Predict = {
     delete tr.dataset.ready;
     q('g-total').title = hcNote;
     q('g-hc').classList.toggle('invalid', needHc);
-    if (needHc) { ['o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); q('o-simple').textContent = '인원 입력'; q('o-simple').title = q('g-hc').title; return; }
-    if (!name || req <= 0) { ['o-simple', 'o-min', 'o-rec', 'o-max'].forEach(c => set(c, null)); return; }
+    if (needHc) { q('o-simple').textContent = '인원 입력'; q('o-simple').title = q('g-hc').title; return; }
+    if (!name || req <= 0) { set('o-simple', null); return; }
     const div = utype === 'ea' ? 1 : spec;
     const simple = Math.round(req / div);
     const pack = Names.product(name)?.pack;
     const simpleKg = utype === 'kg' ? Math.round(req) : (pack ? Math.round(req * pack) : null);
-    let pool = unit ? (Hist.idxName.get(unit + '|' + name) || []) : Hist.records.filter(r => r.name === name && r.rate !== null && !Hist.excluded.has(r.id));
-    let fallback = false;
-    const cat = q('g-cat').value.trim();
-    if (!pool.length && unit && cat) { pool = Hist.idxCat.get(unit + '|' + cat) || []; fallback = pool.length > 0; }
-    if (date && pool.length) {
-      const k = Holidays.kind(date), field = Predict.basis() === 'delivery' ? 'dayDel' : 'dayMeal';
-      const same = pool.filter(r => r[field] === k); if (same.length) pool = same;
-    }
-    const rates = pool.map(r => r.rate);
-    const n = rates.length, mean = n ? rates.reduce((a, b) => a + b, 0) / n : 0;
-    const std = n ? Math.sqrt(rates.reduce((a, b) => a + (b - mean) ** 2, 0) / n) : 0;
-    const maxRate = n ? Math.max(0, ...rates) : 0;
-    const z = base => n ? base * Math.sqrt(1 + 1 / n) : base;
-    const minP = mean, recP = Math.max(minP, mean + z(REC_Z) * std), maxP = Math.max(recP, mean + z(MAX_Z) * std, maxRate);
-    const v = p => Math.round(req * (1 + p / 100) / div);
-    const note = fallback ? ` · '${cat}' 구분 이력으로 대체` : '';
-    tr.dataset.simple = simple; tr.dataset.simpleKg = simpleKg ?? ''; tr.dataset.min = v(minP); tr.dataset.rec = v(recP); tr.dataset.max = v(maxP); tr.dataset.ready = '1';
+    tr.dataset.simple = simple; tr.dataset.simpleKg = simpleKg ?? ''; tr.dataset.ready = '1';
     const os = q('o-simple');
     os.innerHTML = `<div class="s-ea">${fmtN(simple)}<span class="u">ea</span></div><div class="s-kg">${simpleKg === null ? '-' : fmtN(simpleKg) + '<span class="u">kg</span>'}</div>`;
     os.title = `${utype === 'kg' ? `총소요량 ${fmtN(req, 2)}kg ÷ 포장규격 ${spec}kg` : `총소요량 ${fmtN(req)}ea`} (반올림)` + (hcNote ? ' · ' + hcNote : '');
-    set('o-min', v(minP), `과거 평균 오차 ${mean.toFixed(1)}% (이력 ${n}건)${note}`);
-    set('o-rec', v(recP), `평균 + 안전마진 (이력 ${n}건)${note}`);
-    set('o-max', v(maxP), `평균 + 넉넉한 안전마진, 과거 최대 편차 ${Math.round(maxRate)}% 반영${note}`);
-    if (maxRate >= 200) q('o-max').textContent += ' !';
   },
   rowData(tr) {
     const q = c => tr.querySelector('.' + c);
     const name = q('g-name').value.trim(); if (!name || tr.dataset.ready !== '1') return null;
-    const basis = q('g-basis').value, override = num(q('g-order').value);
-    const qty = override !== null ? override : num(tr.dataset[basis]);
+    const qty = num(tr.dataset.simple);
     return {
       tr, date: DF.get(q('g-date')), unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
       total: num(q('g-total').value), base: Predict.mode() === 'person' ? num(q('g-base').value) : null, hc: Predict.mode() === 'person' ? num(tr.dataset.hc) : null, utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
-      simple: num(tr.dataset.simple), simpleKg: num(tr.dataset.simpleKg), min: num(tr.dataset.min), rec: num(tr.dataset.rec), max: num(tr.dataset.max), qty
+      simple: num(tr.dataset.simple), simpleKg: num(tr.dataset.simpleKg), qty
     };
   },
   applyUnitToPicked() {
@@ -1338,10 +1335,12 @@ const Predict = {
       const del = basis === 'delivery' ? r.date : other, meal = basis === 'meal' ? r.date : other;
       const p = Names.product(r.name);
       const kg = r.utype === 'kg' ? Math.round(r.qty * r.spec * 100) / 100 : (p && p.pack ? Math.round(r.qty * p.pack * 100) / 100 : r.qty);
-      return { r, id: `WEB${stamp}${D.pad(i + 1)}`, del, meal, kg };
+      // 행마다 저장용 ID를 한 번만 만들어 둔다 → 실패 후 다시 저장해도 중복되지 않는다
+      const id = r.tr.dataset.sid || (r.tr.dataset.sid = `WEB${stamp}${D.pad(i + 1)}`);
+      return { r, id, del, meal, kg };
     });
     const missing = recs.filter(x => !x.del);
-    let msg = `DB_Master에 ${recs.length}건을 저장합니다.`;
+    let msg = `예정량 ${recs.length}건을 저장합니다.`;
     if (missing.length) msg += `\n\n부대별정보에 납품요일이 없어 납품일을 비워 저장하는 건: ${missing.length}건`;
     const alsoLedger = $('alsoLedger').checked;
     const ledgerOps = [], noLedger = [];
@@ -1349,33 +1348,39 @@ const Predict = {
       const cands = LedgerData.forProduct(x.r.name);
       if (!cands.length) { noLedger.push(x.r.name); return; }
       const lp = cands.sort((a, b) => b.rows.length - a.rows.length)[0];
-      ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: x.id, status: '출고예정', fields: { outDate: x.del || x.r.date, outMain: x.r.qty, outSample: Predict.sample(lp, x.r.name), unit: x.r.unit } });
+      ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: x.id, status: '출고예정', sorted: true, fields: { outDate: x.del || x.r.date, outMain: x.r.qty, outSample: Predict.sample(lp, x.r.name), unit: x.r.unit } });
     });
     if (alsoLedger) msg += `\n재고수불대장 출고 예정 ${ledgerOps.length}건${noLedger.length ? `\n(재고수불대장에서 찾지 못한 품목 제외: ${[...new Set(noLedger)].join(', ')})` : ''}`;
     if (!confirm(msg + '\n\n계속할까요?')) return;
+    Busy.start('예정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      await Api.post('hist', { action: 'append', sheet: 'DB_Master', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', x.r.utype, x.r.simple] })) });
-      recs.forEach(x => { const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
+      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', x.r.utype, x.r.simple] })), ledgerOps });
+      recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
-      let lmsg = '';
-      if (ledgerOps.length) {
-        const res = await Api.post('ledger', { action: 'ledgerSave', ops: ledgerOps });
-        const fail = res.results.filter(r => !r.ok);
-        lmsg = `\n재고수불대장 ${ledgerOps.length - fail.length}건 등록${fail.length ? `, 실패 ${fail.length}건: ${fail.map(f => f.reason).join(' / ')}` : ''}`;
-        App.reloadLedger();
-      }
       App.rendered.confirm = false;
-      toast(`DB_Master에 ${recs.length}건 저장${lmsg}`, 5000);
-    } catch (e) { toast('저장 실패: ' + e.message, 6000); }
+      await App.reloadLedger();
+      if (res.ledger.failed) {
+        toast(`예정량 ${recs.length}건 저장. 재고수불대장 ${res.ledger.failed}건 실패: ${res.ledger.reasons.slice(0, 3).join(' / ')}\n입력 내용은 그대로 두었습니다. 같은 내용으로 다시 저장하면 실패한 건만 반영됩니다`, 9000);
+      } else {
+        Predict.resetForm();
+        toast(`예정량 ${recs.length}건 저장 완료${alsoLedger ? ` (재고수불대장 ${ledgerOps.length}건 반영)` : ''}${res.skipped ? `, 이미 저장된 ${res.skipped}건은 건너뜀` : ''}`, 5000);
+      }
+    } catch (e) { toast('저장 실패: ' + e.message + '\n입력 내용은 그대로 두었습니다. 다시 저장해도 중복되지 않습니다', 8000); }
+    finally { Busy.end(); }
+  },
+  // 저장이 끝나면 입력 칸을 모두 비우고 빈 행 1줄만 남긴다 (행은 [+ 행 추가]를 눌러야 늘어남)
+  resetForm() {
+    $('predictBody').innerHTML = ''; $('predictAll').checked = false;
+    Predict.addRow(true);
   },
   async exportExcel() {
     const rows = [...document.querySelectorAll('#predictBody tr')].map(Predict.rowData).filter(Boolean);
     if (!rows.length) return toast('내보낼 행이 없습니다');
     const basis = Predict.basis();
     await simpleSheet(`예정량_${D.today()}.xlsx`, '예정량',
-      [basis === 'delivery' ? '납품일' : '급식일', '부대', '품명', '구분', '기준량', '급식인원', '총소요량', '단위', '포장규격', '단순산술값(ea)', '단순산술값(kg)', '최소', '권장', '최대', '저장값'],
-      rows.map(r => [r.date, r.unit, r.name, r.cat, r.base, r.hc, r.total, r.utype, r.spec, r.simple, r.simpleKg, r.min, r.rec, r.max, r.qty]),
-      [12, 14, 22, 10, 9, 9, 10, 6, 9, 13, 13, 8, 8, 8, 8]);
+      [basis === 'delivery' ? '납품일' : '급식일', '부대', '품명', '구분', '기준량', '급식인원', '총소요량', '단위', '포장규격', '예정량(ea)', '예정량(kg)'],
+      rows.map(r => [r.date, r.unit, r.name, r.cat, r.base, r.hc, r.total, r.utype, r.spec, r.simple, r.simpleKg]),
+      [12, 14, 22, 10, 9, 9, 10, 6, 9, 13, 13]);
   },
   async renderChart(recs) {
     const byCat = {};
@@ -1420,6 +1425,10 @@ const Confirm = {
       Confirm.sort = { key: k, dir: Confirm.sort.key === k ? -Confirm.sort.dir : 1 }; Confirm.renderRows();
     });
     $('confirmBody').addEventListener('input', Confirm.onInput);
+    $('confirmBody').addEventListener('click', e => {
+      const b = e.target.closest('[data-act]'); if (!b) return;
+      if (b.dataset.act === 'edit') Confirm.openEdit(b.dataset.id); else if (b.dataset.act === 'del') Confirm.remove(b.dataset.id);
+    });
   },
   monthRecs() { const m = $('confirmMonth').value; return Hist.records.filter(r => !m || String(r.delDate).startsWith(m)); },
   render() {
@@ -1449,10 +1458,14 @@ const Confirm = {
         <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan">${fmtN(r.planEa)}</td><td class="num c-plan">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
         <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td>
-        <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '-')}</td></tr>`;
-    }).join('') || '<tr><td colspan="15" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
-    const sum = list.reduce((a, r) => { const pr = Confirm.price(r) || 0; a.plan += pr * (r.planEa || 0); a.conf += pr * (r.confEa || 0); return a; }, { plan: 0, conf: 0 });
-    $('confirmSummary').textContent = `${list.length.toLocaleString()}건${list.length > 400 ? ' (화면에는 400건까지 표시, 필터로 좁혀 보세요)' : ''} · 예정매출 ${fmtN(sum.plan)}원 · 확정매출 ${fmtN(sum.conf)}원 · 미저장 ${Confirm.dirty.size}건`;
+        <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '-')}</td>
+        <td style="white-space:nowrap"><button class="btn sm light" data-act="edit" data-id="${esc(r.id)}">수정</button> <button class="btn sm danger" data-act="del" data-id="${esc(r.id)}">삭제</button></td></tr>`;
+    }).join('') || '<tr><td colspan="16" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
+    const sum = list.reduce((a, r) => { const pr = Confirm.price(r) || 0; a.planQty += r.planEa || 0; a.confQty += r.confEa || 0; a.plan += pr * (r.planEa || 0); a.conf += pr * (r.confEa || 0); return a; }, { planQty: 0, confQty: 0, plan: 0, conf: 0 });
+    const box = (label, val, sub) => `<div class="stat-box"><div class="b-label">${label}</div><div class="b-val">${val}</div><div class="b-sub">${sub}</div></div>`;
+    $('confirmStats').innerHTML = box('예정 수량', fmtN(sum.planQty) + '<span class="hint"> 개</span>', '조건에 맞는 ' + list.length.toLocaleString() + '건') + box('예정 금액', fmtN(sum.plan) + '<span class="hint"> 원</span>', '단가 × 예정 수량') +
+      box('확정 수량', fmtN(sum.confQty) + '<span class="hint"> 개</span>', '확정량이 입력된 건 합계') + box('확정 금액', fmtN(sum.conf) + '<span class="hint"> 원</span>', '단가 × 확정 수량');
+    $('confirmSummary').textContent = `${list.length.toLocaleString()}건${list.length > 400 ? ' (화면에는 400건까지 표시, 필터로 좁혀 보세요)' : ''} · 미저장 ${Confirm.dirty.size}건`;
   },
   onInput(e) {
     const t = e.target; const id = t.dataset.id; if (!id) return;
@@ -1474,8 +1487,12 @@ const Confirm = {
     if (!Confirm.dirty.size) return toast('변경된 확정량이 없습니다');
     const ups = [...Confirm.dirty.entries()].map(([id, d]) => { const r = Hist.byId.get(id); return { r, d, u: { id: /^(hist|plan):/.test(id) ? '' : id, delDate: r.delDate, mealDate: r.mealDate, unit: r.unit, name: r.name, confQty: d.confEa ?? '', confQtyKg: d.confKg ?? '' } }; });
     if (!confirm(`확정량 ${ups.length}건을 저장합니다. 계속할까요?`)) return;
+    // 재고수불대장에 이미 있는 출고 예정·확정 행은 확정 수량(청색)으로 함께 바꾼다
+    const ledgerOps = ups.filter(x => LedgerData.byId.has(x.r.id) && ['출고예정', '출고확정'].includes(LedgerData.byId.get(x.r.id).status) && x.d.confEa !== null && x.d.confEa !== undefined)
+      .map(x => ({ op: 'update', id: x.r.id, status: '출고확정', fields: { outMain: x.d.confEa } }));
+    Busy.start('확정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('hist', { action: 'updateConfirmed', updates: ups.map(x => x.u) });
+      const res = await Api.post('ledger', { action: 'confirmSave', updates: ups.map(x => x.u), ledgerOps });
       const miss = [];
       res.results.forEach((x, i) => {
         const { r, d } = ups[i];
@@ -1484,16 +1501,109 @@ const Confirm = {
         Hist.derive(r); Confirm.dirty.delete(r.id);
       });
       Hist.reindex();
-      const ops = ups.filter(x => !miss.includes(x.r.name + '(' + x.r.unit + ')') && LedgerData.byId.has(x.r.id) && ['출고예정', '출고확정'].includes(LedgerData.byId.get(x.r.id).status) && x.d.confEa !== null && x.d.confEa !== undefined)
-        .map(x => ({ op: 'update', id: x.r.id, status: '출고확정', fields: { outMain: x.d.confEa } }));
-      let lmsg = '';
-      if (ops.length) {
-        try { const lr = await Api.post('ledger', { action: 'ledgerSave', ops }); lmsg = `\n재고수불대장 확정 반영 ${lr.results.filter(r => r.ok).length}건`; App.reloadLedger(); }
-        catch (e) { lmsg = '\n재고수불대장 반영 실패: ' + e.message; }
-      }
+      if (ledgerOps.length) await App.reloadLedger();
       Confirm.renderRows();
+      const lmsg = ledgerOps.length ? `\n재고수불대장 확정 반영 ${ledgerOps.length - res.ledger.failed}건${res.ledger.failed ? `, 실패 ${res.ledger.failed}건: ${res.ledger.reasons.slice(0, 2).join(' / ')}` : ''}` : '';
       toast(`확정량 ${ups.length - miss.length}건 저장${miss.length ? `\n시트에서 행을 찾지 못함 ${miss.length}건: ${miss.join(', ')}` : ''}${lmsg}`, 6000);
     } catch (e) { toast('저장 실패: ' + e.message, 6000); }
+    finally { Busy.end(); }
+  },
+
+  /* --- 수정·삭제·행 추가 (자동화시스템 시트와 재고수불대장에 함께 반영) --- */
+  ledgerRow: id => LedgerData.byId.get(id) || null,
+  async reloadAll() { await Promise.all([App.reloadBoot(), App.reloadLedger()]); },
+  modal(title, bodyHtml, onSave) {
+    $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:520px">
+      <div class="row between mb12"><h2>${title}</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
+      <div id="cfForm" style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">${bodyHtml}</div>
+      <div class="row mt12" style="justify-content:flex-end"><button class="btn light" onclick="Confirm.closeModal()">취소</button><button class="btn ok" id="cfSave">저장</button></div></div></div>`;
+    $('cfSave').onclick = onSave;
+  },
+  closeModal() { $('modalRoot').innerHTML = ''; },
+
+  openEdit(id) {
+    const r = Hist.byId.get(id); if (!r) return;
+    Confirm.modal(`수정 · ${esc(r.name)}`, `
+      <label>납품일</label><span id="cfDel"></span>
+      <label>품명</label><span class="ac-wrap"><input type="text" id="cfName" value="${esc(r.name)}" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
+      <label>예정량(개)</label><input type="number" id="cfQty" value="${r.planEa ?? ''}" style="width:140px">
+      <div class="hint" style="grid-column:1/-1">부대 ${esc(r.unit)} · 예정(kg)은 포장단위로 자동 계산됩니다. 재고수불대장의 출고 행도 함께 수정됩니다.</div>`, () => Confirm.saveEdit(id));
+    DF.mount($('cfDel'), 'cf-del', r.delDate || '');
+    AC.bind($('cfName'), AC.products);
+  },
+  async saveEdit(id) {
+    const r = Hist.byId.get(id); if (!r) return;
+    const del = DF.get(document.querySelector('.cf-del')), name = $('cfName').value.trim(), qty = num($('cfQty').value);
+    if (!del || !name || !(qty > 0)) return toast('납품일·품명·예정량을 모두 입력하세요');
+    const pack = (Names.product(name) || {}).pack || Confirm.pack(r);
+    const kg = pack ? Math.round(qty * pack * 100) / 100 : r.planKg;
+    const lr = Confirm.ledgerRow(id), ledgerOps = [];
+    if (lr) {
+      const nameChanged = name !== r.name, dateChanged = del !== r.delDate;
+      if (nameChanged || dateChanged) {   // 날짜·품명이 바뀌면 품목 안 날짜 순서에 맞게 다시 넣는다
+        const lp = nameChanged ? LedgerData.forProduct(name).sort((a, b) => b.rows.length - a.rows.length)[0] : LedgerData.byKey.get(lr.sheet + '|' + lr.name);
+        if (!lp) return toast(`재고수불대장에서 '${name}' 품목을 찾지 못했습니다. 품명을 확인하세요`);
+        const keepQty = ['출고확정', '출고완료'].includes(lr.status) && lr.outMain ? lr.outMain : qty;
+        ledgerOps.push({ op: 'delete', id, sheet: lr.sheet, name: lr.name });
+        ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id, status: lr.status || '출고예정', sorted: true, fields: { outDate: del, outMain: keepQty, outSample: lr.outSample || 0, unit: lr.unit || r.unit, expiry: lr.expiry || '' } });
+      } else if (!['출고확정', '출고완료'].includes(lr.status)) {
+        ledgerOps.push({ op: 'update', id, sheet: lr.sheet, name: lr.name, fields: { outMain: qty } });
+      }
+    }
+    Busy.start('수정 저장 중입니다 (구글시트 2곳 동시 반영)');
+    try {
+      const res = await Api.post('ledger', { action: 'planEdit', ref: { id: r.id, src: r.src, row: r.row, name: r.name }, fields: { delDate: del, name, planEa: qty, planKg: kg }, ledgerOps });
+      Confirm.closeModal();
+      await Confirm.reloadAll();
+      toast(res.ledger.failed ? `수정 저장. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '수정했습니다 (재고수불대장 반영 완료)', 5000);
+    } catch (e) { toast('수정 실패: ' + e.message, 6000); }
+    finally { Busy.end(); }
+  },
+
+  async remove(id) {
+    const r = Hist.byId.get(id); if (!r) return;
+    const lr = Confirm.ledgerRow(id);
+    if (!confirm(`${r.delDate ? D.short(r.delDate) : ''} ${r.unit} · ${r.name} 행을 삭제합니다.\n확정량 입력(자동화시스템 시트)${lr ? '과 재고수불대장' : ''}에서 모두 지워지며 되돌릴 수 없습니다. 계속할까요?`)) return;
+    Busy.start('삭제 중입니다 (구글시트 2곳 동시 반영)');
+    try {
+      const res = await Api.post('ledger', { action: 'planDelete', refs: [{ id: r.id, src: r.src, row: r.row, name: r.name }], ledgerOps: lr ? [{ op: 'delete', id, sheet: lr.sheet, name: lr.name }] : [] });
+      Confirm.dirty.delete(id);
+      await Confirm.reloadAll();
+      toast(res.deleted ? `삭제했습니다${res.ledger.failed ? ` (재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')})` : ''}` : '시트에서 행을 찾지 못했습니다. 새로고침 후 다시 시도하세요', 5000);
+    } catch (e) { toast('삭제 실패: ' + e.message, 6000); }
+    finally { Busy.end(); }
+  },
+
+  openAdd() {
+    Confirm.modal('행 추가 (급발주 등)', `
+      <label>납품일</label><span id="cfDel"></span>
+      <label>부대</label><span class="ac-wrap"><input type="text" id="cfUnit" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
+      <label>품명</label><span class="ac-wrap"><input type="text" id="cfName" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
+      <label>구분</label><input type="text" id="cfCat" placeholder="자동">
+      <label>확정량(개)</label><input type="number" id="cfQty" style="width:140px">
+      <div class="hint" style="grid-column:1/-1">추가하면 확정량 입력과 재고수불대장(출고확정, 납품일 순서)에 함께 들어가 재고가 바로 갱신됩니다.</div>`, Confirm.saveAdd);
+    DF.mount($('cfDel'), 'cf-del', '');
+    AC.bind($('cfUnit'), AC.units);
+    AC.bind($('cfName'), AC.products, () => { const p = Names.product($('cfName').value.trim()); if (p && !$('cfCat').value) $('cfCat').value = p.category || ''; });
+  },
+  async saveAdd() {
+    const del = DF.get(document.querySelector('.cf-del')), unit = Names.matchUnit($('cfUnit').value), name = $('cfName').value.trim(), qty = num($('cfQty').value);
+    let cat = $('cfCat').value.trim();
+    if (!del || !unit || !name || !(qty > 0)) return toast('납품일·부대·품명·확정량을 모두 입력하세요');
+    const p = Names.product(name); if (!cat) cat = (p && p.category) || '';
+    const kg = p && p.pack ? Math.round(qty * p.pack * 100) / 100 : qty;
+    const id = `WEB${Date.now()}${Math.floor(Math.random() * 90 + 10)}`;
+    const lp = LedgerData.forProduct(name).sort((a, b) => b.rows.length - a.rows.length)[0];
+    const ledgerOps = lp ? [{ op: 'insert', sheet: lp.sheet, name: lp.name, id, status: '출고확정', sorted: true, fields: { outDate: del, outMain: qty, outSample: Predict.sample(lp, name), unit } }] : [];
+    if (!lp && !confirm(`재고수불대장에서 '${name}' 품목을 찾지 못했습니다.\n확정량 입력에만 추가할까요?`)) return;
+    Busy.start('행 추가 중입니다 (구글시트 2곳 동시 반영)');
+    try {
+      const res = await Api.post('ledger', { action: 'planSave', rows: [{ values: [id, del, cat, name, '', '', '', '', '', unit, '', '', '', App.prefs.unitType[name] || 'kg', ''], confEa: qty, confKg: kg }], ledgerOps });
+      Confirm.closeModal();
+      await Confirm.reloadAll();
+      toast(res.ledger.failed ? `행 추가. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '추가했습니다 (재고수불대장 출고확정 반영 완료)', 5000);
+    } catch (e) { toast('추가 실패: ' + e.message, 6000); }
+    finally { Busy.end(); }
   },
   async exportExcel() {
     const list = Confirm.filtered(); if (!list.length) return toast('내보낼 데이터가 없습니다');
@@ -1841,7 +1951,7 @@ const Carry = {
     const send = Carry.items.filter((it, i) => picked.has(i) && (it.state === 'new' || (it.state === 'diff' && resync)));
     if (!send.length) return toast('이월할 건이 없습니다. 수량이 달라진 건을 반영하려면 갱신 옵션을 체크하세요');
     if (!confirm(`${send.length}건을 ${App.currentYear}년 파일로 이월합니다. 계속할까요?`)) return;
-    const btn = $('carrySave'); btn.disabled = true;
+    const btn = $('carrySave'); btn.disabled = true; Busy.start('이월 저장 중입니다');
     let ok = 0, skip = 0; const fail = [];
     try {
       for (let k = 0; k < send.length; k += 25) {
@@ -1851,7 +1961,7 @@ const Carry = {
       }
     } catch (e) { fail.push(e.message); }
     btn.textContent = '이월 저장';
-    await App.reloadLedger();
+    await App.reloadLedger(); Busy.end();
     const msg = `이월 ${ok}건 완료${skip ? `, 건너뜀 ${skip}건` : ''}${fail.length ? `\n실패 ${fail.length}건: ${fail.slice(0, 3).join(' / ')}` : ''}`;
     if (fail.length) { toast(msg, 9000); Carry.load(Carry.from); } else { Carry.close(); toast(msg, 6000); }
   }
@@ -2073,12 +2183,14 @@ const Logi = {
     const miss = Logi.log.filter(x => Logi.inYear(x) && !(x.id && LedgerData.byId.has(x.id)));
     if (!miss.length) return toast('시트에 없는 기록이 없습니다');
     if (!confirm(`시트에서 찾을 수 없는 ${miss.length}건을 새 행으로 다시 반영합니다. 계속할까요?`)) return;
+    Busy.start('다시 반영 중입니다');
     try {
       const res = await Api.post('ledger', { action: 'ledgerSave', ops: miss.map(x => ({ op: 'insert', sheet: x.sheet, name: x.name, company: x.company, id: x.id || undefined, status: x.status, fields: x.fields })) });
       res.results.forEach((r, i) => { if (r.ok) { miss[i].id = r.id; miss[i].ok = true; } });
       Store.set('logiLog', Logi.log); await App.reloadLedger(); Logi.renderLog();
       toast(`${res.results.filter(r => r.ok).length}건 반영`);
     } catch (e) { toast('반영 실패: ' + e.message); }
+    finally { Busy.end(); }
   },
   // 입고·출고를 한 장(시트 1개)에 모은 입출고일지
   async printJournal() {
@@ -2294,6 +2406,10 @@ const RowEdit = {
   close() { $('modalRoot').innerHTML = ''; }
 };
 
+Busy.wrap(Ledger, 'saveOps', '재고수불대장 저장 중입니다');
+Busy.wrap(Ledger, 'saveDueDays', '저장 중입니다');
+Busy.wrap(Logi, 'submit', '입출고 저장 중입니다');
+Busy.wrap(Logi, 'completePlans', '입출고 저장 중입니다');
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
