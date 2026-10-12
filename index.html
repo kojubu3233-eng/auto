@@ -126,6 +126,19 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .rec-mode b{font-size:18px}
 .rec-mode.on{border-color:#2f6f4f;background:#f1f8f3;box-shadow:inset 0 0 0 1px #2f6f4f}
 .plan-extra td{background:#fbfaf7}
+.snap-cal{max-width:420px}
+.snap-cal .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.snap-cal .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.snap-cal .cal-dow{text-align:center;font-size:12px;color:var(--muted);padding:2px 0}
+.snap-cal .cal-day{border:1px solid var(--border);border-radius:6px;background:var(--surface);min-height:44px;padding:3px 4px;cursor:pointer;font:inherit;text-align:left;display:flex;flex-direction:column;justify-content:space-between}
+.snap-cal .cal-day.off{border:none;background:none;cursor:default}
+.snap-cal .cal-day.sel{border-color:#2f6f4f;background:#f1f8f3;box-shadow:inset 0 0 0 1px #2f6f4f}
+.snap-cal .cal-day.today .n{font-weight:700;color:#2f6f4f}
+.snap-cal .dots{display:flex;gap:3px;min-height:8px}
+.snap-cal .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.snap-cal .dot.in{background:#2563eb}.snap-cal .dot.out{background:#dc2626}.snap-cal .dot.stock{background:#9ca3af}
+.snap-legend{font-size:12px;color:var(--muted);margin-top:6px}
+.snap-legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin:0 3px 0 8px;vertical-align:middle}
 .alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
 .reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
 
@@ -439,13 +452,21 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
 
     <div data-subpane="backup" class="hidden">
-      <div class="row mb12">
-        <button class="btn" onclick="Logi.backup()">입출고 기록 백업 파일 받기</button>
+      <div class="controls mb8">
+        <label class="lbl">일자</label><span id="snapDate"></span>
+        <label class="lbl">품목</label><input type="text" id="snapName" placeholder="전체 품목" style="width:160px">
+        <button class="btn light sm" onclick="Snap.saveToday()">오늘 현황 백업</button>
+        <button class="btn light sm" onclick="Snap.fill()" title="입고·출고가 있었던 날짜의 현황을 현재 시트 기준으로 만들어 저장합니다">데이터 있는 날짜 모두 만들기</button>
+        <button class="btn" onclick="Logi.backup()">백업 파일 받기</button>
         <label class="btn light">백업 파일 불러오기<input type="file" accept=".json" class="hidden" onchange="Logi.restore(event)"></label>
       </div>
-      <div class="muted mb8">이 기기에서 저장한 입고·출고 기록입니다. 복원 후 시트에 없는 건은 다시 반영할 수 있습니다.</div>
-      <div class="table-wrap"><table><thead><tr><th>저장시각</th><th>구분</th><th>품명</th><th>일자</th><th>수량</th><th>부대</th><th>시트 반영</th></tr></thead><tbody id="logBody"></tbody></table></div>
-      <div class="row mt8"><button class="btn light sm" onclick="Logi.resendMissing()">시트에 없는 건 다시 반영</button></div>
+      <div class="hint mb8">입출고 및 재고현황을 날짜별로 이 기기에 자동 저장합니다(오늘 날짜는 열 때마다 최신으로 갱신). 아래 달력에서 점이 있는 날짜가 백업이 있는 날입니다.</div>
+      <div id="snapCal" class="snap-cal mb12"></div>
+      <div id="snapView"></div>
+      <details class="mt12"><summary class="muted" style="cursor:pointer">입출고 저장 기록 (시트에 없는 건 다시 반영)</summary>
+        <div class="table-wrap mt8"><table><thead><tr><th>저장시각</th><th>구분</th><th>품명</th><th>일자</th><th>수량</th><th>부대</th><th>시트 반영</th></tr></thead><tbody id="logBody"></tbody></table></div>
+        <div class="row mt8"><button class="btn light sm" onclick="Logi.resendMissing()">시트에 없는 건 다시 반영</button></div>
+      </details>
     </div>
   </div>
   <div class="panel">
@@ -2245,7 +2266,7 @@ const Logi = {
       const b = e.target.closest('[data-sub]'); if (!b) return;
       document.querySelectorAll('#logiTabs .tab-btn').forEach(x => x.classList.toggle('active', x === b));
       document.querySelectorAll('[data-subpane]').forEach(p => p.classList.toggle('hidden', p.dataset.subpane !== b.dataset.sub));
-      if (b.dataset.sub === 'backup') Logi.renderLog();
+      if (b.dataset.sub === 'backup') { Logi.renderLog(); Snap.render(); }
     });
     DF.mount($('printDate'), 'print-date', D.today());
     ['out'].forEach(k => {
@@ -2286,8 +2307,9 @@ const Logi = {
       if (act === 'delline') tr.remove();
     });
     Logi.log = (await Store.get('logiLog')) || [];
+    await Snap.load(); Snap.init();
   },
-  render() { Report.render(); Logi.renderToday(); Logi.renderInPlans(); Logi.renderPlans('out'); document.querySelectorAll('#outBody tr').forEach(Logi.refreshRow); },
+  render() { Report.render(); Snap.auto(); Logi.renderToday(); Logi.renderInPlans(); Logi.renderPlans('out'); document.querySelectorAll('#outBody tr').forEach(Logi.refreshRow); },
   // 샘플 입력: '없음/있음' 선택 + 나간 개수. 없음이면 개수는 0으로 저장된다.
   sampleHtml: (cls, n) => `<span class="row" style="flex-wrap:nowrap;gap:4px"><select class="s-yn"><option value="0">없음</option><option value="1" ${n > 0 ? 'selected' : ''}>있음</option></select><input type="number" class="${cls} num" min="0" value="${n || 0}" style="width:50px" ${n > 0 ? '' : 'disabled'} title="나간 샘플 개수"></span>`,
   onSampleToggle(sel) {
@@ -2525,17 +2547,19 @@ const Logi = {
     $('logBody').innerHTML = Logi.log.slice().reverse().slice(0, 300).map(x => `<tr><td>${x.ts.slice(0, 16).replace('T', ' ')}</td><td>${x.kind === 'in' ? '입고' : '출고'}</td><td style="text-align:left">${esc(x.name)}</td><td>${D.short(x.date)}</td><td class="num">${fmtN(x.qty)}</td><td>${esc(x.unit || '')}</td><td>${x.id && LedgerData.byId.has(x.id) ? '있음' : Logi.inYear(x) ? '<span class="tag warn">없음</span>' : '<span class="hint">이전 연도</span>'}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">저장된 기록이 없습니다</td></tr>';
   },
   backup() {
-    const blob = new Blob([JSON.stringify({ app: '자동화시스템', version: 2, savedAt: new Date().toISOString(), log: Logi.log }, null, 1)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: '자동화시스템', version: 3, savedAt: new Date().toISOString(), log: Logi.log, reportSnaps: Snap.data }, null, 1)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `입출고기록_${D.today()}.json`; a.click();
   },
   async restore(e) {
     const f = e.target.files[0]; if (!f) return;
     try {
-      const data = JSON.parse(await f.text()); if (!Array.isArray(data.log)) throw new Error('입출고 기록 파일이 아닙니다');
+      const data = JSON.parse(await f.text()); if (!Array.isArray(data.log) && !data.reportSnaps) throw new Error('입출고 기록 파일이 아닙니다');
+      if (!Array.isArray(data.log)) data.log = [];
+      let snapAdd = 0; Object.entries(data.reportSnaps || {}).forEach(([d, v]) => { if (!Snap.data[d]) { Snap.data[d] = v; snapAdd++; } }); if (snapAdd) { Snap.persist(); Snap.render(); }
       const keys = new Set(Logi.log.map(x => x.ts + x.name + x.qty));
       const add = data.log.filter(x => !keys.has(x.ts + x.name + x.qty));
       Logi.log.push(...add); Logi.log.sort((a, b) => a.ts.localeCompare(b.ts)); Store.set('logiLog', Logi.log);
-      Logi.renderLog(); toast(`${add.length}건을 불러왔습니다`);
+      Logi.renderLog(); toast(`입출고 기록 ${add.length}건, 일별 현황 ${snapAdd}일을 불러왔습니다`);
     } catch (err) { toast('복원 실패: ' + err.message); }
     e.target.value = '';
   },
@@ -2639,14 +2663,14 @@ const Report = {
     }
     return res;
   },
-  build() {
-    const day = Report.date(), prevDay = D.add(day, -1), out = [];
+  build(day = Report.date(), hideZero = $('reportHideZero').checked) {
+    const prevDay = D.add(day, -1), out = [];
     LedgerData.standard().forEach(p => {
       const end = Report.stockAt(p, day), prev = Report.stockAt(p, prevDay);
       const ins = p.rows.filter(o => o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.status) && o.inDate === day);
       const outs = p.rows.filter(o => o.outTotal && ACTUAL_OUT.has(o.status) && o.outDate === day);
       const inQty = ins.reduce((a, o) => a + o.inQty, 0), outQty = outs.reduce((a, o) => a + o.outTotal, 0);
-      if ($('reportHideZero').checked && !end && !prev && !inQty && !outQty) return;
+      if (hideZero && !end && !prev && !inQty && !outQty) return;
       const lp = Report.lotsAt(p, prevDay, prev), le = Report.lotsAt(p, day, end);
       const keys = [...new Set([...lp.keys(), ...le.keys(), ...ins])].sort((a, b) => String(a.expiry || a.inDate || '').localeCompare(String(b.expiry || b.inDate || '')));
       const lots = keys.map(o => {
@@ -2660,18 +2684,17 @@ const Report = {
     });
     return { day, items: out };
   },
-  render() {
-    Report.init();
-    const { items } = Report.build();
-    Report.items = items;
+  // 표 본문: 현재 데이터(수정 가능)와 날짜별 백업(보기 전용) 모두에 쓴다
+  tableHtml(items, editable) {
     let html = '', lastSheet = null;
-    const sheetCount = {}; items.forEach(it => { sheetCount[it.p.sheet] = (sheetCount[it.p.sheet] || 0) + it.lots.length; });
+    const shOf = it => it.p ? it.p.sheet : it.sheet, sheetCount = {};
+    items.forEach(it => { sheetCount[shOf(it)] = (sheetCount[shOf(it)] || 0) + it.lots.length; });
     items.forEach((it, k) => {
-      const n = it.lots.length, sh = it.p.sheet;
+      const n = it.lots.length, sh = shOf(it), nm = it.p ? it.p.name : it.name, shelf = it.p ? (it.p.product?.shelfMonths || '-') : (it.shelf || '-');
       it.lots.forEach((l, i) => {
-        html += `<tr class="${it.changed ? 'chg' : ''} editable" data-k="${k}" title="누르면 이 품목의 입출고를 수정할 수 있습니다">`;
+        html += `<tr class="${it.changed ? 'chg' : ''}${editable ? ' editable' : ''}"${editable ? ` data-k="${k}" title="누르면 이 품목의 입출고를 수정할 수 있습니다"` : ''}>`;
         if (sh !== lastSheet) { html += `<td class="grp" rowspan="${sheetCount[sh]}">${esc(sh)}</td>`; lastSheet = sh; }
-        if (i === 0) html += `<td rowspan="${n}" class="pname" style="text-align:left;font-weight:600">${esc(it.p.name)}</td><td rowspan="${n}">${it.p.product?.shelfMonths || '-'}</td>`;
+        if (i === 0) html += `<td rowspan="${n}" class="pname" style="text-align:left;font-weight:600">${esc(nm)}</td><td rowspan="${n}">${shelf}</td>`;
         html += `<td>${l.expiry || '-'}</td><td>${l.deadline || '-'}</td><td class="num">${fmtN(l.prev)}</td>`;
         if (i === 0) html += `<td rowspan="${n}" class="num"><b>${fmtN(it.prev)}</b></td>`;
         html += `<td>${l.in ? (l.expiry || '-') : ''}</td><td class="num">${l.in ? fmtN(l.in) : ''}</td><td class="num">${l.out ? fmtN(l.out) : ''}</td>`;
@@ -2681,7 +2704,13 @@ const Report = {
         html += '</tr>';
       });
     });
-    $('reportBody').innerHTML = html || '<tr><td colspan="13" class="empty">표시할 품목이 없습니다</td></tr>';
+    return html || '<tr><td colspan="13" class="empty">표시할 품목이 없습니다</td></tr>';
+  },
+  render() {
+    Report.init();
+    const { items } = Report.build();
+    Report.items = items;
+    $('reportBody').innerHTML = Report.tableHtml(items, true);
   },
   async exportExcel() {
     const { day, items } = Report.build(); if (!items.length) return toast('내보낼 내용이 없습니다');
@@ -2721,6 +2750,84 @@ const Report = {
     ws.views = [{ state: 'frozen', ySplit: 4 }];
     await downloadWorkbook(wb, `입출고및재고현황_${day}.xlsx`);
   }
+};
+
+/* ---------- 일별 입출고·재고현황 백업 ---------- */
+// 날짜별로 '입출고 및 재고현황'을 이 기기(IndexedDB)에 저장하고, 달력의 색상 점으로 백업이 있는 날을 보여 준다.
+const Snap = {
+  data: {}, month: '', timer: null,
+  async load() { Snap.data = (await Store.get('reportSnaps')) || {}; },
+  persist() { Store.set('reportSnaps', Snap.data); },
+  make(day) {
+    return Report.build(day, true).items.map(it => ({
+      sheet: it.p.sheet, name: it.p.name, shelf: it.p.product?.shelfMonths || '', prev: it.prev, end: it.end, inQty: it.inQty, outQty: it.outQty, units: it.units, changed: it.changed,
+      lots: it.lots.map(l => ({ expiry: l.expiry || '', deadline: l.deadline || '', prev: l.prev, in: l.in, out: l.out, end: l.end }))
+    }));
+  },
+  // 앱을 열거나 데이터가 바뀔 때 오늘 현황을 조용히 갱신 (바뀐 경우에만 저장)
+  auto() {
+    clearTimeout(Snap.timer);
+    Snap.timer = setTimeout(() => {
+      if (!LedgerData.standard().length) return;
+      const t = D.today(), snap = Snap.make(t);
+      if (JSON.stringify(snap) !== JSON.stringify(Snap.data[t])) { Snap.data[t] = snap; Snap.persist(); }
+      const pane = document.querySelector('[data-subpane="backup"]');
+      if (pane && !pane.classList.contains('hidden')) Snap.render();
+    }, 800);
+  },
+  saveToday() { const t = D.today(); Snap.data[t] = Snap.make(t); Snap.persist(); Snap.render(); toast(`${D.short(t)} 현황을 백업했습니다`); },
+  async fill() {
+    const days = new Set([D.today()]), t = D.today();
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {
+      if (o.inQty && ACTUAL_IN.has(o.status) && o.status !== '이월' && o.inDate && o.inDate <= t) days.add(o.inDate);
+      if (o.outTotal && ACTUAL_OUT.has(o.status) && o.outDate && o.outDate <= t) days.add(o.outDate);
+    }));
+    const todo = [...days].filter(d => !Snap.data[d]).sort();
+    if (!todo.length) return toast('이미 모든 날짜가 백업되어 있습니다');
+    if (!confirm(`입고·출고가 있었던 ${todo.length}일의 현황을 현재 시트 기준으로 만들어 저장합니다.\n(과거 날짜는 현재 시트 내용으로 다시 계산한 값입니다) 계속할까요?`)) return;
+    Busy.start('일별 현황 생성 중입니다');
+    try {
+      for (let i = 0; i < todo.length; i++) { Snap.data[todo[i]] = Snap.make(todo[i]); if (i % 5 === 4) await new Promise(r => setTimeout(r, 0)); }
+      Snap.persist();
+    } finally { Busy.end(); }
+    Snap.render(); toast(`${todo.length}일 현황을 저장했습니다`);
+  },
+  date: () => DF.get(document.querySelector('.snap-date')) || D.today(),
+  init() {
+    DF.mount($('snapDate'), 'snap-date', D.today()).addEventListener('datechange', () => { Snap.month = Snap.date().slice(0, 7); Snap.render(); });
+    $('snapName').addEventListener('input', Snap.render);
+    $('snapCal').addEventListener('click', e => {
+      const m = e.target.closest('[data-m]'); if (m) { Snap.month = D.addMonths(Snap.month + '-01', +m.dataset.m).slice(0, 7); return Snap.render(); }
+      const d = e.target.closest('[data-d]'); if (d) { DF.set(document.querySelector('.snap-date'), d.dataset.d, true); Snap.render(); }
+    });
+    Snap.month = D.today().slice(0, 7);
+  },
+  // 품목 필터(부분 일치)
+  pick(items) { const nm = Names.norm($('snapName').value); return nm ? items.filter(it => Names.norm(it.name).includes(nm)) : items; },
+  render() {
+    if (!$('snapCal')) return;
+    const sel = Snap.date(), t = D.today(), [y, m] = Snap.month.split('-').map(Number), first = new Date(y, m - 1, 1).getDay(), last = new Date(y, m, 0).getDate();
+    let cells = ''; for (let i = 0; i < first; i++) cells += '<div class="cal-day off"></div>';
+    for (let d = 1; d <= last; d++) {
+      const iso = `${Snap.month}-${String(d).padStart(2, '0')}`, items = Snap.data[iso] ? Snap.pick(Snap.data[iso]) : null;
+      let dots = '';
+      if (items) {
+        const hasIn = items.some(x => x.inQty), hasOut = items.some(x => x.outQty);
+        dots = (hasIn ? '<span class="dot in"></span>' : '') + (hasOut ? '<span class="dot out"></span>' : '') + (!hasIn && !hasOut && items.length ? '<span class="dot stock"></span>' : '');
+      }
+      cells += `<button type="button" class="cal-day ${iso === sel ? 'sel' : ''} ${iso === t ? 'today' : ''}" data-d="${iso}"><span class="n">${d}</span><span class="dots">${dots}</span></button>`;
+    }
+    $('snapCal').innerHTML = `<div class="cal-head"><button type="button" class="btn light sm" data-m="-1">◀</button><b>${y}년 ${m}월</b><button type="button" class="btn light sm" data-m="1">▶</button></div>
+      <div class="cal-grid">${['일', '월', '화', '수', '목', '금', '토'].map(x => `<div class="cal-dow">${x}</div>`).join('')}${cells}</div>
+      <div class="snap-legend"><span class="dot" style="background:#2563eb"></span>입고 <span class="dot" style="background:#dc2626"></span>출고 <span class="dot" style="background:#9ca3af"></span>재고만 · 점이 없는 날은 백업 없음</div>`;
+    const snap = Snap.data[sel], head = `<h3>${D.short(sel)} 입출고 및 재고현황 <span class="hint">(백업 기준)</span></h3>`;
+    if (!snap) { $('snapView').innerHTML = `${head}<div class="empty">이 날짜의 백업이 없습니다.${sel <= t ? ' <button type="button" class="btn light sm" onclick="Snap.makeDay()">현재 시트 기준으로 만들기</button>' : ''}</div>`; return; }
+    $('snapView').innerHTML = `${head}<div class="table-wrap" style="max-height:560px"><table id="snapTable"><thead>
+      <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">부대 사용기한</th><th rowspan="2">전일재고</th><th rowspan="2">총계</th><th colspan="2">금일 입고내역</th><th colspan="2">금일 출고내역</th><th colspan="2">금일 재고현황</th></tr>
+      <tr><th style="top:33px">소비기한</th><th style="top:33px">입고량</th><th style="top:33px">출고량</th><th style="top:33px">출고 부대</th><th style="top:33px">재고</th><th style="top:33px">총계</th></tr>
+      </thead><tbody>${Report.tableHtml(Snap.pick(snap), false)}</tbody></table></div>`;
+  },
+  makeDay() { const d = Snap.date(); Snap.data[d] = Snap.make(d); Snap.persist(); Snap.render(); toast(`${D.short(d)} 현황을 만들었습니다`); }
 };
 
 /* ---------- 재고수불대장 행 수정 창 (재고현황·오늘 입출고에서 사용) ---------- */
