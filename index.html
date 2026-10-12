@@ -125,6 +125,7 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .rec-mode{flex:1;min-width:150px;text-align:left;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:8px 10px;cursor:pointer;font:inherit}
 .rec-mode b{font-size:18px}
 .rec-mode.on{border-color:#2f6f4f;background:#f1f8f3;box-shadow:inset 0 0 0 1px #2f6f4f}
+.plan-extra td{background:#fbfaf7}
 .alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
 .reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
 
@@ -392,16 +393,18 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
 
     <div data-subpane="in">
-      <div class="row mb8"><h3>입고 예정</h3><span id="inPlanDate"></span><span class="hint">재고수불대장의 입고 예정·결정 건. 실제 입고 수량·소비기한을 확인하고 체크 후 '입고 완료'</span></div>
+      <div class="row mb8"><h3>입고 예정</h3><span class="hint">재고수불대장에서 '입고결정'한 건이 오늘부터 자동으로 나타납니다. 실제 입고 수량·소비기한을 입력하고 체크한 뒤 '입고 완료'를 누르세요</span></div>
+      <div class="controls mb8">
+        <label class="lbl">품목</label><input type="text" id="inFilterName" placeholder="품명 검색" style="width:160px">
+        <label class="lbl">입고일</label><span id="inFrom"></span><span>~</span><span id="inTo"></span>
+        <button class="btn light sm" onclick="Logi.resetInFilter()">필터 초기화</button>
+        <label class="row muted"><input type="checkbox" id="inShowPast"> 입고일이 지난 미완료 건도 표시</label>
+      </div>
+      <div id="inPastNote" class="mb8"></div>
       <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
-        <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>예정 수량</th><th>입고 수량</th><th>소비기한</th><th>납품기한</th>
+        <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>예정 수량</th><th>입고 수량</th><th>소비기한</th><th>납품기한</th><th></th>
       </tr></thead><tbody id="inPlanBody"></tbody></table></div>
-      <div class="row mt8" style="justify-content:flex-end"><button class="btn ok" onclick="Logi.completePlans('in')">체크한 건 입고 완료</button></div>
-      <div class="row mt12 mb8"><h3>예정에 없던 입고</h3></div>
-      <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
-        <th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>수량</th><th></th>
-      </tr></thead><tbody id="inBody"></tbody></table></div>
-      <div class="row mt8"><button class="btn light" onclick="Logi.addRow('in')">+ 행 추가</button><span style="flex:1"></span><button class="btn ok" onclick="Logi.submit('in')">입고 저장</button></div>
+      <div class="row mt8" style="justify-content:flex-end"><button class="btn ok" onclick="Logi.completeIn()">체크한 건 입고 완료</button></div>
     </div>
 
     <div data-subpane="out" class="hidden">
@@ -2244,7 +2247,7 @@ const Logi = {
       if (b.dataset.sub === 'backup') Logi.renderLog();
     });
     DF.mount($('printDate'), 'print-date', D.today());
-    ['in', 'out'].forEach(k => {
+    ['out'].forEach(k => {
       DF.mount($(k + 'PlanDate'), k + '-plan-date', D.today()).addEventListener('datechange', () => Logi.renderPlans(k));
       const pb = $(k + 'PlanBody');
       pb.addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr && !e.target.classList.contains('pk')) tr.querySelector('.pk').checked = true; });
@@ -2254,16 +2257,36 @@ const Logi = {
     ['outBody', 'outPlanBody'].forEach(id => $(id).addEventListener('change', e => { if (e.target.classList.contains('s-yn')) Logi.onSampleToggle(e.target); }));
     $('outShowPlan').addEventListener('change', () => Logi.renderPlans('out'));
     document.querySelectorAll('[data-all]').forEach(c => c.addEventListener('change', () => $(c.dataset.all + 'Body').querySelectorAll('.pk').forEach(x => { x.checked = c.checked; })));
-    ['in', 'out'].forEach(k => {
+    ['out'].forEach(k => {
       const body = $(k + 'Body');
       body.addEventListener('datechange', e => Logi.refreshRow(e.target.closest('tr')));
       body.addEventListener('change', e => { if (e.target.classList.contains('l-lot')) Logi.lotChanged(e.target.closest('tr')); });
       body.addEventListener('click', e => { if (e.target.dataset.act === 'del') { e.target.closest('tr').remove(); } });
       for (let i = 0; i < 2; i++) Logi.addRow(k, true);
     });
+    // 입고 탭: 필터 · 입고일 변경 · 한 줄 추가
+    const ipb = $('inPlanBody');
+    DF.mount($('inFrom'), 'in-from', ''); DF.mount($('inTo'), 'in-to', '');
+    $('inFilterName').addEventListener('input', () => Logi.renderInPlans());
+    $('inShowPast').addEventListener('change', () => Logi.renderInPlans());
+    $('inFrom').addEventListener('datechange', () => Logi.renderInPlans()); $('inTo').addEventListener('datechange', () => Logi.renderInPlans());
+    const mainOf = tr => ipb.querySelector(`tr.plan-main[data-i="${tr.dataset.i}"]`);
+    ipb.addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr && !e.target.classList.contains('pk')) mainOf(tr).querySelector('.pk').checked = true; });
+    ipb.addEventListener('datechange', e => {
+      const tr = e.target.closest('tr'); if (!tr) return;
+      if (e.target.classList.contains('pdate')) return Logi.changeInDate(+tr.dataset.i, DF.get(e.target));
+      mainOf(tr).querySelector('.pk').checked = true;
+      tr.querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), Logi.plans.in[+tr.dataset.i].p.product));
+    });
+    ipb.addEventListener('click', e => {
+      const act = e.target.dataset && e.target.dataset.act; if (!act) return;
+      const tr = e.target.closest('tr');
+      if (act === 'addline') Logi.addInLine(tr);
+      if (act === 'delline') tr.remove();
+    });
     Logi.log = (await Store.get('logiLog')) || [];
   },
-  render() { Report.render(); Logi.renderToday(); Logi.renderPlans('in'); Logi.renderPlans('out'); document.querySelectorAll('#inBody tr, #outBody tr').forEach(Logi.refreshRow); },
+  render() { Report.render(); Logi.renderToday(); Logi.renderInPlans(); Logi.renderPlans('out'); document.querySelectorAll('#outBody tr').forEach(Logi.refreshRow); },
   // 샘플 입력: '없음/있음' 선택 + 나간 개수. 없음이면 개수는 0으로 저장된다.
   sampleHtml: (cls, n) => `<span class="row" style="flex-wrap:nowrap;gap:4px"><select class="s-yn"><option value="0">없음</option><option value="1" ${n > 0 ? 'selected' : ''}>있음</option></select><input type="number" class="${cls} num" min="0" value="${n || 0}" style="width:50px" ${n > 0 ? '' : 'disabled'} title="나간 샘플 개수"></span>`,
   onSampleToggle(sel) {
@@ -2281,11 +2304,7 @@ const Logi = {
   productOptions: () => LedgerData.standard().map(p => ({ label: `${p.name} · ${p.sheet}`, value: p.name, key: p.key })),
   addRow(kind, silent) {
     const tr = document.createElement('tr');
-    tr.innerHTML = kind === 'in'
-      ? `<td class="ac-wrap"><input type="text" class="l-name" autocomplete="off" placeholder="품명 검색"><span class="ac-list"></span></td><td class="o-storage">-</td><td class="o-shelf">-</td>
-         <td>${DF.html('l-date', D.today())}</td><td>${DF.html('l-exp', '', 'future')}</td><td class="o-deadline">-</td><td><input type="number" class="l-qty num" style="width:80px"></td>
-         <td><button class="btn sm light" data-act="del">삭제</button></td>`
-      : `<td class="ac-wrap"><input type="text" class="l-name" autocomplete="off" placeholder="품명 검색"><span class="ac-list"></span></td>
+    tr.innerHTML = `<td class="ac-wrap"><input type="text" class="l-name" autocomplete="off" placeholder="품명 검색"><span class="ac-list"></span></td>
          <td>${DF.html('l-date', D.today())}</td><td><select class="l-lot"><option value="">소비기한 선택</option></select><span class="l-exp-wrap hidden">${DF.html('l-exp', '', 'future')}</span></td><td class="o-deadline">-</td>
          <td><input type="number" class="l-qty num" style="width:70px"></td><td>${Logi.sampleHtml('l-sample', 0)}</td>
          <td class="ac-wrap"><input type="text" class="l-unit" autocomplete="off" placeholder="부대"><span class="ac-list"></span></td>
@@ -2294,7 +2313,7 @@ const Logi = {
     tr.dataset.kind = kind;
     AC.bind(tr.querySelector('.l-name'), Logi.productOptions, it => { tr.dataset.key = it.key; Logi.refreshRow(tr); });
     tr.querySelector('.l-name').addEventListener('change', () => { const k = Logi.matchKey(tr.querySelector('.l-name').value); if (k) tr.dataset.key = k; Logi.refreshRow(tr); });
-    if (kind === 'out') AC.bind(tr.querySelector('.l-unit'), AC.units);
+    AC.bind(tr.querySelector('.l-unit'), AC.units);
     if (!silent) tr.querySelector('.l-name').focus();
   },
   prod: tr => LedgerData.byKey.get(tr.dataset.key || ''),
@@ -2309,10 +2328,7 @@ const Logi = {
   },
   refreshRow(tr) {
     if (!tr) return; const p = Logi.prod(tr), info = p && p.product;
-    if (tr.dataset.kind === 'in') {
-      tr.querySelector('.o-storage').innerHTML = !p ? '-' : info?.storage ? esc(info.storage) : '<span class="hint" title="품목정보 G열에 입력하면 표시됩니다. 미입력 시 냉동 기준(2/3)으로 계산">미입력</span>';
-      tr.querySelector('.o-shelf').innerHTML = !p ? '-' : info?.shelfMonths ? info.shelfMonths + '개월' : '<span class="hint" title="품목정보 H열(소비기한 개월)을 입력하세요">미입력</span>';
-    } else if (p) {
+    if (p) {
       const sel = tr.querySelector('.l-lot'), cur = sel.value;
       sel.innerHTML = '<option value="">소비기한 선택</option>' + p.lots.filter(l => l.expiry).map(l => `<option value="${l.expiry}">${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})</option>`).join('') + '<option value="__manual">직접 입력</option>';
       if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
@@ -2334,7 +2350,6 @@ const Logi = {
     if (!silent) Logi.refreshRow(tr);
   },
   expiry(tr) {
-    if (tr.dataset.kind === 'in') return DF.get(tr.querySelector('.l-exp'));
     const v = tr.querySelector('.l-lot').value; return v === '__manual' ? DF.get(tr.querySelector('.l-exp')) : v;
   },
   async submit(kind) {
@@ -2346,13 +2361,9 @@ const Logi = {
       if (!p) { errors.push(`${i + 1}행: '${name}'을 재고수불대장 품목에서 선택하세요`); return; }
       const date = DF.get(tr.querySelector('.l-date')), qty = num(tr.querySelector('.l-qty').value), exp = Logi.expiry(tr);
       if (!date || !qty) { errors.push(`${i + 1}행: 일자와 수량을 입력하세요`); return; }
-      let fields, status;
-      if (kind === 'in') { fields = { inDate: date, inQty: qty, expiry: exp }; status = '입고완료'; }
-      else {
-        const unit = normUnit(tr.querySelector('.l-unit').value);
-        if (!unit) { errors.push(`${i + 1}행: 부대를 입력하세요`); return; }
-        fields = { outDate: date, outMain: qty, outSample: num(tr.querySelector('.l-sample').value) || 0, unit, expiry: exp }; status = '출고완료';
-      }
+      const unit = normUnit(tr.querySelector('.l-unit').value);
+      if (!unit) { errors.push(`${i + 1}행: 부대를 입력하세요`); return; }
+      const fields = { outDate: date, outMain: qty, outSample: num(tr.querySelector('.l-sample').value) || 0, unit, expiry: exp }, status = '출고완료';
       const id = 'L' + Date.now().toString(36).toUpperCase() + i;
       ops.push({ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, id, status, fields });
       entries.push({ ts: new Date().toISOString(), kind, sheet: p.sheet, name: p.name, company: p.company, date, qty, unit: fields.unit || '', expiry: exp, status, fields, id });
@@ -2373,21 +2384,17 @@ const Logi = {
     } catch (e) { toast('저장 실패: ' + e.message, 6000); return false; }
   },
   planDate: kind => DF.get(document.querySelector(`.${kind}-plan-date`)) || D.today(),
+  // 출고 예정(기존 방식, 다음 단계에서 개편)
   renderPlans(kind) {
     const date = Logi.planDate(kind), body = $(kind + 'PlanBody');
     const items = [];
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
-      if (kind === 'in' && o.inQty && (PLAN_IN.has(o.status) || (!o.status && o.inDate >= D.today())) && (o.inDate === date || (!o.inDate && date === D.today()))) items.push({ p, o });
-      if (kind === 'out' && (o.status === '출고확정' || ($('outShowPlan').checked && o.status === '출고예정')) && o.outDate === date) items.push({ p, o });
+      if ((o.status === '출고확정' || ($('outShowPlan').checked && o.status === '출고예정')) && o.outDate === date) items.push({ p, o });
     }));
     Logi.plans = Logi.plans || {}; Logi.plans[kind] = items;
-    if (!items.length) { body.innerHTML = `<tr><td colspan="9" class="empty">${D.short(date)} ${kind === 'in' ? '입고 예정이 없습니다' : '출고 확정된 예정이 없습니다'}</td></tr>`; return; }
+    if (!items.length) { body.innerHTML = `<tr><td colspan="9" class="empty">${D.short(date)} 출고 확정된 예정이 없습니다</td></tr>`; return; }
     body.innerHTML = items.map(({ p, o }, i) => {
-      const info = p.product;
-      if (kind === 'in') return `<tr data-i="${i}" class="${o.status === '입고결정' ? '' : 'c-plan'}"><td class="sel-col"><input type="checkbox" class="pk"></td><td style="text-align:left">${esc(p.name)} <span class="tag ${o.status === '입고결정' ? 'conf' : 'plan'}">${o.status === '입고결정' ? '결정' : '예정'}</span><div class="hint">${esc(p.sheet)}</div></td>
-        <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td class="num">${fmtN(o.inQty)}</td>
-        <td><input type="number" class="pq num" value="${o.inQty || ''}" style="width:80px"></td><td>${DF.html('pexp', o.expiry || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(o.expiry, info))}</td></tr>`;
-      const lots = p.lots.filter(l => l.expiry);
+      const info = p.product, lots = p.lots.filter(l => l.expiry);
       return `<tr data-i="${i}" class="${o.status === '출고예정' ? 'c-plan' : ''}"><td class="sel-col"><input type="checkbox" class="pk"></td><td style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(o.unit)}</td><td><span class="tag ${o.status === '출고예정' ? 'plan' : 'conf'}">${o.status.slice(2)}</span></td><td class="num">${fmtN(o.outMain)}${o.outSample ? ' + ' + fmtN(o.outSample) : ''}</td>
         <td><input type="number" class="pq num" value="${o.outMain || ''}" style="width:70px"></td><td>${Logi.sampleHtml('ps', o.outSample || 0)}</td>
@@ -2402,13 +2409,100 @@ const Logi = {
     for (const tr of trs) {
       const { p, o } = Logi.plans[kind][+tr.dataset.i]; const qty = num(tr.querySelector('.pq').value);
       if (!qty) return toast(`${p.name}: 수량을 입력하세요`);
-      let fields, status;
-      if (kind === 'in') { fields = { inDate: o.inDate || date, inQty: qty, expiry: DF.get(tr.querySelector('.pexp')) }; status = '입고완료'; }
-      else { fields = { outDate: o.outDate || date, outMain: qty, outSample: num(tr.querySelector('.ps').value) || 0, unit: o.unit, expiry: tr.querySelector('.plot').value }; status = '출고완료'; }
+      const fields = { outDate: o.outDate || date, outMain: qty, outSample: num(tr.querySelector('.ps').value) || 0, unit: o.unit, expiry: tr.querySelector('.plot').value }, status = '출고완료';
       ops.push({ ...Ledger.ref(o), op: 'update', status, fields });
-      entries.push({ ts: new Date().toISOString(), kind, sheet: p.sheet, name: p.name, company: p.company, date: fields.inDate || fields.outDate, qty, unit: fields.unit || '', expiry: fields.expiry, status, fields, id: o.id || '' });
+      entries.push({ ts: new Date().toISOString(), kind, sheet: p.sheet, name: p.name, company: p.company, date: fields.outDate, qty, unit: fields.unit || '', expiry: fields.expiry, status, fields, id: o.id || '' });
     }
     if (await Logi.send(kind, ops, entries)) Logi.renderPlans(kind);
+  },
+  /* --- 입고 예정: 재고수불대장 '입고결정' 건 (오늘 이후) --- */
+  inDraft: {},
+  inKey: o => o.id || (o.sheet + '#' + o.row),
+  // 입력 중인 값(수량·소비기한·한 줄 추가·체크)을 보관해 필터·새로고침 뒤에도 유지한다
+  collectIn() {
+    const body = $('inPlanBody'); if (!body || !Logi.plans || !Logi.plans.in) return;
+    body.querySelectorAll('tr.plan-main').forEach(tr => {
+      const it = Logi.plans.in[+tr.dataset.i]; if (!it) return;
+      Logi.inDraft[Logi.inKey(it.o)] = {
+        checked: tr.querySelector('.pk').checked, qty: tr.querySelector('.pq').value, exp: DF.get(tr.querySelector('.pexp')),
+        extras: [...body.querySelectorAll(`tr.plan-extra[data-i="${tr.dataset.i}"]`)].map(x => ({ qty: x.querySelector('.pq').value, exp: DF.get(x.querySelector('.pexp')) }))
+      };
+    });
+  },
+  inLineHtml(i, p, x = {}) {
+    return `<tr class="plan-extra" data-i="${i}"><td></td><td colspan="5" class="hint" style="text-align:right">└ 같은 입고분의 다른 소비기한 (${esc(p.name)})</td>
+      <td><input type="number" class="pq num" value="${x.qty || ''}" style="width:80px"></td><td>${DF.html('pexp', x.exp || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp, p.product))}</td><td><button type="button" class="btn sm light" data-act="delline">삭제</button></td></tr>`;
+  },
+  addInLine(tr) {
+    const i = +tr.dataset.i, it = Logi.plans.in[i]; if (!it) return;
+    const body = $('inPlanBody'), rows = body.querySelectorAll(`tr[data-i="${i}"]`), last = rows[rows.length - 1];
+    last.insertAdjacentHTML('afterend', Logi.inLineHtml(i, it.p));
+    last.nextElementSibling.querySelector('.pq').focus();
+    body.querySelector(`tr.plan-main[data-i="${i}"] .pk`).checked = true;
+  },
+  resetInFilter() {
+    $('inFilterName').value = ''; $('inShowPast').checked = false;
+    DF.set(document.querySelector('.in-from'), '', true); DF.set(document.querySelector('.in-to'), '', true);
+    Logi.renderInPlans();
+  },
+  renderInPlans() {
+    const body = $('inPlanBody'); if (!body) return;
+    Logi.collectIn();
+    const today = D.today(), nm = Names.norm($('inFilterName').value), from = DF.get(document.querySelector('.in-from')), to = DF.get(document.querySelector('.in-to')), showPast = $('inShowPast').checked;
+    const items = []; let past = 0;
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {
+      if (o.status !== '입고결정' || !o.inQty) return;
+      const d = o.inDate || today;
+      if (d < today) { past++; if (!showPast) return; }
+      if (nm && !Names.norm(p.name).includes(nm)) return;
+      if ((from && d < from) || (to && d > to)) return;
+      items.push({ p, o, d });
+    }));
+    items.sort((a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name));
+    Logi.plans = Logi.plans || {}; Logi.plans.in = items;
+    $('inPastNote').innerHTML = past && !showPast ? `<span class="tag warn">입고일이 지난 미완료 ${past}건</span> <span class="hint">위의 '입고일이 지난 미완료 건도 표시'를 체크하면 볼 수 있습니다</span>` : '';
+    if (!items.length) { body.innerHTML = '<tr><td colspan="10" class="empty">입고결정된 예정 건이 없습니다 (재고수불대장에서 입고결정을 체크하면 나타납니다)</td></tr>'; return; }
+    body.innerHTML = items.map(({ p, o, d }, i) => {
+      const info = p.product, dr = Logi.inDraft[Logi.inKey(o)] || {}, exp = dr.exp !== undefined ? dr.exp : (o.expiry || '');
+      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td>
+        <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${DF.html('pdate', d)}</td><td class="num">${fmtN(o.inQty)}</td>
+        <td><input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px"></td><td>${DF.html('pexp', exp, 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</td>
+        <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x)).join('');
+    }).join('');
+  },
+  // 입고일만 바꾸는 경우: 입고결정 상태는 그대로 두고 날짜만 저장한다
+  async changeInDate(i, iso) {
+    const it = Logi.plans.in[i]; if (!it || !iso || iso === it.d) return;
+    Logi.collectIn();
+    try {
+      const res = await Api.post('ledger', { action: 'ledgerSave', ops: [{ ...Ledger.ref(it.o), op: 'update', fields: { inDate: iso } }] });
+      const fail = res.results.filter(r => !r.ok);
+      if (!App.applyPatch(res.patch)) await App.reloadLedger();
+      toast(fail.length ? '실패: ' + fail.map(f => f.reason).join(' / ') : `입고일을 ${D.short(iso)}로 변경했습니다${iso < D.today() ? ' (오늘 이전 날짜라 목록에서 숨겨질 수 있습니다)' : ''}`, 4000);
+    } catch (e) { toast('저장 실패: ' + e.message, 6000); Logi.renderInPlans(); }
+  },
+  async completeIn() {
+    Logi.collectIn();
+    const body = $('inPlanBody'), trs = [...body.querySelectorAll('tr.plan-main')].filter(tr => tr.querySelector('.pk').checked);
+    if (!trs.length) return toast('입고 완료할 건을 체크하세요');
+    const ops = [], entries = [], today = D.today(); let noExp = 0;
+    for (const tr of trs) {
+      const i = +tr.dataset.i, { p, o } = Logi.plans.in[i];
+      const date = DF.get(tr.querySelector('.pdate')) || o.inDate || today;
+      const lines = [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')) }];
+      body.querySelectorAll(`tr.plan-extra[data-i="${i}"]`).forEach(x => lines.push({ qty: num(x.querySelector('.pq').value), exp: DF.get(x.querySelector('.pexp')) }));
+      if (lines.some(l => !l.qty)) return toast(`${p.name}: 입고 수량을 입력하세요 (필요 없는 한 줄은 삭제하세요)`);
+      const total = lines.reduce((a, l) => a + l.qty, 0);
+      if (total !== o.inQty && !confirm(`${p.name}: 예정 수량 ${fmtN(o.inQty)}개와 입고 수량 합계 ${fmtN(total)}개가 다릅니다.\n입고 수량 ${fmtN(total)}개로 처리할까요?`)) return;
+      noExp += lines.filter(l => !l.exp).length;
+      lines.forEach((l, k) => {
+        const fields = { inDate: date, inQty: l.qty, expiry: l.exp }, status = '입고완료';
+        ops.push(k === 0 ? { ...Ledger.ref(o), op: 'update', status, fields } : { op: 'insert', sheet: p.sheet, name: p.name, company: o.company || p.company, id: 'L' + Date.now().toString(36).toUpperCase() + ops.length, status, sorted: true, fields });
+        entries.push({ ts: new Date().toISOString(), kind: 'in', sheet: p.sheet, name: p.name, company: p.company, date, qty: l.qty, unit: '', expiry: l.exp, status, fields, id: ops[ops.length - 1].id || o.id || '' });
+      });
+    }
+    if (noExp && !confirm(`소비기한이 없는 입고가 ${noExp}건 있습니다. 소비기한이 없으면 납품기한을 계산할 수 없습니다.\n그대로 입고 완료할까요?`)) return;
+    if (await Logi.send('in', ops, entries)) { trs.forEach(tr => delete Logi.inDraft[Logi.inKey(Logi.plans.in[+tr.dataset.i].o)]); Logi.renderInPlans(); }
   },
   renderToday() {
     const t = D.today(); const today = Logi.log.filter(x => x.ts.slice(0, 10) === t || x.date === t).slice(-50).reverse();
@@ -2675,6 +2769,7 @@ Busy.wrap(Ledger, 'saveOps', '재고수불대장 저장 중입니다');
 Busy.wrap(Ledger, 'saveDueDays', '저장 중입니다');
 Busy.wrap(Logi, 'submit', '입출고 저장 중입니다');
 Busy.wrap(Logi, 'completePlans', '입출고 저장 중입니다');
+Busy.wrap(Logi, 'completeIn', '입고 저장 중입니다');
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 </body>
