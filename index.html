@@ -387,7 +387,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="table-wrap" style="max-height:560px">
       <table><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
     </div>
-    <div class="row mt8 between"><span class="hint">납품 줄을 누르면 입고일·수량·소비기한을 적을 수 있고, 입고일을 적으면 입고결정 체크박스가 나타납니다. 출고는 예정량·확정량 입력과 자동 연동됩니다(적색 예정 · 청색 확정 · 검정 완료).</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
+    <div class="row mt8 between"><span class="hint">납품 줄을 누르면 입고일·수량·소비기한을 적을 수 있고, 상태 칸의 입고결정 체크로 그 입고일에 받기로 결정합니다(체크 해제 시 예정). 출고는 예정량·확정량 입력과 자동 연동됩니다(적색 예정 · 청색 확정 · 검정 완료).</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
     <div class="reco mt12" id="ldReco">
       <div class="row mb8"><b>발주량 추천</b><span class="ac-wrap"><input type="text" id="ldRecoUnit" placeholder="부대 선택" autocomplete="off" style="width:170px"><span class="ac-list"></span></span></div>
       <div id="ldRecoBody"></div>
@@ -987,7 +987,7 @@ function makeLedgerData() {
     p.rows.forEach(o => {
       o.comb = !!(o.outTotal && PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT && (o.inQty || o.inDate));
       o.inSt = o.comb ? (o.inState || (o.inDate && o.inDate >= today ? '입고예정' : '입고완료')) : o.status;
-      o.canDecide = !!(o.comb && o.inDate && o.inSt !== '입고완료');
+      o.canDecide = !!(o.outTotal && PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT && !(o.comb && o.inSt === '입고완료'));
       o.pendingIn = !!(o.comb && o.inQty && PLAN_IN.has(o.inSt));
     });
     let last = -1; p.rows.forEach((o, i) => { if (o.stock !== '' && o.stock !== null && o.stock !== undefined) last = i; });
@@ -1804,10 +1804,6 @@ const Ledger = {
     $('ldAddDate').querySelector('input').placeholder = '입고일';
     $('ldAddExp').querySelector('input').placeholder = '소비기한';
     $('ldBody').addEventListener('click', Ledger.onRowClick);
-    $('ldBody').addEventListener('datechange', e => {   // 입고일을 적으면 입고결정 체크박스가 나타나고, 지우면 사라진다
-      if (!e.target.classList.contains('e-inDate')) return;
-      const l = e.target.closest('tr').querySelector('.dec-cb'); if (l) l.style.display = DF.get(e.target) ? '' : 'none';
-    });
     AC.bind($('ldRecoUnit'), AC.units, Ledger.renderReco);
     $('ldRecoUnit').addEventListener('change', Ledger.renderReco);
     document.addEventListener('keydown', e => {
@@ -2013,7 +2009,7 @@ const Ledger = {
     const o = item.o, outEd = o.isOut, inEd = o.isIn || !o.isOut || (PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT);
     const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
     const st = o.status === '입고예정' || o.status === '입고결정', cmb = !st && inEd && outEd && o.inSt !== '입고완료';   // st: 입고 줄 / cmb: 납품 줄(입고일을 적으면 입고결정 가능)
-    const decide = (st || cmb) ? `<label class="dec-cb" style="${o.inDate ? '' : 'display:none'}"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
+    const decide = (st || cmb) ? `<label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
       <td>${inEd ? `${DF.html('e-inDate', o.inDate || '')}<div class="hint">소비기한</div>${DF.html('e-expiry', o.expiry || '', 'future')}` : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` : ''}</td>
       <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
@@ -2029,7 +2025,7 @@ const Ledger = {
       if (!(o.status === '입고예정' || o.status === '입고결정')) {   // 납품 줄: 별도 줄을 만들지 않고 같은 줄에서 결정한다 (수정 줄이 열려 있으면 적은 값도 함께 저장)
         const fields = { inState: on ? '입고결정' : '입고예정' };
         if (tr.dataset.edit) Object.assign(fields, Ledger.readIn(tr));
-        if (on && !(fields.inQty ?? o.inQty)) { e.target.checked = false; return toast('입고 수량을 먼저 입력하세요'); }
+        if (on && !((fields.inQty ?? o.inQty) && (fields.inDate ?? o.inDate))) { e.target.checked = false; return toast('이 줄을 눌러 입고일과 수량을 먼저 입력하세요'); }
         return Ledger.saveOps([{ ...Ledger.ref(o), op: 'update', fields }], msg);
       }
       return Ledger.saveOps([{ ...Ledger.ref(o), op: 'update', status: on ? '입고결정' : '입고예정', fields: {} }], msg);
