@@ -112,6 +112,11 @@ tr.picked td { background:#FFFBEB !important; }
 tr.row-grey td { background:#F1F1EF !important; color:#9A9A94 !important; } tr.row-grey .tag { opacity:.6; }
 .over-btn { border:1px solid var(--danger); background:var(--danger-soft); color:var(--danger); border-radius:6px; padding:2px 8px; font-weight:700; cursor:pointer; font-size:12px; } .over-btn:hover { background:var(--danger); color:#fff; }
 td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap;cursor:pointer;margin-left:4px}
+.reco-now{font-size:13px;margin-bottom:6px}
+.reco-rec{padding:10px 12px;border:1px solid var(--line,#ddd);border-radius:8px;margin-bottom:10px;background:#f6faf6}
+.reco-rec.need{background:#fff4f2;border-color:#e5a39b}
+.reco-rec b{font-size:20px}
+.reco-rec.need b{color:#c0392b}
 .alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
 .reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
 
@@ -1933,7 +1938,7 @@ const Ledger = {
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
       <td>${inEd ? `${DF.html('e-inDate', o.inDate || '')}<div class="hint">소비기한</div>${DF.html('e-expiry', o.expiry || '', 'future')}` : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` : ''}</td>
       <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
-      <td>${esc(o.unit || '')}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
+      <td>${esc(o.unit || '')}${outEd ? `<div class="hint">현재고 ${fmtN((Ledger.d().byKey.get(Ledger.key) || {}).stock || 0)}<br>발주 ${fmtN(o.outTotal || 0)}</div>` : ''}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
       <td>${decide}<div class="row mt8" style="flex-wrap:nowrap"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="cancel">취소</button><button type="button" class="btn sm danger" data-act="delete">삭제</button></div>${outEd ? '<div class="hint mt8">출고 날짜·수량은 예정량·확정량 입력에서 수정</div>' : ''}</td></tr>`;
   },
   onRowClick(e) {
@@ -1956,7 +1961,7 @@ const Ledger = {
       return;
     }
     if (e.target.closest('input,label,button')) return;
-    Ledger.editing = item.o; Ledger.renderDetail();
+    Ledger.editing = item.o; if (item.o.unit && item.o.unit !== EXPIRED_UNIT) $('ldRecoUnit').value = item.o.unit; Ledger.renderDetail();
   },
   ref(o) { return { id: o.id || '', sheet: o.sheet, row: o.row, name: o.name }; },
   // 납품기한 초과 수량을 누르면: 그 줄 바로 아래에 '납품기한 초과' 출고 줄을 넣어 재고를 줄이고, 위 줄은 회색으로 표시한다
@@ -2041,13 +2046,21 @@ const Ledger = {
     const box = $('ldRecoBody'); if (!box) return;
     const p = Ledger.d().byKey.get(Ledger.key); if (!p || p.type !== 'standard') { box.innerHTML = ''; return; }
     const unit = Names.matchUnit($('ldRecoUnit').value.trim());
-    // 부족분 참고값: 앞으로 나갈 출고(예정·확정) − (현재고 + 입고예정)
-    const need = p.planOut - (p.stock + p.planIn);
-    const head = `<div class="hint mb8">참고: 현재고 ${fmtN(p.stock)} + 입고예정 ${fmtN(p.planIn)} − 출고예정·확정 ${fmtN(p.planOut)} = <b>${fmtN(p.stock + p.planIn - p.planOut)}</b>${need > 0 ? ` → 약 <b class="c-plan">${fmtN(need)}개</b> 부족` : ' (부족분 없음)'}</div>`;
-    if (!unit) { box.innerHTML = head + '<div class="hint">부대를 선택하면 해당 부대의 과거 예정량·확정량·증감율을 보여 줍니다.</div>'; return; }
     const pname = p.product ? p.product.name : p.name, cat = p.product && p.product.category;
-    const has = r => r.confEa !== null && r.confEa !== undefined && r.planEa;
-    const rate = (plan, conf) => plan ? (conf - plan) / plan * 100 : null;
+    const today = D.today(), rateOf = (plan, conf) => plan ? (conf - plan) / plan * 100 : null;
+    const hasConf = r => r.confEa !== null && r.confEa !== undefined && r.planEa;
+    const isPlanOut = o => PLAN_OUT.has(o.status) || (o.status === '출고확정' && o.outDate && o.outDate > today);
+    // 추천 발주량 = 앞으로 나갈 출고 − (현재고 + 입고예정). 출고'예정'분은 과거 평균 증감율(이 부대 → 없으면 이 품목 전체)을 반영한다
+    const hist = Hist.records.filter(r => r.name === pname && hasConf(r));
+    const useH = (unit && hist.filter(r => r.unit === unit).length) ? hist.filter(r => r.unit === unit) : hist;
+    const hp = useH.reduce((a, r) => a + r.planEa, 0), hc = useH.reduce((a, r) => a + r.confEa, 0), adj = hp ? (hc - hp) / hp : 0;
+    const plannedOnly = p.rows.reduce((a, o) => a + (o.status === '출고예정' && o.outTotal ? o.outTotal : 0), 0);
+    const extra = Math.round(plannedOnly * adj), need = p.planOut + extra - (p.stock + p.planIn), rec = Math.max(0, Math.ceil(need));
+    const unitOut = unit ? p.rows.reduce((a, o) => a + (o.unit === unit && o.outTotal && isPlanOut(o) ? o.outTotal : 0), 0) : 0;
+    const head = `<div class="reco-now">현재 보유고 <b>${fmtN(p.stock)}</b>개 · 입고예정 <b>${fmtN(p.planIn)}</b>개 · 출고예정·확정 합계 <b>${fmtN(p.planOut)}</b>개${unit ? ` · <b>${esc(unit)}</b> 발주량 <b>${fmtN(unitOut)}</b>개` : ''}</div>
+      <div class="reco-rec ${rec ? 'need' : ''}"><span>추천 발주량</span> <b>${fmtN(rec)}개</b> <span class="hint">${rec ? `출고 ${fmtN(p.planOut)}${extra ? ` ${extra > 0 ? '+' : '−'} 증감 보정 ${fmtN(Math.abs(extra))}` : ''} − (현재고 ${fmtN(p.stock)} + 입고예정 ${fmtN(p.planIn)}) = 부족 ${fmtN(need)}개` : `재고가 충분합니다 (여유 ${fmtN(-need)}개)`}${adj ? ` · 과거 증감율 ${adj > 0 ? '+' : ''}${(adj * 100).toFixed(1)}% 반영` : ''}</span></div>`;
+    if (!unit) { box.innerHTML = head + '<div class="hint">부대를 선택하면 해당 부대의 과거 예정량·확정량·증감율을 보여 줍니다.</div>'; return; }
+    const has = hasConf, rate = rateOf;
     const fmtRate = v => v === null ? '-' : `<span style="color:${v > 0 ? 'var(--warn)' : 'var(--conf)'}">${v > 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
     const same = Hist.records.filter(r => r.name === pname && r.planEa != null);
     const mine = same.filter(r => r.unit === unit).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
