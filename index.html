@@ -286,15 +286,6 @@ tr.edit-row td { background:#FFFBEB !important; }
       <button class="btn light" onclick="Predict.exportExcel()">엑셀 다운로드</button>
     </div>
   </div>
-  <details class="panel" id="statsPanel">
-    <summary style="cursor:pointer;font-weight:700">과거 오차 분석 (자동화시스템 '데이터'·DB_Master 납품 이력)</summary>
-    <div class="row mt12 mb8">
-      <select id="statUnit"></select>
-      <span class="muted" id="statSummary"></span>
-    </div>
-    <div style="height:260px" class="mb12"><canvas id="statChart"></canvas></div><div class="hint mb8" id="statChartMsg">구분별 월평균 오차율 (예정 대비 확정, 최근 12개월)</div>
-    <div class="table-wrap" style="max-height:340px"><table><thead><tr><th>제외</th><th>납품일</th><th>부대</th><th>구분</th><th>품명</th><th>예정</th><th>확정</th><th>오차</th></tr></thead><tbody id="statBody"></tbody></table></div>
-  </details>
 </section>
 
 <!-- 확정량 입력 -->
@@ -802,7 +793,7 @@ document.addEventListener('click', () => document.querySelectorAll('.ms-panel').
 
 /* ---------- 예정량·확정량 데이터 ---------- */
 const Hist = {
-  records: [], byId: new Map(), excluded: new Set(),
+  records: [], byId: new Map(),
   parseSheet(values, src) {
     const out = [];
     if (!values || !values.length) return out;
@@ -959,9 +950,8 @@ const App = {
     DF.init();
     $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) App.show(b.dataset.tab); });
     await Store.open();
-    const [boot, ledger, prefs, excl, skip] = await Promise.all(['boot', 'ledger', 'prefs', 'excluded', 'linkSkip'].map(Store.get));
+    const [boot, ledger, prefs, skip] = await Promise.all(['boot', 'ledger', 'prefs', 'linkSkip'].map(Store.get));
     if (prefs) App.prefs = prefs;
-    if (excl) Hist.excluded = new Set(excl);
     if (skip) App.linkSkip = new Set(skip);
     Predict.init(); Confirm.init(); Ledger.init(); Logi.init();
     if (boot) App.applyBoot(boot, true);
@@ -1165,14 +1155,9 @@ const Predict = {
     document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.calcAll(); }));
     $('predictAll').addEventListener('change', e => body.querySelectorAll('.pick').forEach(c => { c.checked = e.target.checked; c.closest('tr').classList.toggle('picked', c.checked); }));
     AC.bind($('pickedUnit'), AC.units);
-    $('statsPanel').addEventListener('toggle', () => { if ($('statsPanel').open) Predict.renderStats(); });
-    $('statUnit').addEventListener('change', Predict.renderStats);
   },
   render() {
-    const units = [...new Set([...Names.units.map(u => u.name), ...Hist.units()])].sort();
-    $('statUnit').innerHTML = '<option value="">부대 전체</option>' + units.map(u => `<option>${esc(u)}</option>`).join('');
     Predict.calcAll();
-    if ($('statsPanel').open) Predict.renderStats();
   },
   addRow(silent) {
     const body = $('predictBody');
@@ -1381,34 +1366,6 @@ const Predict = {
       [basis === 'delivery' ? '납품일' : '급식일', '부대', '품명', '구분', '기준량', '급식인원', '총소요량', '단위', '포장규격', '예정량(ea)', '예정량(kg)'],
       rows.map(r => [r.date, r.unit, r.name, r.cat, r.base, r.hc, r.total, r.utype, r.spec, r.simple, r.simpleKg]),
       [12, 14, 22, 10, 9, 9, 10, 6, 9, 13, 13]);
-  },
-  async renderChart(recs) {
-    const byCat = {};
-    recs.forEach(r => { if (!r.delDate) return; const m = r.delDate.slice(0, 7); ((byCat[r.cat] = byCat[r.cat] || {})[m] = byCat[r.cat][m] || []).push(Math.abs(r.rate)); });
-    const cats = Object.keys(byCat).sort((a, b) => Object.values(byCat[b]).flat().length - Object.values(byCat[a]).flat().length).slice(0, 6);
-    const months = [...new Set(recs.map(r => r.delDate && r.delDate.slice(0, 7)).filter(Boolean))].sort().slice(-12);
-    try { await loadScript('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js'); } catch (e) { $('statChartMsg').textContent = e.message; return; }
-    const colors = ['#2B3A55', '#B3261E', '#3F6B4A', '#9A6324', '#1D4ED8', '#8A8478'];
-    const data = { labels: months.map(m => m.slice(2).replace('-', '.')), datasets: cats.map((c, i) => ({ label: c, data: months.map(m => { const a = byCat[c][m]; return a ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : null; }), borderColor: colors[i], backgroundColor: colors[i], spanGaps: true, tension: .25, pointRadius: 3 })) };
-    if (Predict.chart) { Predict.chart.data = data; Predict.chart.update(); return; }
-    Predict.chart = new Chart($('statChart'), { type: 'line', data, options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y}%` } } }, scales: { y: { beginAtZero: true, title: { display: true, text: '평균 오차율(%)' } } } } });
-  },
-  renderStats() {
-    const u = $('statUnit').value;
-    const recs = Hist.records.filter(r => r.rate !== null && (!u || r.unit === u)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
-    const used = recs.filter(r => !Hist.excluded.has(r.id));
-    const avg = used.length ? used.reduce((a, r) => a + Math.abs(r.rate), 0) / used.length : 0;
-    const byCat = {}; used.forEach(r => (byCat[r.cat] = byCat[r.cat] || []).push(r.rate));
-    const vol = Object.entries(byCat).map(([c, a]) => { const m = a.reduce((x, y) => x + y, 0) / a.length; return [c, Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length)]; }).sort((a, b) => b[1] - a[1]);
-    Predict.renderChart(used);
-    $('statSummary').textContent = `분석 ${used.length.toLocaleString()}건 · 평균 오차 ${avg.toFixed(1)}%` + (vol.length ? ` · 변동 큰 구분: ${vol.slice(0, 3).map(([c, s]) => `${c}(${s.toFixed(0)})`).join(', ')}` : '');
-    $('statBody').innerHTML = recs.slice(0, 200).map(r => `<tr><td><input type="checkbox" ${Hist.excluded.has(r.id) ? 'checked' : ''} onchange="Predict.toggleExclude('${esc(r.id)}', this.checked)"></td>
-      <td>${r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td>${esc(r.cat)}</td><td style="text-align:left">${esc(r.name)}</td>
-      <td class="num">${fmtN(r.plan)}</td><td class="num">${fmtN(r.conf)}</td><td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate > 0 ? '+' : ''}${Math.round(r.rate)}%</td></tr>`).join('') || '<tr><td colspan="8" class="empty">데이터 없음</td></tr>';
-  },
-  toggleExclude(id, on) {
-    on ? Hist.excluded.add(id) : Hist.excluded.delete(id);
-    Store.set('excluded', [...Hist.excluded]); Hist.reindex(); Predict.calcAll(); Predict.renderStats();
   }
 };
 
