@@ -117,6 +117,14 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .reco-rec.need{background:#fff4f2;border-color:#e5a39b}
 .reco-rec b{font-size:20px}
 .reco-rec.need b{color:#c0392b}
+.ld-sticky{position:sticky;top:0;z-index:15;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;font-size:13px;box-shadow:0 2px 6px rgba(29,27,24,.08)}
+.ld-sticky:empty{display:none}
+.ld-sticky b{font-size:15px}
+.ld-sticky .rec-b{color:#c0392b}
+.rec-modes{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+.rec-mode{flex:1;min-width:150px;text-align:left;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:8px 10px;cursor:pointer;font:inherit}
+.rec-mode b{font-size:18px}
+.rec-mode.on{border-color:#2f6f4f;background:#f1f8f3;box-shadow:inset 0 0 0 1px #2f6f4f}
 .alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
 .reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
 
@@ -167,6 +175,7 @@ tr.edit-row td { background:#FFFBEB !important; }
   h1 { font-size:16px; } h2 { font-size:14px; }
   .panel { padding:12px; border-radius:8px; margin-bottom:10px; }
   .header { position:sticky; top:0; z-index:20; }
+  .ld-sticky { top:96px; }
   .tab-bar { flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; position:sticky; top:52px; z-index:19; background:var(--paper); margin-bottom:10px; scrollbar-width:none; }
   .tab-bar::-webkit-scrollbar { display:none; }
   .tab-btn { white-space:nowrap; padding:10px 12px; font-size:13px; flex-shrink:0; }
@@ -351,6 +360,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div><h2 id="ldTitle"></h2><div class="muted" id="ldSub"></div></div>
       <div class="row"><button class="btn light sm" onclick="Ledger.exportDetail()">엑셀 다운로드</button><button class="btn light sm" onclick="Ledger.close()">닫기</button></div>
     </div>
+    <div class="ld-sticky" id="ldSticky"></div>
     <div class="buckets mb12" id="ldStats"></div>
     <div class="alert-lines mb12" id="ldAlert"></div>
     <div class="controls" id="ldAddBox">
@@ -1711,7 +1721,7 @@ const Ledger = {
   // 화면에 보여 줄 데이터: 현재 연도는 LedgerData, 과거 연도를 고르면 그 연도 파일 데이터
   d() { return Ledger.year && Ledger.archive && Ledger.archive.year === Ledger.year ? Ledger.archive.data : LedgerData; },
   init() {
-    const from = DF.mount($('ledgerFrom'), 'l-from', '');
+    const from = DF.mount($('ledgerFrom'), 'l-from', D.addMonths(D.today(), -3));
     const to = DF.mount($('ledgerTo'), 'l-to', '');
     to.placeholder = '이후 전체';
     [from, to].forEach(i => i.addEventListener('datechange', () => { Ledger.renderList(); if (Ledger.key) Ledger.renderDetail(); }));
@@ -1772,7 +1782,7 @@ const Ledger = {
     if (toCurrent) Ledger.archive = null;
     Ledger.key = null; Ledger.sheet = ''; Ledger.due = null; Ledger.editing = null;
     $('ledgerSearch').value = ''; $('ledgerDetail').classList.add('hidden'); $('ledgerDue').classList.add('hidden');
-    Ledger.setPeriod('', '');
+    Ledger.setPeriod(toCurrent ? D.addMonths(D.today(), -3) : '', '');
     Ledger.render();
   },
 
@@ -1868,7 +1878,7 @@ const Ledger = {
     $('ldAddBox').classList.toggle('hidden', p.type !== 'standard');
     $('ldReco').classList.toggle('hidden', p.type !== 'standard');
     if (p.type !== 'standard') {
-      $('ldStats').innerHTML = ''; $('ldAlert').innerHTML = '';
+      $('ldStats').innerHTML = ''; $('ldAlert').innerHTML = ''; $('ldSticky').innerHTML = '';
       $('ldHead').innerHTML = '<tr><th>납품일</th><th>수량</th><th>샘플</th><th>부대</th></tr>';
       const rows = p.rows.filter(o => (!from || o.outDate >= from) && (!to || o.outDate <= to));
       $('ldBody').innerHTML = rows.map(o => `<tr><td>${D.short(o.outDate)}</td><td class="num">${fmtN(o.qty)}</td><td class="num">${fmtN(o.sample)}</td><td>${esc(o.unit)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">기간 내 내역 없음</td></tr>';
@@ -1922,6 +1932,7 @@ const Ledger = {
         return head + rowHtml(x, i);
       }).join('') || '<tr><td colspan="13" class="empty">기간 내 내역 없음</td></tr>');
     Ledger.renderReco();
+    const er = $('ldBody').querySelector('tr.edit-row'); if (er) er.scrollIntoView({ block: 'nearest' });
   },
   // 이 입고 줄(로트)의 남은 수량이 납품기한 임박/초과에 해당하면 그 수량을 돌려준다 (해당 수량만 표시)
   lotInfo(p, o, today, days) {
@@ -2042,6 +2053,8 @@ const Ledger = {
   },
 
   /* --- 발주량 추천: 부대를 고르면 해당 부대·동일 구분 품목의 과거 예정·확정·증감율 --- */
+  recoMode: 'mid',
+  setRecoMode(m) { Ledger.recoMode = m; Ledger.renderReco(); },
   renderReco() {
     const box = $('ldRecoBody'); if (!box) return;
     const p = Ledger.d().byKey.get(Ledger.key); if (!p || p.type !== 'standard') { box.innerHTML = ''; return; }
@@ -2050,55 +2063,63 @@ const Ledger = {
     const today = D.today(), rateOf = (plan, conf) => plan ? (conf - plan) / plan * 100 : null;
     const hasConf = r => r.confEa !== null && r.confEa !== undefined && r.planEa;
     const isPlanOut = o => PLAN_OUT.has(o.status) || (o.status === '출고확정' && o.outDate && o.outDate > today);
-    // 예상 증감율: 해당 부대의 과거 확정/예정 비율의 중앙값 (부대별 특성이므로 다른 부대 이력은 쓰지 않는다)
+    // 예상 증감율: 해당 부대의 과거 확정/예정 비율. 부대별 특성이므로 다른 부대 이력은 쓰지 않는다
     //  1순위 이 부대의 같은 품목 2건 이상 → 2순위 이 부대의 같은 구분 2건 이상 → 없으면 예정량 그대로
-    // 이례적 변동 제외(자동): ① 확정이 예정의 0.5배 미만·2배 초과  ② 4건 이상일 때 중앙값에서 크게 벗어난 건
-    //  (기준 = 중앙값 ± max(15%p, 편차 중앙값(MAD)의 3.7배))
+    // 이례적 변동 제외(자동): ① 확정이 예정의 0.5배 미만·2배 초과  ② 4건 이상일 때 중앙값에서 크게 벗어난 건 (중앙값 ± max(15%p, 편차 중앙값의 3.7배))
+    // 선택지: 적게(하위 25%) · 중앙값(기본, 재고 0에 수렴) · 많게(상위 25%)
     const base = Hist.records.filter(r => hasConf(r));
     const tiers = [
       { label: '이 부대의 같은 품목', f: (r, u) => r.name === pname && r.unit === u },
       { label: '이 부대의 같은 구분(' + (cat || '-') + ')', f: (r, u) => cat && r.cat === cat && r.unit === u }
     ];
-    const median = a => { const v = [...a].sort((x, y) => x - y), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+    const pctl = (a, q) => { const v = [...a].sort((x, y) => x - y), k = (v.length - 1) * q, f = Math.floor(k), c = Math.ceil(k); return v[f] + (v[c] - v[f]) * (k - f); };
+    const median = a => pctl(a, 0.5);
     const rateFor = u => {
       for (const t of tiers) {
         const all = base.filter(r => t.f(r, u));
         let ks = all.map(r => r.confEa / r.planEa - 1).filter(k => k >= -0.5 && k <= 1);
         if (ks.length >= 4) { const m = median(ks), lim = Math.max(0.15, 3.7 * median(ks.map(k => Math.abs(k - m)))); ks = ks.filter(k => Math.abs(k - m) <= lim); }
-        if (ks.length >= 2) return { rate: median(ks), n: ks.length, out: all.length - ks.length, label: t.label };
+        if (ks.length >= 2) return { low: pctl(ks, 0.25), mid: median(ks), high: pctl(ks, 0.75), n: ks.length, out: all.length - ks.length, label: t.label };
       }
-      return { rate: 0, n: 0, out: 0, label: '이 부대 이력 부족 → 예정량 그대로' };
+      return { low: 0, mid: 0, high: 0, n: 0, out: 0, label: '이 부대 이력 부족 → 예정량 그대로' };
     };
     const byUnit = new Map();
     p.rows.forEach(o => { if (o.status === '출고예정' && o.outTotal && o.unit) { const x = byUnit.get(o.unit) || { main: 0, total: 0 }; x.main += o.outMain || 0; x.total += o.outTotal; byUnit.set(o.unit, x); } });
-    let plannedTotal = 0, expectedPlanned = 0;
-    const est = [...byUnit.entries()].map(([u, x]) => { const r = rateFor(u), exp = x.total + Math.round(x.main * r.rate); plannedTotal += x.total; expectedPlanned += exp; return { u, x, r, exp }; });
-    const fixedOut = p.planOut - plannedTotal, expectedOut = fixedOut + expectedPlanned;
-    const need = expectedOut - (p.stock + p.planIn), rec = Math.max(0, Math.ceil(need));
+    let plannedTotal = 0;
+    const est = [...byUnit.entries()].map(([u, x]) => { plannedTotal += x.total; return { u, x, r: rateFor(u) }; });
+    const fixedOut = p.planOut - plannedTotal;
+    const outBy = m => fixedOut + est.reduce((a, e) => a + e.x.total + Math.round(e.x.main * e.r[m]), 0);
+    const recBy = m => Math.max(0, Math.ceil(outBy(m) - p.stock - p.planIn));
+    const MODES = [['low', '적게', '하위 25%'], ['mid', '중앙값 (권장)', '재고 0에 수렴'], ['high', '많게', '상위 25%']];
+    const mode = Ledger.recoMode || 'mid', expectedOut = outBy(mode), need = expectedOut - p.stock - p.planIn, rec = recBy(mode);
     const unitOut = unit ? p.rows.reduce((a, o) => a + (o.unit === unit && o.outTotal && isPlanOut(o) ? o.outTotal : 0), 0) : 0;
     const pc = v => (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+    // 화면 위에 계속 보이는 요약줄 (입력·수정 중에도 현재 보유고와 해당 부대 발주량을 볼 수 있다)
+    $('ldSticky').innerHTML = `<span><b>${esc(p.name)}</b></span><span>현재 보유고 <b>${fmtN(p.stock)}</b></span><span>입고예정 <b>${fmtN(p.planIn)}</b></span><span>출고예정·확정 <b>${fmtN(p.planOut)}</b></span>${unit ? `<span>${esc(unit)} 발주량 <b>${fmtN(unitOut)}</b></span>` : ''}<span>예상재고 <b>${fmtN(p.stock + p.planIn - p.planOut)}</b></span><span>추천 발주량 <b class="${rec ? 'rec-b' : ''}">${fmtN(rec)}</b></span>`;
     const head = `<div class="reco-now">현재 보유고 <b>${fmtN(p.stock)}</b>개 · 입고예정 <b>${fmtN(p.planIn)}</b>개 · 출고예정·확정 합계 <b>${fmtN(p.planOut)}</b>개${unit ? ` · <b>${esc(unit)}</b> 발주량 <b>${fmtN(unitOut)}</b>개` : ''}</div>
+      <div class="rec-modes">${MODES.map(([m, t, sub]) => `<button type="button" class="rec-mode ${m === mode ? 'on' : ''}" onclick="Ledger.setRecoMode('${m}')"><div class="hint">${t} · ${sub}</div><b>${fmtN(recBy(m))}개</b></button>`).join('')}</div>
       <div class="reco-rec ${rec ? 'need' : ''}"><span>추천 발주량</span> <b>${fmtN(rec)}개</b> <span class="hint">${rec ? `예상 출고 ${fmtN(expectedOut)} − (현재고 ${fmtN(p.stock)} + 입고예정 ${fmtN(p.planIn)}) = 부족 ${fmtN(need)}개` : `재고가 충분합니다 (예상 출고 ${fmtN(expectedOut)}, 여유 ${fmtN(-need)}개)`}</span></div>
-      ${est.length ? `<div class="table-wrap" style="max-height:200px"><table><thead><tr><th>부대</th><th>출고예정</th><th>적용 증감율</th><th>근거(확정 이력)</th><th>예상 출고</th></tr></thead><tbody>${est.map(e => `<tr><td>${esc(e.u)}</td><td class="num">${fmtN(e.x.total)}</td><td class="num">${e.r.n ? pc(e.r.rate) : '-'}</td><td style="text-align:left">${esc(e.r.label)}${e.r.n ? ` · ${e.r.n}건 중앙값${e.r.out ? ` (이례적 ${e.r.out}건 제외)` : ''}` : ''}</td><td class="num"><b>${fmtN(e.exp)}</b></td></tr>`).join('')}${fixedOut ? `<tr><td>확정분</td><td class="num">${fmtN(fixedOut)}</td><td class="num">-</td><td style="text-align:left">이미 확정 (보정 없음)</td><td class="num"><b>${fmtN(fixedOut)}</b></td></tr>` : ''}</tbody></table></div>` : ''}
-      <div class="hint mb8">추천 발주량 = (확정분 + 출고예정 × (1 + 이 부대 과거 증감율)) − (현재고 + 입고예정). 재고를 0에 가깝게 맞추도록 안전재고는 더하지 않았습니다.</div>`;
-    if (!unit) { box.innerHTML = head + '<div class="hint">부대를 선택하면 해당 부대의 과거 예정량·확정량·증감율을 보여 줍니다.</div>'; return; }
-    const has = hasConf, rate = rateOf;
+      ${est.length ? `<div class="table-wrap" style="max-height:200px"><table><thead><tr><th>부대</th><th>출고예정</th><th>적용 증감율</th><th>예상 구간</th><th>근거(확정 이력)</th><th>예상 출고</th></tr></thead><tbody>${est.map(e => `<tr><td>${esc(e.u)}</td><td class="num">${fmtN(e.x.total)}</td><td class="num">${e.r.n ? pc(e.r[mode]) : '-'}</td><td class="num">${e.r.n ? `${pc(e.r.low)} ~ ${pc(e.r.high)}` : '-'}</td><td style="text-align:left">${esc(e.r.label)}${e.r.n ? ` · ${e.r.n}건${e.r.out ? ` (이례적 ${e.r.out}건 제외)` : ''}` : ''}</td><td class="num"><b>${fmtN(e.x.total + Math.round(e.x.main * e.r[mode]))}</b></td></tr>`).join('')}${fixedOut ? `<tr><td>확정분</td><td class="num">${fmtN(fixedOut)}</td><td class="num">-</td><td class="num">-</td><td style="text-align:left">이미 확정 (보정 없음)</td><td class="num"><b>${fmtN(fixedOut)}</b></td></tr>` : ''}</tbody></table></div>` : ''}
+      <div class="hint mb8">추천 발주량 = (확정분 + 출고예정 × (1 + 이 부대 과거 증감율)) − (현재고 + 입고예정). 안전재고는 더하지 않았습니다.</div>`;
+    if (!unit) { box.innerHTML = head + '<div class="hint">부대를 선택하면 해당 부대의 과거 납품이력을 보여 줍니다.</div>'; return; }
+    // 이 부대·이 품목의 과거 납품이력 (없으면 표시하지 않음)
+    const hasC = hasConf, rateP = rateOf;
+    const same = Hist.records.filter(r => r.name === pname && r.planEa != null && r.unit === unit);
+    const past = same.filter(r => hasC(r) || (r.delDate && r.delDate < today)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
     const fmtRate = v => v === null ? '-' : `<span style="color:${v > 0 ? 'var(--warn)' : 'var(--conf)'}">${v > 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
-    const same = Hist.records.filter(r => r.name === pname && r.planEa != null);
-    const mine = same.filter(r => r.unit === unit).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
-    const done = mine.filter(has), pSum = done.reduce((a, r) => a + r.planEa, 0), cSum = done.reduce((a, r) => a + r.confEa, 0);
-    let html = head + `<div class="reco-title">1. ${esc(unit)}의 ${esc(pname)} 과거 현황 <span class="hint">(확정 ${done.length}건 · 평균 증감율 ${done.length ? fmtRate(rate(pSum, cSum)) : '-'})</span></div>
-      <div class="table-wrap" style="max-height:220px"><table><thead><tr><th>납품일</th><th>예정(개)</th><th>확정(개)</th><th>증감율</th></tr></thead><tbody>${mine.slice(0, 12).map(r => `<tr><td>${r.delDate ? D.short(r.delDate) : '-'}</td><td class="num">${fmtN(r.planEa)}</td><td class="num">${r.confEa === null || r.confEa === undefined ? '-' : fmtN(r.confEa)}</td><td class="num">${has(r) ? fmtRate(rate(r.planEa, r.confEa)) : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">이 부대의 과거 내역이 없습니다</td></tr>'}</tbody></table></div>`;
-    const totalDone = same.filter(has).length;
-    if (totalDone >= 5) html += `<div class="hint mt8">${esc(pname)}은(는) 확정 데이터가 ${totalDone}건 있어 동일 구분 품목 현황은 생략했습니다.</div>`;
-    else {
+    const done = past.filter(hasC);
+    let html = head;
+    if (past.length) html += `<div class="reco-title">${esc(unit)}의 ${esc(pname)} 과거 납품이력 <span class="hint">(확정 ${done.length}건)</span></div>
+      <div class="table-wrap" style="max-height:220px"><table><thead><tr><th>납품일</th><th>예정(개)</th><th>확정(개)</th><th>증감율</th></tr></thead><tbody>${past.slice(0, 12).map(r => `<tr><td>${r.delDate ? D.short(r.delDate) : '-'}</td><td class="num">${fmtN(r.planEa)}</td><td class="num">${r.confEa === null || r.confEa === undefined ? '-' : fmtN(r.confEa)}</td><td class="num">${hasC(r) ? fmtRate(rateP(r.planEa, r.confEa)) : '-'}</td></tr>`).join('')}</tbody></table></div>`;
+    // 이 품목 이력이 2건 미만이면 같은 구분의 다른 품목 이력이 증감율 근거가 되므로 함께 보여 준다
+    if (done.length < 2) {
       const peers = new Map();
-      Hist.records.filter(r => r.unit === unit && cat && r.cat === cat && r.name !== pname && r.planEa != null).forEach(r => {
-        const x = peers.get(r.name) || { n: 0, plan: 0, conf: 0, cn: 0 }; x.n++; x.plan += r.planEa; if (has(r)) { x.cn++; x.conf += r.confEa; x.cp = (x.cp || 0) + r.planEa; } peers.set(r.name, x);
+      Hist.records.filter(r => r.unit === unit && cat && r.cat === cat && r.name !== pname && hasC(r)).forEach(r => {
+        const x = peers.get(r.name) || { n: 0, plan: 0, conf: 0 }; x.n++; x.plan += r.planEa; x.conf += r.confEa; peers.set(r.name, x);
       });
       const list = [...peers.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 10);
-      html += `<div class="reco-title mt12">2. ${esc(unit)}의 동일 구분(${esc(cat || '구분 없음')}) 품목 현황 <span class="hint">(${esc(pname)} 확정 데이터 ${totalDone}건 — 5건 미만이라 참고용으로 표시)</span></div>
-        <div class="table-wrap" style="max-height:240px"><table><thead><tr><th>품명</th><th>건수</th><th>예정 합계</th><th>확정 합계</th><th>증감율</th></tr></thead><tbody>${list.map(([n, x]) => `<tr><td style="text-align:left">${esc(n)}</td><td class="num">${x.n}</td><td class="num">${fmtN(x.plan)}</td><td class="num">${x.cn ? fmtN(x.conf) : '-'}</td><td class="num">${x.cn ? fmtRate(rate(x.cp, x.conf)) : '-'}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">동일 구분 품목의 내역이 없습니다</td></tr>'}</tbody></table></div>`;
+      if (list.length) html += `<div class="reco-title mt12">${esc(unit)}의 같은 구분(${esc(cat)}) 다른 품목 이력 <span class="hint">(이 품목 이력이 부족해 증감율 근거로 사용)</span></div>
+        <div class="table-wrap" style="max-height:240px"><table><thead><tr><th>품명</th><th>확정 건수</th><th>예정 합계</th><th>확정 합계</th><th>증감율</th></tr></thead><tbody>${list.map(([n, x]) => `<tr><td style="text-align:left">${esc(n)}</td><td class="num">${x.n}</td><td class="num">${fmtN(x.plan)}</td><td class="num">${fmtN(x.conf)}</td><td class="num">${fmtRate(rateP(x.plan, x.conf))}</td></tr>`).join('')}</tbody></table></div>`;
     }
     box.innerHTML = html;
   },
