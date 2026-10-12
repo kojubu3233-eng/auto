@@ -930,6 +930,8 @@ function makeLedgerData() {
     L.link(p);
     const today = D.today();
     const isPlanOut = o => PLAN_OUT.has(o.status) || (o.status === '출고확정' && o.outDate && o.outDate > today);
+    // 입고와 출고가 한 줄에 있고 입고일이 오늘 이후인 줄의 입고는 아직 결정 전(입고예정)으로 본다
+    p.rows.forEach(o => { o.pendingIn = !!(o.inQty && o.outTotal && (o.status === '출고예정' || o.status === '출고확정') && o.inDate && o.inDate >= today); });
     let last = -1; p.rows.forEach((o, i) => { if (o.stock !== '' && o.stock !== null && o.stock !== undefined) last = i; });
     let stock = 0, planIn = 0, planOut = 0;
     // 납품기한 초과 처리 줄: 바로 위 입고 줄(로트)에서 그 수량만큼 빠진 것으로 본다
@@ -937,10 +939,10 @@ function makeLedgerData() {
     p.rows.forEach((o, i) => { if (o.unit === EXPIRED_UNIT && o.outTotal && i > 0 && p.rows[i - 1].inQty) p.expired.set(p.rows[i - 1], (p.expired.get(p.rows[i - 1]) || 0) + o.outTotal); });
     p.rows.forEach((o, i) => {
       const inJ = i <= last && o.stock !== '';
-      if (o.inQty && PLAN_IN.has(o.status)) { planIn += o.inQty; if (inJ) stock -= o.inQty; }
+      if (o.inQty && (PLAN_IN.has(o.status) || o.pendingIn)) { planIn += o.inQty; if (inJ) stock -= o.inQty; }
       if (o.outTotal && isPlanOut(o)) { planOut += o.outTotal; if (inJ) stock += o.outTotal; }
       if (i > last) {
-        if (o.inQty && ACTUAL_IN.has(o.status)) stock += o.inQty;
+        if (o.inQty && ACTUAL_IN.has(o.status) && !o.pendingIn) stock += o.inQty;
         if (o.outTotal && ACTUAL_OUT.has(o.status) && !isPlanOut(o)) stock -= o.outTotal;
       }
     });
@@ -957,7 +959,7 @@ function makeLedgerData() {
     const lots = []; let need = Math.max(0, stock);
     for (let i = p.rows.length - 1; i >= 0 && need > 0; i--) {
       const o = p.rows[i];
-      if (!(o.inQty && ACTUAL_IN.has(o.status))) continue;
+      if (!(o.inQty && ACTUAL_IN.has(o.status)) || o.pendingIn) continue;
       const avail = o.inQty - ((p.expired && p.expired.get(o)) || 0);   // 초과 처리된 수량은 제외
       if (avail <= 0) continue;
       const take = Math.min(avail, need); need -= take;
@@ -1911,7 +1913,7 @@ const Ledger = {
       if (o.unit === EXPIRED_UNIT) return '<span class="tag danger">초과처리</span> <button type="button" class="btn sm light" data-undo="1">되돌리기</button>';
       const s = o.status || (o.inQty ? '입고완료' : '');
       const tag = s === '이월' ? 'carry' : s.endsWith('예정') ? 'plan' : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
-      const decide = (o.status === '입고예정' || o.status === '입고결정') ? ` <label class="dec-cb" title="체크하면 입고결정, 해제하면 입고예정"><input type="checkbox" data-dec="1"${o.status === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
+      const decide = (o.status === '입고예정' || o.status === '입고결정') ? ` <label class="dec-cb" title="체크하면 입고결정, 해제하면 입고예정"><input type="checkbox" data-dec="1"${o.status === '입고결정' ? ' checked' : ''}> 입고결정</label>` : o.pendingIn ? ` <label class="dec-cb" title="체크하면 입고 부분이 별도 줄로 분리되어 입고결정이 됩니다"><input type="checkbox" data-split="1"> 입고결정</label>` : '';
       return s ? `<span class="tag ${tag}">${s.replace(/^(입고|출고)/, '')}</span>${decide}` : '<span class="hint">기존</span>';
     };
     const rowHtml = (item, i) => {
@@ -1919,7 +1921,7 @@ const Ledger = {
       const { soon, over } = Ledger.lotInfo(p, o, today, days);
       const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + (p.expired.has(o) ? ' row-grey' : '');
       const inNote = o.expiry ? `<div class="hint">소비기한 ${D.short(o.expiry)}</div>` : (o.note ? `<div class="hint">${esc(o.note)}</div>` : '');
-      const html = `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${inNote}</td><td class="num ${o.status === '입고예정' ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}</td>
+      const html = `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${inNote}</td><td class="num ${o.status === '입고예정' || o.pendingIn ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}</td>
         <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
         <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td>
         <td class="num ${soon ? 'warn-cell' : ''}">${soon ? fmtN(soon) : ''}</td><td class="num">${over ? `<button type="button" class="over-btn" data-over="1" title="누르면 납품기한 초과 수량을 출고 처리하는 줄이 바로 아래에 추가됩니다">${fmtN(over)}</button>` : ''}</td><td>${statusCell(o)}</td></tr>`;
@@ -1951,7 +1953,7 @@ const Ledger = {
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
       <td>${inEd ? `${DF.html('e-inDate', o.inDate || '')}<div class="hint">소비기한</div>${DF.html('e-expiry', o.expiry || '', 'future')}` : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` : ''}</td>
       <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
-      <td>${esc(o.unit || '')}${outEd ? `<div class="hint">현재고 ${fmtN((Ledger.d().byKey.get(Ledger.key) || {}).stock || 0)}<br>발주 ${fmtN(o.outTotal || 0)}</div>` : ''}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
+      <td>${esc(o.unit || '')}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
       <td>${decide}<div class="row mt8" style="flex-wrap:nowrap"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="cancel">취소</button><button type="button" class="btn sm danger" data-act="delete">삭제</button></div>${outEd ? '<div class="hint mt8">출고 날짜·수량은 예정량·확정량 입력에서 수정</div>' : ''}</td></tr>`;
   },
   onRowClick(e) {
@@ -1959,6 +1961,7 @@ const Ledger = {
     const item = Ledger.shown[+tr.dataset.i]; if (!item) return;
     const ds = e.target.dataset || {};
     if (ds.dec) { e.stopPropagation(); const on = e.target.checked; return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: on ? '입고결정' : '입고예정', fields: {} }], on ? '입고 결정으로 변경했습니다' : '입고 결정을 취소했습니다'); }
+    if (ds.split) { e.stopPropagation(); return Ledger.splitInbound(item.o); }
     if (ds.over) { e.stopPropagation(); return Ledger.expireLot(item.o); }
     if (ds.undo) { e.stopPropagation(); return Ledger.undoExpire(item.o); }
     if (tr.dataset.edit) {
@@ -1975,6 +1978,14 @@ const Ledger = {
     }
     if (e.target.closest('input,label,button')) return;
     Ledger.editing = item.o; if (item.o.unit && item.o.unit !== EXPIRED_UNIT) $('ldRecoUnit').value = item.o.unit; Ledger.renderDetail();
+  },
+  // 입고·출고가 한 줄인 줄에서 입고 부분만 떼어 별도 줄(입고결정)로 만든다. 출고 부분은 그대로 남는다
+  splitInbound(o) {
+    const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
+    return Ledger.saveOps([
+      { ...Ledger.ref(o), op: 'update', fields: { inDate: '', inQty: '', expiry: '' } },
+      { op: 'insert', sheet: o.sheet, name: o.name, company: o.company || p.company, status: '입고결정', sorted: true, fields: { inDate: o.inDate, inQty: o.inQty, expiry: o.expiry || '' } }
+    ], '입고결정으로 처리했습니다 (입고 부분이 별도 줄로 분리되었습니다)');
   },
   ref(o) { return { id: o.id || '', sheet: o.sheet, row: o.row, name: o.name }; },
   // 납품기한 초과 수량을 누르면: 그 줄 바로 아래에 '납품기한 초과' 출고 줄을 넣어 재고를 줄이고, 위 줄은 회색으로 표시한다
