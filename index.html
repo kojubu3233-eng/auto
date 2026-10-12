@@ -1003,6 +1003,18 @@ const App = {
     try { App.applyBoot(await App.fetchBoot(new Date().getFullYear(), true)); } catch (e) { toast('자동화시스템 새로고침 실패: ' + e.message); }
     App.refreshViews();
   },
+  // 저장 응답에 담겨 온 '바뀐 탭' 데이터를 화면 데이터에 끼워 넣는다 (전체 재조회 불필요). 반영하지 못하면 false
+  applyPatch(patch) {
+    if (!patch || !Array.isArray(patch.sheets) || !App.ledger || String(patch.year) !== String(App.ledger.year)) return false;
+    const byName = new Map(patch.sheets.map(s => [s.sheet, s]));
+    const sheets = App.ledger.sheets.map(s => byName.get(s.sheet) || s);
+    patch.sheets.forEach(s => { if (!App.ledger.sheets.some(x => x.sheet === s.sheet)) sheets.push(s); });
+    App.applyLedger({ ...App.ledger, sheets });
+    App.refreshViews();
+    return true;
+  },
+  // 저장 뒤 재고수불대장 화면 갱신: 부분 데이터가 있으면 바로 반영, 없으면 뒤에서 전체 재조회
+  afterWrite(res) { if (!App.applyPatch(res && res.patch)) App.reloadLedger(); },
   async reloadLedger() {
     try { const l = await Api.get('ledger', { action: 'ledger', force: '1' }); if (Array.isArray(l.sheets)) App.applyLedger(l); } catch (e) { toast('재고수불대장 새로고침 실패: ' + e.message); }
     App.refreshViews();
@@ -1051,13 +1063,18 @@ const Link = {
       const picks = [...document.querySelectorAll('#modalRoot select')].map(s => ({ p: list[+s.dataset.i], v: s.value })).filter(x => x.v);
       $('linkSave').disabled = true;
       const fails = [];
-      for (const x of picks) {
-        if (x.v === '__skip') { App.linkSkip.add(x.p.name); continue; }
-        try {
-          const r = await Api.post('hist', { action: 'addAlias', name: x.v, alias: x.p.name });
-          if (r.duplicate) fails.push(`${x.p.name}: 이미 '${r.owner}'의 별칭입니다`);
-          else { const pr = Names.product(x.v); if (pr && !pr.aliases.includes(x.p.name)) pr.aliases.push(x.p.name); }
-        } catch (e) { fails.push(`${x.p.name}: ${e.message}`); }
+      const items = [];
+      picks.forEach(x => { if (x.v === '__skip') App.linkSkip.add(x.p.name); else items.push(x); });
+      if (items.length) {
+        try {   // 여러 건을 한 번에 보낸다 (건마다 따로 보내면 건수만큼 기다려야 함)
+          const r = await Api.post('hist', { action: 'addAliases', items: items.map(x => ({ name: x.v, alias: x.p.name })) });
+          r.results.forEach((res, i) => {
+            const x = items[i];
+            if (res.duplicate) fails.push(`${x.p.name}: 이미 '${res.owner}'의 별칭입니다`);
+            else if (!res.ok) fails.push(`${x.p.name}: ${res.error || '저장 실패'}`);
+            else { const pr = Names.product(x.v); if (pr && !pr.aliases.includes(x.p.name)) pr.aliases.push(x.p.name); }
+          });
+        } catch (e) { fails.push(e.message); }
       }
       Store.set('linkSkip', [...App.linkSkip]);
       Names.load(Names.products, Names.units);
@@ -1389,7 +1406,7 @@ const Predict = {
       recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
       App.rendered.confirm = false;
-      App.reloadLedger();   // 재고수불대장 재조회는 기다리지 않고 뒤에서 진행
+      App.afterWrite(res);
       if (res.ledger.failed) {
         toast(`예정량 ${recs.length}건 저장. 재고수불대장 ${res.ledger.failed}건 실패: ${res.ledger.reasons.slice(0, 3).join(' / ')}\n입력 내용은 그대로 두었습니다. 같은 내용으로 다시 저장하면 실패한 건만 반영됩니다`, 9000);
       } else {
@@ -1515,7 +1532,7 @@ const Confirm = {
         Hist.derive(r); Confirm.dirty.delete(r.id);
       });
       Hist.reindex();
-      if (ledgerOps.length) App.reloadLedger();
+      if (ledgerOps.length) App.afterWrite(res);
       Confirm.renderRows();
       const lmsg = ledgerOps.length ? `\n재고수불대장 확정 반영 ${ledgerOps.length - res.ledger.failed}건${res.ledger.failed ? `, 실패 ${res.ledger.failed}건: ${res.ledger.reasons.slice(0, 2).join(' / ')}` : ''}` : '';
       toast(`확정량 ${ups.length - miss.length}건 저장${miss.length ? `\n시트에서 행을 찾지 못함 ${miss.length}건: ${miss.join(', ')}` : ''}${lmsg}`, 6000);
@@ -1526,9 +1543,11 @@ const Confirm = {
   /* --- 수정·삭제·행 추가 (자동화시스템 시트와 재고수불대장에 함께 반영) --- */
   ledgerRow: id => LedgerData.byId.get(id) || null,
   // 저장 직후 화면은 바로 갱신하고, 시트 전체 재조회는 뒤에서 진행(끝날 때까지 행 번호가 필요한 수정·삭제는 잠시 막음)
-  sync() {
+  sync(res, rowsShifted) {
+    App.afterWrite(res);
+    if (!rowsShifted) return;   // 행이 지워져 번호가 밀린 경우에만 자동화시스템 시트를 다시 읽는다
     App.syncing = true;
-    Promise.all([App.reloadBoot(), App.reloadLedger()]).finally(() => { App.syncing = false; });
+    App.reloadBoot().finally(() => { App.syncing = false; });
   },
   wait() { if (App.syncing) { toast('시트 동기화 중입니다. 잠시 후 다시 시도하세요'); return true; } return false; },
   modal(title, bodyHtml, onSave) {
@@ -1575,7 +1594,7 @@ const Confirm = {
       const res = await Api.post('ledger', { action: 'planEdit', ref: { id: r.id, src: r.src, row: r.row, name: r.name }, fields: { delDate: del, name, planEa: qty, planKg: kg }, ledgerOps });
       Confirm.closeModal();
       Object.assign(r, { delDate: del, name, planEa: qty, planKg: kg }); Hist.derive(r); Hist.reindex(); Confirm.render();
-      Confirm.sync();
+      Confirm.sync(res);
       toast(res.ledger.failed ? `수정 저장. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '수정했습니다 (재고수불대장 반영 완료)', 5000);
     } catch (e) { toast('수정 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
@@ -1591,7 +1610,7 @@ const Confirm = {
       const res = await Api.post('ledger', { action: 'planDelete', refs: [{ id: r.id, src: r.src, row: r.row, name: r.name }], ledgerOps: lr ? [{ op: 'delete', id, sheet: lr.sheet, name: lr.name, row: lr.row }] : [] });
       Confirm.dirty.delete(id); Confirm.picked.delete(id);
       Hist.records = Hist.records.filter(x => x.id !== id); Hist.byId.delete(id); Hist.reindex(); Confirm.render();
-      Confirm.sync();
+      Confirm.sync(res, true);
       toast(res.deleted ? `삭제했습니다${res.ledger.failed ? ` (재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')})` : ''}` : '시트에서 행을 찾지 못했습니다. 새로고침 후 다시 시도하세요', 5000);
     } catch (e) { toast('삭제 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
@@ -1612,7 +1631,7 @@ const Confirm = {
       const gone = new Set(recs.map(r => r.id));
       gone.forEach(id => { Confirm.dirty.delete(id); Confirm.picked.delete(id); });
       Hist.records = Hist.records.filter(x => !gone.has(x.id)); Hist.reindex(); Confirm.render();
-      Confirm.sync();
+      Confirm.sync(res, true);
       const miss = res.missing && res.missing.length;
       toast(`${res.deleted}건 삭제했습니다${miss ? `\n시트에서 찾지 못한 ${miss}건: ${res.missing.slice(0, 3).join(', ')}` : ''}${res.ledger.failed ? `\n재고수불대장 반영 실패 ${res.ledger.failed}건: ${res.ledger.reasons.slice(0, 2).join(' / ')}` : ''}`, 6000);
     } catch (e) { toast('삭제 실패: ' + e.message, 6000); }
@@ -1647,7 +1666,7 @@ const Confirm = {
       Confirm.closeModal();
       const rec = { id, src: 'plan', delDate: del, mealDate: '', cat, name, unit, planEa: null, planKg: null, confEa: qty, confKg: kg, price: p?.price || null, unitType: App.prefs.unitType[name] || 'kg', simple: null };
       Hist.derive(rec); Hist.records.push(rec); Hist.reindex(); Confirm.render();
-      Confirm.sync();
+      Confirm.sync(res);
       toast(res.ledger.failed ? `행 추가. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '추가했습니다 (재고수불대장 출고확정 반영 완료)', 5000);
     } catch (e) { toast('추가 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
@@ -1904,7 +1923,7 @@ const Ledger = {
       const res = await Api.post('ledger', year ? { action: 'ledgerSave', ops, year } : { action: 'ledgerSave', ops });
       const fail = res.results.filter(r => !r.ok), warn = res.results.flatMap(r => r.warn || []);
       Ledger.editing = null;
-      if (year) { await Ledger.loadArchive(year, true); Ledger.render(); } else await App.reloadLedger();
+      if (year) { await Ledger.loadArchive(year, true); Ledger.render(); } else if (!App.applyPatch(res.patch)) await App.reloadLedger();
       const note = year ? Ledger.carriedNote(ops) : '';
       toast(fail.length ? '실패: ' + fail.map(f => f.reason).join(' / ') : okMsg + (warn.length ? '\n' + warn.join('\n') : '') + note, note ? 8000 : 5000);
       return res;
@@ -2149,7 +2168,7 @@ const Logi = {
       res.results.forEach((r, i) => { entries[i].ok = r.ok; if (r.id) entries[i].id = r.id; entries[i].reason = r.reason || ''; });
       Logi.log.push(...entries); Store.set('logiLog', Logi.log);
       const fail = res.results.filter(r => !r.ok);
-      await App.reloadLedger();
+      if (!App.applyPatch(res.patch)) await App.reloadLedger();
       toast(`${kind === 'in' ? '입고' : '출고'} ${ops.length - fail.length}건 저장${fail.length ? `\n실패 ${fail.length}건: ${fail.map(f => f.reason).join(' / ')}` : ''}`, 5000);
       return !fail.length;
     } catch (e) { toast('저장 실패: ' + e.message, 6000); return false; }
@@ -2234,7 +2253,7 @@ const Logi = {
     try {
       const res = await Api.post('ledger', { action: 'ledgerSave', ops: miss.map(x => ({ op: 'insert', sheet: x.sheet, name: x.name, company: x.company, id: x.id || undefined, status: x.status, fields: x.fields })) });
       res.results.forEach((r, i) => { if (r.ok) { miss[i].id = r.id; miss[i].ok = true; } });
-      Store.set('logiLog', Logi.log); await App.reloadLedger(); Logi.renderLog();
+      Store.set('logiLog', Logi.log); if (!App.applyPatch(res.patch)) await App.reloadLedger(); Logi.renderLog();
       toast(`${res.results.filter(r => r.ok).length}건 반영`);
     } catch (e) { toast('반영 실패: ' + e.message); }
     finally { Busy.end(); }
