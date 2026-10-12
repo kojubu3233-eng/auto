@@ -1389,7 +1389,7 @@ const Predict = {
       recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
       App.rendered.confirm = false;
-      await App.reloadLedger();
+      App.reloadLedger();   // 재고수불대장 재조회는 기다리지 않고 뒤에서 진행
       if (res.ledger.failed) {
         toast(`예정량 ${recs.length}건 저장. 재고수불대장 ${res.ledger.failed}건 실패: ${res.ledger.reasons.slice(0, 3).join(' / ')}\n입력 내용은 그대로 두었습니다. 같은 내용으로 다시 저장하면 실패한 건만 반영됩니다`, 9000);
       } else {
@@ -1505,7 +1505,7 @@ const Confirm = {
         Hist.derive(r); Confirm.dirty.delete(r.id);
       });
       Hist.reindex();
-      if (ledgerOps.length) await App.reloadLedger();
+      if (ledgerOps.length) App.reloadLedger();
       Confirm.renderRows();
       const lmsg = ledgerOps.length ? `\n재고수불대장 확정 반영 ${ledgerOps.length - res.ledger.failed}건${res.ledger.failed ? `, 실패 ${res.ledger.failed}건: ${res.ledger.reasons.slice(0, 2).join(' / ')}` : ''}` : '';
       toast(`확정량 ${ups.length - miss.length}건 저장${miss.length ? `\n시트에서 행을 찾지 못함 ${miss.length}건: ${miss.join(', ')}` : ''}${lmsg}`, 6000);
@@ -1515,7 +1515,7 @@ const Confirm = {
 
   /* --- 수정·삭제·행 추가 (자동화시스템 시트와 재고수불대장에 함께 반영) --- */
   ledgerRow: id => LedgerData.byId.get(id) || null,
-  async reloadAll() { await Promise.all([App.reloadBoot(), App.reloadLedger()]); },
+  async reloadAll() { App.reloadLedger(); await App.reloadBoot(); },
   modal(title, bodyHtml, onSave) {
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:520px">
       <div class="row between mb12"><h2>${title}</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
