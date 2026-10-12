@@ -108,7 +108,10 @@ tr.picked td { background:#FFFBEB !important; }
 .tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; }
 .tag.plan { background:var(--danger-soft); color:var(--plan); } .tag.conf { background:#E8EEFB; color:var(--conf); } .tag.done { background:var(--ok-soft); color:var(--ok); }
 .tag.carry { background:#EEE; color:#000; } .prod-box.due-box.soon { border-color:var(--warn); } .prod-box.due-box.past { border-color:var(--danger); } .prod-box.due-box.on { box-shadow:0 0 0 2px var(--ink) inset; }
-.tag.warn { background:var(--warn-soft); color:var(--warn); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
+.tag.warn { background:var(--warn-soft); color:var(--warn); }
+tr.row-grey td { background:#F1F1EF !important; color:#9A9A94 !important; } tr.row-grey .tag { opacity:.6; }
+.over-btn { border:1px solid var(--danger); background:var(--danger-soft); color:var(--danger); border-radius:6px; padding:2px 8px; font-weight:700; cursor:pointer; font-size:12px; } .over-btn:hover { background:var(--danger); color:#fff; }
+td.warn-cell { color:var(--warn); font-weight:700; } .reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
 
 .prod-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
 .prod-box { border:1px solid var(--border); border-radius:8px; padding:10px; cursor:pointer; background:var(--surface); text-align:left; }
@@ -239,7 +242,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="list-box" id="dueSoon"><div class="empty">불러오는 중</div></div>
     </div>
     <div class="panel">
-      <div class="row between mb12"><h2>납품기한 경과</h2></div>
+      <div class="row between mb12"><h2>납품기한 초과</h2></div>
       <div class="list-box" id="duePast"><div class="empty">불러오는 중</div></div>
     </div>
   </div>
@@ -327,32 +330,36 @@ tr.edit-row td { background:#FFFBEB !important; }
         <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월</button><button class="btn light sm" onclick="Ledger.allPeriod()">전체기간</button></div>
     </div>
     <div id="ledgerYearBanner" class="banner hidden"></div>
-    <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><h2 id="ledgerCrumb"></h2></div>
+    <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><button class="btn light sm" onclick="Ledger.exportStock()">재고현황 엑셀</button><h2 id="ledgerCrumb"></h2></div>
     <div class="prod-grid" id="ledgerProducts"></div>
   </div>
   <div class="panel hidden" id="ledgerDue">
     <div class="row between mb12"><h2 id="ldDueTitle"></h2>
       <div class="row"><span id="ldDueCfg" class="row"><label class="lbl muted">임박 기준</label><input type="number" id="ldDueDays" min="1" max="365" style="width:70px"><span class="muted">일</span><button class="btn sm" onclick="Ledger.saveDueDays()">저장</button></span><button class="btn light sm" onclick="Ledger.closeDue()">닫기</button></div></div>
     <div class="table-wrap" style="max-height:480px"><table><thead><tr><th>대분류</th><th>품명</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>상태</th><th>잔량</th></tr></thead><tbody id="ldDueBody"></tbody></table></div>
-    <div class="hint mt8">홈 화면의 임박·경과 목록과 같은 기준입니다. 행을 누르면 해당 품목 상세로 이동합니다. 임박 기준은 서버에 저장되어 모든 기기에 적용됩니다.</div>
+    <div class="hint mt8">홈 화면의 임박·초과 목록과 같은 기준입니다. 행을 누르면 해당 품목 상세로 이동합니다. 임박 기준은 서버에 저장되어 모든 기기에 적용됩니다.</div>
   </div>
   <div class="panel hidden" id="ledgerDetail">
     <div class="row between mb12">
       <div><h2 id="ldTitle"></h2><div class="muted" id="ldSub"></div></div>
-      <div class="row"><button class="btn light sm" onclick="Ledger.close()">닫기</button></div>
+      <div class="row"><button class="btn light sm" onclick="Ledger.exportDetail()">엑셀 다운로드</button><button class="btn light sm" onclick="Ledger.close()">닫기</button></div>
     </div>
+    <div class="buckets mb12" id="ldStats"></div>
     <div class="controls" id="ldAddBox">
-      <label class="lbl">입고 추가</label>
+      <label class="lbl">입고(발주) 추가</label>
       <span id="ldAddDate"></span>
       <input type="number" id="ldAddQty" placeholder="수량" style="width:90px">
       <span id="ldAddExp"></span>
-      <label class="row muted"><input type="checkbox" id="ldAddDecide"> 입고 결정</label>
       <button class="btn sm" onclick="Ledger.addInbound()">추가</button>
     </div>
     <div class="table-wrap" style="max-height:560px">
       <table id="ldTable"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
     </div>
-    <div class="row mt8 between"><span class="hint">빨간 글씨 예정 · 파란 글씨 확정 · 검정 글씨 완료. 행을 누르면 수정할 수 있습니다. Esc 키 또는 같은 품목 박스를 다시 누르면 닫힙니다.</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
+    <div class="row mt8 between"><span class="hint">입고는 직접 입력합니다(입고수량 적색 = 입고결정 전). 출고는 예정량·확정량 입력과 자동 연동됩니다(적색 예정 · 청색 확정 · 검정 완료). 행을 누르면 수정할 수 있습니다. Esc 키 또는 같은 품목 박스를 다시 누르면 닫힙니다.</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
+    <div class="reco mt12" id="ldReco">
+      <div class="row mb8"><b>발주량 추천</b><span class="ac-wrap"><input type="text" id="ldRecoUnit" placeholder="부대 선택" autocomplete="off" style="width:170px"><span class="ac-list"></span></span></div>
+      <div id="ldRecoBody"></div>
+    </div>
   </div>
 </section>
 
@@ -873,6 +880,7 @@ const PLAN_IN = new Set(['입고예정', '입고결정']);
 const PLAN_OUT = new Set(['출고예정']);
 const ACTUAL_IN = { has: s => !PLAN_IN.has(s) };
 const ACTUAL_OUT = { has: s => !PLAN_OUT.has(s) };
+const EXPIRED_UNIT = '납품기한 초과';   // 납품기한 초과 처리로 넣은 출고 줄의 부대칸 표시
 const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입고결정': 'c-conf', '출고확정': 'c-conf', '입고완료': 'c-done', '이월': 'c-done', '출고완료': 'c-done', '': 'c-done' };
 
 function makeLedgerData() {
@@ -899,18 +907,23 @@ function makeLedgerData() {
     L.products.forEach(L.compute);
   },
   link(p) { const r = Names.resolve(p.name); p.link = r; p.product = r.product; return p.product; },
-  // 현재고는 시트 J열(재고) 마지막 값을 기준으로 한다. 예정 행이 J열에 반영돼 있으면 되돌려 실재고로 맞춘다.
+  // 현재고는 '오늘 기준'이다: 시트 J열(재고) 마지막 값에서 예정 입출고(입고예정·입고결정·출고예정)와 아직 오지 않은 날짜의 출고확정을 뺀 값.
   compute(p) {
     L.link(p);
+    const today = D.today();
+    const isPlanOut = o => PLAN_OUT.has(o.status) || (o.status === '출고확정' && o.outDate && o.outDate > today);
     let last = -1; p.rows.forEach((o, i) => { if (o.stock !== '' && o.stock !== null && o.stock !== undefined) last = i; });
     let stock = 0, planIn = 0, planOut = 0;
+    // 납품기한 초과 처리 줄: 바로 위 입고 줄(로트)에서 그 수량만큼 빠진 것으로 본다
+    p.expired = new Map();
+    p.rows.forEach((o, i) => { if (o.unit === EXPIRED_UNIT && o.outTotal && i > 0 && p.rows[i - 1].inQty) p.expired.set(p.rows[i - 1], (p.expired.get(p.rows[i - 1]) || 0) + o.outTotal); });
     p.rows.forEach((o, i) => {
       const inJ = i <= last && o.stock !== '';
       if (o.inQty && PLAN_IN.has(o.status)) { planIn += o.inQty; if (inJ) stock -= o.inQty; }
-      if (o.outTotal && PLAN_OUT.has(o.status)) { planOut += o.outTotal; if (inJ) stock += o.outTotal; }
+      if (o.outTotal && isPlanOut(o)) { planOut += o.outTotal; if (inJ) stock += o.outTotal; }
       if (i > last) {
         if (o.inQty && ACTUAL_IN.has(o.status)) stock += o.inQty;
-        if (o.outTotal && ACTUAL_OUT.has(o.status)) stock -= o.outTotal;
+        if (o.outTotal && ACTUAL_OUT.has(o.status) && !isPlanOut(o)) stock -= o.outTotal;
       }
     });
     if (last >= 0) stock += p.rows[last].stock;
@@ -927,7 +940,9 @@ function makeLedgerData() {
     for (let i = p.rows.length - 1; i >= 0 && need > 0; i--) {
       const o = p.rows[i];
       if (!(o.inQty && ACTUAL_IN.has(o.status))) continue;
-      const take = Math.min(o.inQty, need); need -= take;
+      const avail = o.inQty - ((p.expired && p.expired.get(o)) || 0);   // 초과 처리된 수량은 제외
+      if (avail <= 0) continue;
+      const take = Math.min(avail, need); need -= take;
       lots.push({ inDate: o.inDate, qty: o.inQty, remain: take, expiry: o.expiry, row: o });
     }
     lots.reverse();
@@ -1128,7 +1143,7 @@ const Home = {
     const soon = lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) >= 0 && D.diff(x.l.deadline, t) <= dueDays()).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
     const past = lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) < 0).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
     const dueRow = (x, cls) => `<div class="list-row"><div><div class="l-name">${esc(x.p.name)}</div><div class="l-sub">소비기한 ${D.short(x.l.expiry)} · 납품기한 ${D.short(x.l.deadline)}</div></div>
-      <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${D.diff(x.l.deadline, t) < 0 ? D.diff(t, x.l.deadline) + '일 경과' : D.diff(x.l.deadline, t) + '일 남음'}</span></div></div></div>`;
+      <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${D.diff(x.l.deadline, t) < 0 ? D.diff(t, x.l.deadline) + '일 초과' : D.diff(x.l.deadline, t) + '일 남음'}</span></div></div></div>`;
     $('dueSoon').innerHTML = soon.length ? soon.map(x => dueRow(x, 'warn')).join('') : `<div class="empty">${dueDays()}일 이내 납품기한 재고가 없습니다</div>`;
     $('duePast').innerHTML = past.length ? past.map(x => dueRow(x, 'danger')).join('') : '<div class="empty">납품기한이 지난 재고가 없습니다</div>';
   },
@@ -1710,6 +1725,8 @@ const Ledger = {
     $('ldAddDate').querySelector('input').placeholder = '입고일';
     $('ldAddExp').querySelector('input').placeholder = '소비기한';
     $('ldBody').addEventListener('click', Ledger.onRowClick);
+    AC.bind($('ldRecoUnit'), AC.units, Ledger.renderReco);
+    $('ldRecoUnit').addEventListener('change', Ledger.renderReco);
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape' || App.tab !== 'ledger' || e.target.classList?.contains('dinput')) return;
       if (Ledger.editing) { Ledger.editing = null; Ledger.renderDetail(); } else if (Ledger.key) Ledger.close(); else if (Ledger.due) Ledger.closeDue();
@@ -1782,11 +1799,11 @@ const Ledger = {
   renderDue() {
     const kind = Ledger.due, list = Ledger.dueLots()[kind], days = dueDays();
     const qty = list.reduce((s, x) => s + x.l.remain, 0);
-    $('ldDueTitle').textContent = (kind === 'soon' ? `납품기한 임박 (${days}일 이내)` : '납품기한 경과') + ` · ${list.length}건 · ${fmtN(qty)}개`;
+    $('ldDueTitle').textContent = (kind === 'soon' ? `납품기한 임박 (${days}일 이내)` : '납품기한 초과') + ` · ${list.length}건 · ${fmtN(qty)}개`;
     $('ldDueCfg').classList.toggle('hidden', kind !== 'soon');
     $('ldDueDays').value = days;
     $('ldDueBody').innerHTML = list.map(({ p, l, left }) => `<tr class="editable" data-key="${esc(p.key)}"><td>${esc(p.sheet)}</td><td style="text-align:left;font-weight:600">${esc(p.name)}</td><td>${l.inDate ? D.short(l.inDate) : '-'}</td><td>${D.short(l.expiry)}</td><td>${D.short(l.deadline)}</td>
-      <td><span class="tag ${left < 0 ? 'danger' : 'warn'}">${left < 0 ? -left + '일 경과' : left + '일 남음'}</span></td><td class="num">${fmtN(l.remain)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 재고가 없습니다</td></tr>';
+      <td><span class="tag ${left < 0 ? 'danger' : 'warn'}">${left < 0 ? -left + '일 초과' : left + '일 남음'}</span></td><td class="num">${fmtN(l.remain)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 재고가 없습니다</td></tr>';
   },
   async saveDueDays() {
     const n = Math.round(Number($('ldDueDays').value));
@@ -1808,8 +1825,8 @@ const Ledger = {
     $('ledgerCrumb').textContent = kw ? '검색 결과' : Ledger.sheet;
     if (showSheets) {
       const due = Ledger.dueLots(), sum = a => a.reduce((s, x) => s + x.l.remain, 0);
-      const dueBoxes = `<button class="prod-box cat-box due-box soon ${Ledger.due === 'soon' ? 'on' : ''}" data-due="soon"><div class="p-name">납품기한 임박</div><div class="p-stock">${due.soon.length}건</div><div class="p-sub">${days}일 이내 · ${fmtN(sum(due.soon))}개</div></button>
-        <button class="prod-box cat-box due-box past ${Ledger.due === 'past' ? 'on' : ''}" data-due="past"><div class="p-name">납품기한 경과</div><div class="p-stock">${due.past.length}건</div><div class="p-sub">${fmtN(sum(due.past))}개</div></button>`;
+      const dueBoxes = `<button class="prod-box cat-box due-box soon ${Ledger.due === 'soon' ? 'on' : ''}" data-due="soon"><div class="p-name">납품기한 임박</div><div class="p-stock">${fmtN(sum(due.soon))}개</div><div class="p-sub">${days}일 이내 · ${due.soon.length}건</div></button>
+        <button class="prod-box cat-box due-box past ${Ledger.due === 'past' ? 'on' : ''}" data-due="past"><div class="p-name">납품기한 초과</div><div class="p-stock">${fmtN(sum(due.past))}개</div><div class="p-sub">${due.past.length}건</div></button>`;
       const sheets = data.raw.sheets.map(s => s.sheet);
       $('ledgerProducts').innerHTML = dueBoxes + sheets.map(s => {
         const ps = data.products.filter(p => p.sheet === s);
@@ -1823,7 +1840,7 @@ const Ledger = {
     const list = data.products.filter(p => (kw ? true : p.sheet === Ledger.sheet) && (!kw || Names.norm(p.name).includes(kw) || (p.product && Names.norm(p.product.name).includes(kw))));
     $('ledgerProducts').innerHTML = list.map(p => {
       const dl = p.nextDeadline ? D.diff(p.nextDeadline, t) : null;
-      const tag = dl === null ? '' : dl < 0 ? '<span class="tag danger">납품기한 경과</span>' : dl <= days ? `<span class="tag warn">납품기한 ${dl}일</span>` : '';
+      const tag = dl === null ? '' : dl < 0 ? '<span class="tag danger">납품기한 초과</span>' : dl <= days ? `<span class="tag warn">납품기한 ${dl}일</span>` : '';
       const stock = p.type === 'standard' ? `<div class="p-stock">${fmtN(p.stock)}</div><div class="p-sub">${p.planIn ? `입고예정 ${fmtN(p.planIn)} ` : ''}${p.planOut ? `출고예정 ${fmtN(p.planOut)}` : ''}</div>` : `<div class="p-sub mt8">출고 ${p.rows.length}건</div>`;
       return `<button class="prod-box ${Ledger.key === p.key ? 'on' : ''}" data-key="${esc(p.key)}"><div class="p-name">${esc(p.name)}</div><div class="p-sheet">${kw ? esc(p.sheet) + ' · ' : ''}${esc(p.company || '')}</div>${stock}<div>${tag}</div></button>`;
     }).join('') || '<div class="empty" style="grid-column:1/-1">조건에 맞는 품목이 없습니다</div>';
@@ -1832,21 +1849,28 @@ const Ledger = {
   close() { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); },
   renderDetail() {
     const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
-    const { from, to } = Ledger.period(), today = D.today();
+    const { from, to } = Ledger.period(), today = D.today(), days = dueDays();
     const info = p.product ? `${p.product.name}${p.product.storage ? ' · ' + p.product.storage : ''}${p.product.shelfMonths ? ' · 소비기한 ' + p.product.shelfMonths + '개월' : ''}` : '품목정보 미연결';
     $('ldTitle').textContent = p.name;
-    $('ldSub').textContent = `${p.sheet}${p.company ? ' · ' + p.company : ''} · ${info}${p.type === 'standard' ? ` · 현재고 ${fmtN(p.stock)}` : ''}`;
+    $('ldSub').textContent = `${p.sheet}${p.company ? ' · ' + p.company : ''} · ${info}`;
     $('ldAddBox').classList.toggle('hidden', p.type !== 'standard');
+    $('ldReco').classList.toggle('hidden', p.type !== 'standard');
     if (p.type !== 'standard') {
+      $('ldStats').innerHTML = '';
       $('ldHead').innerHTML = '<tr><th>납품일</th><th>수량</th><th>샘플</th><th>부대</th></tr>';
       const rows = p.rows.filter(o => (!from || o.outDate >= from) && (!to || o.outDate <= to));
       $('ldBody').innerHTML = rows.map(o => `<tr><td>${D.short(o.outDate)}</td><td class="num">${fmtN(o.qty)}</td><td class="num">${fmtN(o.sample)}</td><td>${esc(o.unit)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">기간 내 내역 없음</td></tr>';
       return;
     }
-    $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="2">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th rowspan="2">소비기한</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">일자</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th></tr>';
+    // 입력·수정 중에도 보이는 재고 현황 (오늘 기준, 예정 입출고는 따로 표시)
+    const sumOf = f => p.lots.filter(f).reduce((a, l) => a + l.remain, 0);
+    const soonQ = sumOf(l => l.deadline && D.diff(l.deadline, today) >= 0 && D.diff(l.deadline, today) <= days), overQ = sumOf(l => l.deadline && D.diff(l.deadline, today) < 0);
+    const box = (label, val, sub, cls = '') => `<div class="stat-box ${cls}"><div class="b-label">${label}</div><div class="b-val">${val}</div><div class="b-sub">${sub}</div></div>`;
+    $('ldStats').innerHTML = box('현재고', fmtN(p.stock), '오늘 기준 (예정 제외)') + box('입고예정', fmtN(p.planIn), '예정·결정 합계') + box('출고예정', fmtN(p.planOut), '예정·확정(납품 전) 합계') +
+      box('예상재고', fmtN(p.stock + p.planIn - p.planOut), '입출고 예정 모두 반영 시') + box('납품기한 임박', fmtN(soonQ) + '<span class="hint"> 개</span>', `${days}일 이내`, soonQ ? 'warn' : '') + box('납품기한 초과', fmtN(overQ) + '<span class="hint"> 개</span>', '숫자를 눌러 출고 처리', overQ ? 'danger' : '');
+    $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="2">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th colspan="2">납품기한 주의</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">납품일</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th><th style="top:33px">임박</th><th style="top:33px">초과</th></tr>';
     const shown = [];
     const dateOf = o => o.inDate || o.outDate || '';
-    const lotOf = new Map(p.lots.map(l => [l.row, l]));
     let carry = '';
     p.rows.forEach(o => {
       const d = dateOf(o);
@@ -1854,62 +1878,101 @@ const Ledger = {
       if (to && d && d > to) return;
       shown.push({ o, run: o.stock, counted: o.stock !== '' });
     });
+    const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
     const statusCell = o => {
+      if (o.unit === EXPIRED_UNIT) return '<span class="tag danger">초과처리</span> <button type="button" class="btn sm light" data-undo="1">되돌리기</button>';
       const s = o.status || (o.inQty ? '입고완료' : '');
       const tag = s === '이월' ? 'carry' : s.endsWith('예정') ? 'plan' : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
-      const decide = o.status === '입고예정' ? ` <label class="hint"><input type="checkbox" data-decide="1"> 결정</label>` : '';
+      const decide = o.status === '입고예정' ? ' <button type="button" class="btn sm ok" data-decide="1">입고결정</button>' : '';
       return s ? `<span class="tag ${tag}">${s.replace(/^(입고|출고)/, '')}</span>${decide}` : '<span class="hint">기존</span>';
     };
-    const expiryCell = o => {
-      const l = lotOf.get(o), over = l && l.deadline && D.diff(l.deadline, today) < 0 ? ' <span class="tag danger">경과</span>' : '';
-      return (o.expiry ? o.expiry : esc(o.note || '')) + over;
-    };
-    const rowHtml = ({ o, run, counted }, i) => {
-      if (Ledger.editing === o) return Ledger.editRow(o, i);
-      const cls = STATUS_CLASS[o.status] || '';
-      const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
-      return `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}</td><td class="num">${o.inQty ? fmtN(o.inQty) : ''}</td>
+    const rowHtml = (item, i) => {
+      const { o, run, counted } = item;
+      if (Ledger.editing === o) return Ledger.editRow(item, i);
+      const { soon, over } = Ledger.lotInfo(p, o, today, days);
+      const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + (p.expired.has(o) ? ' row-grey' : '');
+      const inNote = o.expiry ? `<div class="hint">소비기한 ${D.short(o.expiry)}</div>` : (o.note ? `<div class="hint">${esc(o.note)}</div>` : '');
+      return `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${inNote}</td><td class="num ${o.status === '입고예정' ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}</td>
         <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
-        <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td><td>${expiryCell(o)}</td><td>${statusCell(o)}</td></tr>`;
+        <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td>
+        <td class="num ${soon ? 'warn-cell' : ''}">${soon ? fmtN(soon) : ''}</td><td class="num">${over ? `<button type="button" class="over-btn" data-over="1" title="누르면 납품기한 초과 수량을 출고 처리하는 줄이 바로 아래에 추가됩니다">${fmtN(over)}</button>` : ''}</td><td>${statusCell(o)}</td></tr>`;
     };
     Ledger.shown = shown; let lastYear = '';
-    $('ldBody').innerHTML = (from && carry !== '' ? `<tr class="carry"><td colspan="9" style="text-align:right">${D.short(from)} 이전 재고</td><td class="num">${fmtN(carry)}</td><td colspan="2"></td></tr>` : '') +
+    $('ldBody').innerHTML = (from && carry !== '' ? `<tr class="carry"><td colspan="9" style="text-align:right">${D.short(from)} 이전 재고</td><td class="num">${fmtN(carry)}</td><td colspan="3"></td></tr>` : '') +
       (shown.map((x, i) => {
-        const y = (dateOf(x.o) || '').slice(0, 4), head = y && y !== lastYear ? (lastYear = y, `<tr class="carry"><td colspan="12" style="text-align:left">${y}년</td></tr>`) : '';
+        const y = (dateOf(x.o) || '').slice(0, 4), head = y && y !== lastYear ? (lastYear = y, `<tr class="carry"><td colspan="13" style="text-align:left">${y}년</td></tr>`) : '';
         return head + rowHtml(x, i);
-      }).join('') || '<tr><td colspan="12" class="empty">기간 내 내역 없음</td></tr>');
+      }).join('') || '<tr><td colspan="13" class="empty">기간 내 내역 없음</td></tr>');
+    Ledger.renderReco();
   },
-  editRow(o, i) {
-    const isIn = o.isIn && !o.isOut, isOut = o.isOut && !o.isIn;
-    const sts = isIn ? IN_STATUS : isOut ? OUT_STATUS : [...IN_STATUS, ...OUT_STATUS];
-    const cur = o.status || (o.inQty ? '입고완료' : '출고완료');
+  // 이 입고 줄(로트)의 남은 수량이 납품기한 임박/초과에 해당하면 그 수량을 돌려준다 (해당 수량만 표시)
+  lotInfo(p, o, today, days) {
+    const l = p.lots.find(x => x.row === o);
+    if (!l || !l.deadline) return { soon: 0, over: 0 };
+    const left = D.diff(l.deadline, today);
+    return left < 0 ? { soon: 0, over: l.remain } : left <= days ? { soon: l.remain, over: 0 } : { soon: 0, over: 0 };
+  },
+  // 수정 줄: 입고(발주)는 직접 수정, 출고는 예정량·확정량 입력과 연동되므로 샘플 수량만 수정할 수 있다
+  editRow(item, i) {
+    const o = item.o, inEd = o.isIn || !o.isOut, outEd = o.isOut;
+    const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
+    const decide = o.status === '입고예정' ? '<button type="button" class="btn sm ok" data-decide="1">입고결정</button>' : o.status === '입고결정' ? '<button type="button" class="btn sm light" data-undecide="1">결정 취소</button>' : '';
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
-      <td>${DF.html('e-inDate', o.inDate || '')}</td><td><input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:70px"></td>
-      <td>${DF.html('e-outDate', o.outDate || '')}</td><td></td><td><input type="number" class="e-outMain num" value="${o.outMain || ''}" style="width:70px"></td><td><input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:50px"></td>
-      <td class="ac-wrap"><input type="text" class="e-unit" value="${esc(o.unit || '')}" style="width:100px"><span class="ac-list"></span></td>
-      <td></td><td>${DF.html('e-expiry', o.expiry || '', 'future')}</td><td><select class="e-status">${sts.map(s => `<option ${s === cur ? 'selected' : ''}>${s}</option>`).join('')}</select>
-      <div class="row mt8" style="flex-wrap:nowrap"><button class="btn sm ok" data-act="save">저장</button><button class="btn sm light" data-act="cancel">취소</button><button class="btn sm danger" data-act="delete">삭제</button></div></td></tr>`;
+      <td>${inEd ? `${DF.html('e-inDate', o.inDate || '')}<div class="hint">소비기한</div>${DF.html('e-expiry', o.expiry || '', 'future')}` : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` : ''}</td>
+      <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
+      <td>${esc(o.unit || '')}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
+      <td>${decide}<div class="row mt8" style="flex-wrap:nowrap"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="cancel">취소</button><button type="button" class="btn sm danger" data-act="delete">삭제</button></div>${outEd ? '<div class="hint mt8">출고 날짜·수량은 예정량·확정량 입력에서 수정</div>' : ''}</td></tr>`;
   },
   onRowClick(e) {
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
     const item = Ledger.shown[+tr.dataset.i]; if (!item) return;
-    if (e.target.dataset.decide) { e.stopPropagation(); return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: '입고결정', fields: {} }], '입고 결정으로 변경했습니다'); }
+    const ds = e.target.dataset || {};
+    if (ds.decide) { e.stopPropagation(); return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: '입고결정', fields: {} }], '입고 결정으로 변경했습니다'); }
+    if (ds.undecide) { e.stopPropagation(); return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: '입고예정', fields: {} }], '입고 결정을 취소했습니다'); }
+    if (ds.over) { e.stopPropagation(); return Ledger.expireLot(item.o); }
+    if (ds.undo) { e.stopPropagation(); return Ledger.undoExpire(item.o); }
     if (tr.dataset.edit) {
-      const act = e.target.dataset.act; if (!act) return;
+      const act = ds.act; if (!act) return;
       if (act === 'cancel') { Ledger.editing = null; return Ledger.renderDetail(); }
-      if (act === 'delete') { if (!confirm('이 행을 재고수불대장에서 삭제합니다. 계속할까요?')) return; return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'delete' }], '삭제했습니다'); }
+      if (act === 'delete') return Ledger.removeRow(item.o);
       if (act === 'save') {
-        const q = c => tr.querySelector('.' + c);
-        const fields = { inDate: DF.get(q('e-inDate')), inQty: num(q('e-inQty').value) ?? '', outDate: DF.get(q('e-outDate')), outMain: num(q('e-outMain').value) ?? '', outSample: num(q('e-outSample').value) ?? '', unit: normUnit(q('e-unit').value), expiry: DF.get(q('e-expiry')) };
-        return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', status: q('e-status').value, fields }], '저장했습니다');
+        const q = c => tr.querySelector('.' + c), fields = {};
+        if (q('e-inQty')) Object.assign(fields, { inDate: DF.get(q('e-inDate')), inQty: num(q('e-inQty').value) ?? '', expiry: DF.get(q('e-expiry')) });
+        if (q('e-outSample')) fields.outSample = num(q('e-outSample').value) ?? '';
+        return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', fields }], '저장했습니다');
       }
       return;
     }
-    if (e.target.closest('input,label')) return;
+    if (e.target.closest('input,label,button')) return;
     Ledger.editing = item.o; Ledger.renderDetail();
-    const ed = $('ldBody').querySelector('[data-edit] .e-unit'); if (ed) AC.bind(ed, AC.units);
   },
   ref(o) { return { id: o.id || '', sheet: o.sheet, row: o.row, name: o.name }; },
+  // 납품기한 초과 수량을 누르면: 그 줄 바로 아래에 '납품기한 초과' 출고 줄을 넣어 재고를 줄이고, 위 줄은 회색으로 표시한다
+  async expireLot(o) {
+    const p = Ledger.d().byKey.get(Ledger.key); const l = p && p.lots.find(x => x.row === o); if (!l) return;
+    if (!confirm(`${p.name} 소비기한 ${o.expiry ? D.short(o.expiry) : ''} 재고 ${fmtN(l.remain)}개를 '납품기한 초과'로 출고 처리합니다.\n바로 아래에 줄이 추가되고 재고가 줄어듭니다. (상태 칸의 [되돌리기]로 취소할 수 있습니다)\n\n계속할까요?`)) return;
+    await Ledger.saveOps([{ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, status: '출고완료', afterRow: o.row, fields: { outDate: D.today(), outMain: l.remain, outSample: 0, unit: EXPIRED_UNIT, expiry: o.expiry || '' } }], '납품기한 초과 수량을 출고 처리했습니다');
+  },
+  async undoExpire(o) {
+    if (!confirm('납품기한 초과 처리를 되돌립니다. 아래 줄이 삭제되고 재고가 원래대로 돌아옵니다. 계속할까요?')) return;
+    await Ledger.saveOps([{ ...Ledger.ref(o), op: 'delete' }], '초과 처리를 되돌렸습니다');
+  },
+  // 삭제: 예정량·확정량 입력에서 온 출고 줄이면 자동화시스템 시트의 같은 행도 함께 지운다
+  async removeRow(o) {
+    const h = !Ledger.year && o.id ? Hist.byId.get(o.id) : null;
+    if (!h) { if (!confirm('이 행을 재고수불대장에서 삭제합니다. 계속할까요?')) return; return Ledger.saveOps([{ ...Ledger.ref(o), op: 'delete' }], '삭제했습니다'); }
+    if (Confirm.wait()) return;
+    if (!confirm('이 행을 삭제합니다.\n예정량·확정량 입력(자동화시스템 시트)의 같은 행도 함께 지워지며 되돌릴 수 없습니다. 계속할까요?')) return;
+    Busy.start('삭제 중입니다 (구글시트 2곳 동시 반영)');
+    try {
+      const res = await Api.post('ledger', { action: 'planDelete', refs: [{ id: h.id, src: h.src, row: h.row, name: h.name }], ledgerOps: [{ op: 'delete', id: o.id, sheet: o.sheet, name: o.name, row: o.row }] });
+      Ledger.editing = null; Confirm.dirty.delete(h.id); Confirm.picked.delete(h.id);
+      Hist.records = Hist.records.filter(x => x.id !== h.id); Hist.reindex(); App.rendered.confirm = false;
+      Confirm.sync(res, true);
+      toast(res.ledger.failed ? `삭제. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '삭제했습니다 (확정량 입력에서도 지워짐)', 5000);
+    } catch (e) { toast('삭제 실패: ' + e.message, 6000); }
+    finally { Busy.end(); }
+  },
   // 과거 연도 파일에서 이미 이월된 품목을 고쳤을 때 안내
   carriedNote(ops) {
     const c = Ledger.archive && Ledger.archive.raw.carried; if (!c) return '';
@@ -1933,10 +1996,65 @@ const Ledger = {
     const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
     const date = DF.get(document.querySelector('.ld-add-date')), qty = num($('ldAddQty').value), exp = DF.get(document.querySelector('.ld-add-exp'));
     if (!qty) return toast('수량을 입력하세요');
-    const status = $('ldAddDecide').checked ? '입고결정' : '입고예정';
-    const res = await Ledger.saveOps([{ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, status, fields: { inDate: date, inQty: qty, expiry: exp } }], `${status}으로 추가했습니다`);
-    if (res) { $('ldAddQty').value = ''; DF.set(document.querySelector('.ld-add-date'), '', true); DF.set(document.querySelector('.ld-add-exp'), '', true); $('ldAddDecide').checked = false; }
-  }
+    const res = await Ledger.saveOps([{ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, status: '입고예정', fields: { inDate: date, inQty: qty, expiry: exp } }], '입고예정(적색)으로 추가했습니다. 입고가 확정되면 [입고결정]을 누르세요');
+    if (res) { $('ldAddQty').value = ''; DF.set(document.querySelector('.ld-add-date'), '', true); DF.set(document.querySelector('.ld-add-exp'), '', true); }
+  },
+  /* --- 엑셀 다운로드 --- */
+  async exportDetail() {
+    const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
+    if (p.type !== 'standard') return toast('이 탭은 출고 내역만 있어 다운로드를 지원하지 않습니다');
+    const today = D.today(), days = dueDays();
+    const rows = (Ledger.shown || []).map(({ o, run, counted }) => {
+      const { soon, over } = Ledger.lotInfo(p, o, today, days);
+      return [o.company || p.company, o.name, o.inDate || '', o.inQty || '', o.outDate || '', o.outTotal || '', o.outMain || '', o.outSample || '', o.unit || '', counted ? run : '', soon || '', over || '', o.status || '', o.expiry || ''];
+    });
+    if (!rows.length) return toast('내보낼 내역이 없습니다');
+    await simpleSheet(`재고수불대장_${p.name}_${D.today()}.xlsx`, p.name.slice(0, 30),
+      ['업체', '제품', '입고일', '입고수량', '납품일', '출고소계', '본품', '샘플', '부대', '재고', '납품기한 임박', '납품기한 초과', '상태', '소비기한'], rows,
+      [12, 22, 12, 10, 12, 10, 8, 8, 14, 10, 12, 12, 10, 12]);
+  },
+  async exportStock() {
+    const today = D.today(), days = dueDays(), data = Ledger.d();
+    const rows = data.standard().map(p => {
+      const sum = f => p.lots.filter(f).reduce((a, l) => a + l.remain, 0);
+      return [p.sheet, p.name, p.company || '', p.stock, p.planIn || '', p.planOut || '',
+        sum(l => l.deadline && D.diff(l.deadline, today) >= 0 && D.diff(l.deadline, today) <= days) || '', sum(l => l.deadline && D.diff(l.deadline, today) < 0) || '', p.nextDeadline || ''];
+    });
+    if (!rows.length) return toast('내보낼 재고가 없습니다');
+    await simpleSheet(`재고현황_${today}.xlsx`, '재고현황', ['대분류', '품명', '업체', '현재고(오늘)', '입고예정', '출고예정', '납품기한 임박', '납품기한 초과', '가장 빠른 납품기한'], rows, [14, 24, 12, 12, 10, 10, 14, 14, 16]);
+  },
+
+  /* --- 발주량 추천: 부대를 고르면 해당 부대·동일 구분 품목의 과거 예정·확정·증감율 --- */
+  renderReco() {
+    const box = $('ldRecoBody'); if (!box) return;
+    const p = Ledger.d().byKey.get(Ledger.key); if (!p || p.type !== 'standard') { box.innerHTML = ''; return; }
+    const unit = Names.matchUnit($('ldRecoUnit').value.trim());
+    // 부족분 참고값: 앞으로 나갈 출고(예정·확정) − (현재고 + 입고예정)
+    const need = p.planOut - (p.stock + p.planIn);
+    const head = `<div class="hint mb8">참고: 현재고 ${fmtN(p.stock)} + 입고예정 ${fmtN(p.planIn)} − 출고예정·확정 ${fmtN(p.planOut)} = <b>${fmtN(p.stock + p.planIn - p.planOut)}</b>${need > 0 ? ` → 약 <b class="c-plan">${fmtN(need)}개</b> 부족` : ' (부족분 없음)'}</div>`;
+    if (!unit) { box.innerHTML = head + '<div class="hint">부대를 선택하면 해당 부대의 과거 예정량·확정량·증감율을 보여 줍니다.</div>'; return; }
+    const pname = p.product ? p.product.name : p.name, cat = p.product && p.product.category;
+    const has = r => r.confEa !== null && r.confEa !== undefined && r.planEa;
+    const rate = (plan, conf) => plan ? (conf - plan) / plan * 100 : null;
+    const fmtRate = v => v === null ? '-' : `<span style="color:${v > 0 ? 'var(--warn)' : 'var(--conf)'}">${v > 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
+    const same = Hist.records.filter(r => r.name === pname && r.planEa != null);
+    const mine = same.filter(r => r.unit === unit).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
+    const done = mine.filter(has), pSum = done.reduce((a, r) => a + r.planEa, 0), cSum = done.reduce((a, r) => a + r.confEa, 0);
+    let html = head + `<div class="reco-title">1. ${esc(unit)}의 ${esc(pname)} 과거 현황 <span class="hint">(확정 ${done.length}건 · 평균 증감율 ${done.length ? fmtRate(rate(pSum, cSum)) : '-'})</span></div>
+      <div class="table-wrap" style="max-height:220px"><table><thead><tr><th>납품일</th><th>예정(개)</th><th>확정(개)</th><th>증감율</th></tr></thead><tbody>${mine.slice(0, 12).map(r => `<tr><td>${r.delDate ? D.short(r.delDate) : '-'}</td><td class="num">${fmtN(r.planEa)}</td><td class="num">${r.confEa === null || r.confEa === undefined ? '-' : fmtN(r.confEa)}</td><td class="num">${has(r) ? fmtRate(rate(r.planEa, r.confEa)) : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">이 부대의 과거 내역이 없습니다</td></tr>'}</tbody></table></div>`;
+    const totalDone = same.filter(has).length;
+    if (totalDone >= 5) html += `<div class="hint mt8">${esc(pname)}은(는) 확정 데이터가 ${totalDone}건 있어 동일 구분 품목 현황은 생략했습니다.</div>`;
+    else {
+      const peers = new Map();
+      Hist.records.filter(r => r.unit === unit && cat && r.cat === cat && r.name !== pname && r.planEa != null).forEach(r => {
+        const x = peers.get(r.name) || { n: 0, plan: 0, conf: 0, cn: 0 }; x.n++; x.plan += r.planEa; if (has(r)) { x.cn++; x.conf += r.confEa; x.cp = (x.cp || 0) + r.planEa; } peers.set(r.name, x);
+      });
+      const list = [...peers.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 10);
+      html += `<div class="reco-title mt12">2. ${esc(unit)}의 동일 구분(${esc(cat || '구분 없음')}) 품목 현황 <span class="hint">(${esc(pname)} 확정 데이터 ${totalDone}건 — 5건 미만이라 참고용으로 표시)</span></div>
+        <div class="table-wrap" style="max-height:240px"><table><thead><tr><th>품명</th><th>건수</th><th>예정 합계</th><th>확정 합계</th><th>증감율</th></tr></thead><tbody>${list.map(([n, x]) => `<tr><td style="text-align:left">${esc(n)}</td><td class="num">${x.n}</td><td class="num">${fmtN(x.plan)}</td><td class="num">${x.cn ? fmtN(x.conf) : '-'}</td><td class="num">${x.cn ? fmtRate(rate(x.cp, x.conf)) : '-'}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">동일 구분 품목의 내역이 없습니다</td></tr>'}</tbody></table></div>`;
+    }
+    box.innerHTML = html;
+  },
 };
 
 /* ---------- 연도 이월 ---------- */
