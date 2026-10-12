@@ -443,7 +443,7 @@ tr.edit-row td { background:#FFFBEB !important; }
           <div class="row"><h2>재산대장</h2><span class="muted">오늘 기준</span><label class="row muted"><input type="checkbox" id="estateHideZero" checked> 재고·출고예정 없는 품목 숨기기</label></div>
           <button class="btn light" onclick="Estate.exportExcel()">엑셀 다운로드</button>
         </div>
-        <div class="hint mb8">소비기한·납품기한별로 줄이 나뉩니다. 출고예정은 출고 탭에서 출고일을 입력한 건이 자동으로 나타나고, 출고일이 되면 재고에서 빠지며 출고예정 칸은 비워집니다. 납품기한 = 소비기한 − 제품 소비기한(개월) × 2/3 (냉장·상온 1/2)</div>
+        <div class="hint mb8">소비기한·납품기한별로 줄이 나뉩니다(소비기한 칸을 눌러 수정할 수 있습니다). 출고예정은 출고 탭에서 출고일을 입력한 건이 자동으로 나타나고, 출고일이 되면 재고에서 빠지며 출고예정 칸은 비워집니다. 납품기한 = 소비기한 − 제품 소비기한(개월) × 2/3 (냉장·상온 1/2)</div>
         <div class="table-wrap" style="max-height:640px"><table id="estateTable"><thead>
           <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">납품기한</th><th rowspan="2">재고</th><th colspan="2">출고예정</th></tr>
           <tr><th style="top:33px">출고일</th><th style="top:33px">수량</th></tr>
@@ -1804,6 +1804,11 @@ const Ledger = {
     $('ldAddDate').querySelector('input').placeholder = '입고일';
     $('ldAddExp').querySelector('input').placeholder = '소비기한';
     $('ldBody').addEventListener('click', Ledger.onRowClick);
+    $('estateBody').addEventListener('datechange', e => {
+      if (!e.target.classList.contains('es-exp')) return;
+      const tr = e.target.closest('tr'), r = tr && Estate.refs[+tr.dataset.k]; if (!r) return;
+      const v = DF.get(e.target); if (v !== (r.expiry || '')) Estate.editExpiry(r, v);
+    });
     AC.bind($('ldRecoUnit'), AC.units, Ledger.renderReco);
     $('ldRecoUnit').addEventListener('change', Ledger.renderReco);
     document.addEventListener('keydown', e => {
@@ -2753,7 +2758,7 @@ const Estate = {
       const used = new Set(), key = x => x.expiry || '9999';
       const rows = p.lots.slice().sort((a, b) => key(a).localeCompare(key(b))).map(l => {
         const mine = pl.filter(x => x.exp === (l.expiry || '')); mine.forEach(x => used.add(x));
-        return { expiry: l.expiry || '', deadline: l.deadline || '', stock: l.remain, ships: mine.sort((a, b) => a.date.localeCompare(b.date)) };
+        return { o: l.row, p, expiry: l.expiry || '', deadline: l.deadline || '', stock: l.remain, ships: mine.sort((a, b) => a.date.localeCompare(b.date)) };
       });
       const rest = p.stock - rows.reduce((a, r) => a + r.stock, 0);
       if (rest > 0) rows.push({ expiry: '', deadline: '', stock: rest, ships: pl.filter(x => !x.exp && !used.has(x)).map(x => (used.add(x), x)) });
@@ -2764,18 +2769,28 @@ const Estate = {
     });
     return { day: today, items };
   },
+  refs: [],
+  // 소비기한 수정: 그 재고가 들어온 입고 줄의 소비기한을 바꾸고, 같은 소비기한으로 잡혀 있던 출고 배분(출고 탭)도 함께 옮긴다
+  async editExpiry(r, val) {
+    const o = r.o, old = o.expiry || '', ops = [{ ...Ledger.ref(o), op: 'update', fields: { expiry: val } }];
+    if (old) r.p.rows.forEach(x => {
+      if (PEND_OUT.has(x.status) && x.lines && x.lines.some(l => l.exp === old)) ops.push({ ...Ledger.ref(x), op: 'update', fields: { ships: fmtShips(x.lines.map(l => ({ ...l, exp: l.exp === old ? val : l.exp }))) } });
+    });
+    await Logi.post(ops, '소비기한을 수정했습니다');
+    Estate.render();
+  },
   dlClass(dl) { if (!dl) return ''; const d = D.diff(dl, D.today()); return d < 0 ? 'dl-over' : d <= dueDays() ? 'dl-soon' : ''; },
   render() {
-    const { items } = Estate.build();
+    const { items } = Estate.build(); Estate.refs = [];
     let html = '', last = null; const cnt = {};
     items.forEach(it => { cnt[it.p.sheet] = (cnt[it.p.sheet] || 0) + it.rows.length + 1; });
     items.forEach(it => {
       const n = it.rows.length + 1;
       it.rows.forEach((r, i) => {
-        html += '<tr>';
+        html += r.o ? `<tr data-k="${Estate.refs.push(r) - 1}">` : '<tr>';
         if (it.p.sheet !== last) { html += `<td class="grp" rowspan="${cnt[it.p.sheet]}">${esc(it.p.sheet)}</td>`; last = it.p.sheet; }
         if (i === 0) html += `<td rowspan="${n}" class="pname" style="text-align:left;font-weight:600">${esc(it.p.name)}</td><td rowspan="${n}">${it.p.product?.shelfMonths || '-'}</td>`;
-        html += `<td>${r.expiry || '-'}</td><td class="${Estate.dlClass(r.deadline)}">${r.deadline || '-'}</td><td class="num">${r.stock ? fmtN(r.stock) : ''}</td>
+        html += `<td>${r.o ? DF.html('es-exp', r.expiry, 'future') : (r.expiry || '-')}</td><td class="${Estate.dlClass(r.deadline)}">${r.deadline || '-'}</td><td class="num">${r.stock ? fmtN(r.stock) : ''}</td>
           <td>${r.ships.map(x => `<div>${D.short(x.date)}</div>`).join('')}</td><td class="num">${r.ships.map(x => `<div title="${esc(x.unit || '')}">${fmtN(x.qty)}</div>`).join('')}</td></tr>`;
       });
       html += `<tr class="sub"><td colspan="2" style="text-align:center">소계 (오늘 기준)</td><td class="num">${fmtN(Math.max(it.stock, 0))}</td><td></td><td class="num">${it.planned ? fmtN(it.planned) : ''}</td></tr>`;
