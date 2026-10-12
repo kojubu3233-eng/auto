@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>자동화시스템</title>
 <script src="config.js"></script>
 <style>
@@ -140,6 +140,7 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .snap-legend{font-size:12px;color:var(--muted);margin-top:6px}
 .snap-legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin:0 3px 0 8px;vertical-align:middle}
 .out-grp td{border-top:2px solid var(--border)}
+.out-act{display:none}
 .out-grp.dirty td,.out-line.dirty td{background:#fffbeb}
 #estateTable .sub td{background:var(--surface-alt);font-weight:700}
 #estateTable .dl-over{color:#c0392b;font-weight:600}.dl-soon{color:#b45309;font-weight:600}
@@ -197,8 +198,13 @@ tr.edit-row td { background:#FFFBEB !important; }
   .home-grid { grid-template-columns:1fr; gap:10px; }
   .buckets { grid-template-columns:repeat(3,1fr); gap:6px; }
   .bucket { padding:8px; } .bucket .b-val { font-size:17px; }
-  .controls { flex-direction:column; align-items:stretch; gap:8px; }
+  .controls { flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px; }
   .controls .row, .controls .radio-group { flex-wrap:wrap; }
+  .controls > .hint { flex-basis:100%; }
+  .controls > input[type=text]:not(.dinput), .controls > .ac-wrap { flex:1 1 130px; width:auto !important; min-width:0; }
+  .controls .ac-wrap input { width:100% !important; }
+  .controls > .lbl { flex-basis:100%; margin-bottom:-4px; }
+  .controls > .lbl + span, .controls > .lbl + input { flex:0 0 auto; }
   .row.between { flex-wrap:wrap; }
   /* 입력칸 16px: 아이폰 확대 방지, 손가락 터치 영역 확보 */
   input[type=text], input[type=number], input[type=date], input[type=month], select { font-size:16px; min-height:36px; }
@@ -206,9 +212,57 @@ tr.edit-row td { background:#FFFBEB !important; }
   .btn { padding:10px 14px; font-size:14px; } .btn.sm { padding:7px 10px; font-size:13px; }
   .dfield .dpick { padding:6px 7px; } .dfield .dpick svg { width:18px; height:18px; }
   .dfield input.dinput, .grid .dfield input.dinput { width:104px; }
-  .table-wrap { max-height:none !important; -webkit-overflow-scrolling:touch; }
+  .table-wrap { max-height:none !important; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; }
+  .table-wrap > table { width:max-content; min-width:100%; }
+  th, td { word-break:keep-all; }
+  td.pname, td[style*="text-align:left"] { min-width:96px; }
+  input[type=checkbox], input[type=radio] { width:20px; height:20px; accent-color:var(--accent); }
+  .radio-group label, label.row, .dec-cb, .ms-panel label { min-height:34px; display:inline-flex; align-items:center; gap:6px; }
+  .ms-panel { max-width:calc(100vw - 24px); }
+  body { padding-left:max(6px, env(safe-area-inset-left)); padding-right:max(6px, env(safe-area-inset-right)); padding-bottom:max(6px, env(safe-area-inset-bottom)); }
+  .re-grid input.dinput, .edit-row .dfield input.dinput { width:100px; }
   table { font-size:12px; }
   th, td { padding:6px 4px; }
+  /* 입력 표(예정량·확정량·입고)는 한 줄이 카드 한 장: 가로 스크롤 없이 입력 */
+  .m-card, .m-card tbody { display:block; width:100% !important; min-width:0 !important; }
+  .table-wrap > table.m-card { width:100% !important; }
+  .m-card thead, .m-card thead tr { display:block; }
+  .m-card thead tr { display:flex; align-items:center; padding:6px 4px; }
+  .m-card thead th { display:none; border:0; }
+  .m-card thead th:first-child { display:flex; align-items:center; gap:8px; position:static; background:none; padding:0; width:auto !important; }
+  .m-card thead th:first-child::after { content:"전체 선택"; font-weight:600; color:var(--muted); font-size:13px; }
+  .m-card tbody tr { display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; margin:8px 6px; padding:10px; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+  .m-card tbody tr.picked { background:var(--accent-soft); }
+  .m-card tbody td { display:flex; flex-direction:column; align-items:stretch; border:0; padding:0; text-align:left !important; min-width:0; background:transparent; width:auto !important; }
+  .m-card tbody td[data-label]::before { content:attr(data-label); font-size:11px; color:var(--muted-2); margin-bottom:2px; font-weight:600; }
+  .m-card tbody td:first-child { grid-column:1/-1; flex-direction:row; align-items:center; }
+  .m-card tbody td.m-wide, .m-card tbody td.empty { grid-column:1/-1; }
+  .m-card tbody td.m-wide[data-label=""]::before, .m-card tbody td:first-child::before { display:none; }
+  .m-card tbody td.m-wide[data-label=""] { flex-direction:row; gap:6px; }
+  .m-card tbody td.m-row { flex-direction:row; gap:8px; } .m-card tbody td.m-row::before { display:none; } .m-card tbody td.m-row .btn { flex:1; }
+
+  .m-out-act, .m-led tbody tr.out-act { display:block; padding:0; margin:-2px 6px 10px; border:0; background:none; }
+  .m-led tbody tr.out-act td { display:flex; flex-direction:row; gap:8px; } .m-led tbody tr.out-act .btn { flex:1; }
+  .m-led tbody tr.out-line { margin-bottom:2px; } .m-led tbody td.m-tail { display:none; }
+  .m-led thead { display:none; }
+  .m-led tbody td[data-label="업체"], .m-led tbody td[data-label="제품"] { display:none; }
+  .m-led tbody tr td { background:transparent !important; }
+  .m-led tbody td:first-child { grid-column:auto; flex-direction:column; align-items:stretch; }
+  .m-led tbody td:first-child::before { display:block; }
+  .m-led tbody td[colspan] { grid-column:1/-1; }
+  .m-led tbody tr { gap:4px 10px; padding:8px 10px; margin:6px; cursor:pointer; }
+  .m-led tbody tr.carry { display:block; background:var(--surface-alt); padding:8px 10px; }
+  .m-led tbody tr.carry td { display:block; text-align:left !important; } .m-led tbody tr.carry td::before { display:none; }
+  .m-led tbody tr.edit-row { background:var(--warn-soft); }
+  .m-led tbody td.m-wide .tag { align-self:flex-start; }
+  .m-led .edit-row td .row { flex-wrap:wrap; }
+  .m-led .edit-row td[data-label=""] { grid-column:1/-1; }
+  .m-card tbody td:empty, .m-card tbody td.m-skip { display:none; }
+  .m-card tbody td.num { text-align:left !important; }
+  .m-card tbody td input[type=text], .m-card tbody td input[type=number], .m-card tbody td select { width:100% !important; border:1px solid var(--border) !important; border-radius:6px; background:var(--surface); }
+  .m-card tbody td .dfield { display:flex; width:100%; } .m-card tbody td .dfield input.dinput { flex:1; width:auto !important; min-width:0; }
+  .m-card tbody td input[type=checkbox] { width:22px; height:22px; }
+
   .prod-grid { grid-template-columns:repeat(2,1fr); gap:6px; }
   .prod-box { padding:8px; } .prod-box .p-stock { font-size:16px; }
   #ledgerSearch { width:100% !important; }
@@ -300,7 +354,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <span class="hint">날짜는 숫자만 입력: 1007 → 10월 7일, 7 → 이번 달 7일</span>
     </div>
     <div class="table-wrap" style="max-height:none">
-      <table class="grid" id="predictTable">
+      <table class="grid m-card" id="predictTable">
         <thead><tr>
           <th class="sel-col"><input type="checkbox" id="predictAll"></th>
           <th id="dateHead" style="width:150px">납품일</th><th style="width:130px">부대</th><th style="min-width:170px">품명</th><th style="width:100px">구분</th>
@@ -339,7 +393,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <span class="hint">확정량(개)이나 (kg) 하나만 입력하면 나머지는 포장단위로 계산됩니다</span>
     </div>
     <div class="table-wrap" style="max-height:600px">
-      <table id="confirmTable">
+      <table id="confirmTable" class="m-card">
         <thead><tr>
           <th style="width:34px"><input type="checkbox" id="confirmAll" title="화면에 보이는 행 전체 선택"></th><th data-sort="delDate">납품일</th><th data-sort="unit">부대</th><th data-sort="name">품명</th><th data-sort="cat">구분</th><th>단위</th>
           <th>단순산술값</th><th>예정(개)</th><th>예정(kg)</th><th>확정(개)</th><th>확정(kg)</th>
@@ -385,7 +439,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <button class="btn sm" onclick="Ledger.addInbound()">추가</button>
     </div>
     <div class="table-wrap" style="max-height:560px">
-      <table><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
+      <table class="m-card m-led" data-labels="업체,제품,입고일,입고수량,납품일,소계,본품,샘플,부대,재고,납품기한 임박,납품기한 초과,상태"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
     </div>
     <div class="row mt8 between"><span class="hint">납품 줄을 누르면 입고일·수량·소비기한을 적을 수 있고, 상태 칸의 입고결정 체크로 그 입고일에 받기로 결정합니다(체크 해제 시 예정). 출고는 예정량·확정량 입력과 자동 연동됩니다(적색 예정 · 청색 확정 · 검정 완료).</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
     <div class="reco mt12" id="ldReco">
@@ -414,7 +468,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <label class="row muted"><input type="checkbox" id="inShowPast"> 입고일이 지난 미완료 건도 표시</label>
       </div>
       <div id="inPastNote" class="mb8"></div>
-      <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
+      <div class="table-wrap" style="max-height:none"><table class="grid m-card"><thead><tr>
         <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>예정 수량</th><th>입고 수량</th><th>소비기한</th><th>납품기한</th><th></th>
       </tr></thead><tbody id="inPlanBody"></tbody></table></div>
       <div class="row mt8" style="justify-content:flex-end"><button class="btn ok" onclick="Logi.completeIn()">체크한 건 입고 완료</button></div>
@@ -429,7 +483,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <label class="lbl">출고일</label><span id="outFShipFrom"></span><span>~</span><span id="outFShipTo"></span>
         <button class="btn light sm" onclick="Logi.resetOutFilter()">필터 초기화</button>
       </div>
-      <div class="table-wrap" style="max-height:none"><table class="grid"><thead><tr>
+      <div class="table-wrap" style="max-height:none"><table class="grid m-card m-led" data-labels="11:납품일,부대,품명,수량(계),본품,샘플,소비기한,수량,출고일,상태,;4:소비기한,수량,출고일,상태"><thead><tr>
         <th>납품일</th><th>부대</th><th style="min-width:140px">품명</th><th>수량(계)</th><th>본품</th><th>샘플</th><th style="min-width:170px">소비기한</th><th>수량</th><th>출고일</th><th>상태</th><th></th>
       </tr></thead><tbody id="outPlanBody"></tbody></table></div>
     </div>
@@ -2457,9 +2511,9 @@ const Logi = {
       return lines.map((l, li) => {
         const done = l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">예정</span>${l.ship ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
         const head = li === 0 ? `<td rowspan="${n}">${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${fmtN(o.outMain)}</td><td rowspan="${n}" class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>` : '';
-        const tail = li === 0 ? `<td rowspan="${n}"><button type="button" class="btn sm ok" data-act="save">저장</button><br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
+        const tail = li === 0 ? `<td rowspan="${n}" class="m-tail"><button type="button" class="btn sm ok" data-act="save">저장</button><br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
         return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ' <span class="tag danger">재고 부족</span>' : ''}</td><td><input type="number" class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
-      }).join('');
+      }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
     }).join('');
   },
   // 한 건(그룹)의 소비기한 배분·출고일을 시트 AA열에 저장
@@ -2964,6 +3018,30 @@ Busy.wrap(Ledger, 'saveDueDays', '저장 중입니다');
 Busy.wrap(Logi, 'saveOutGroup', '출고 저장 중입니다');
 Busy.wrap(Logi, 'completeIn', '입고 저장 중입니다');
 document.addEventListener('DOMContentLoaded', () => App.init());
+
+/* 모바일 카드 표: 머리글 글자를 칸마다 붙여 둔다 (좁은 화면에서만) */
+(function () {
+  if (!window.matchMedia) return;
+  const mq = window.matchMedia('(max-width:760px)');
+  const label = t => {
+    const tb = t.tBodies[0]; if (!tb || !mq.matches) return;
+    const lb = t.dataset.labels, byN = lb && lb.includes(';') ? Object.fromEntries(lb.split(';').map(x => { const k = x.indexOf(':'); return [x.slice(0, k), x.slice(k + 1).split(',')]; })) : null;
+    const hs0 = lb && !byN ? lb.split(',') : null, hs1 = hs0 || (byN ? null : [...t.tHead.rows[0].cells].map(h => h.textContent.trim().replace(/\s+/g, ' ')));
+    for (const tr of tb.rows) {
+      const hs = hs1 || byN[tr.cells.length] || [];
+      if (tr.dataset.m) continue; tr.dataset.m = '1';
+      [...tr.cells].forEach((td, i) => {
+        if (td.colSpan > 1 || td.classList.contains('m-tail')) return;
+        const l = hs[i] || ''; td.dataset.label = l;
+        if (l === '' || l === '품명' || l === '제품' || l === '소비기한' || l === '관리') td.classList.add('m-wide');
+        if (l === '관리') td.classList.add('m-row'); else if (l === '단순산술값') td.classList.add('m-skip');
+      });
+    }
+  };
+  const run = () => document.querySelectorAll('table.m-card').forEach(t => { if (t._mo) return; t._mo = new MutationObserver(() => { cancelAnimationFrame(t._raf); t._raf = requestAnimationFrame(() => label(t)); }); t._mo.observe(t.tBodies[0], { childList: true }); label(t); });
+  document.addEventListener('DOMContentLoaded', run);
+  mq.addEventListener('change', () => document.querySelectorAll('table.m-card tbody tr').forEach(tr => delete tr.dataset.m) || run());
+})();
 </script>
 </body>
 </html>
