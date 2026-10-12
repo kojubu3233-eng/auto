@@ -1515,7 +1515,12 @@ const Confirm = {
 
   /* --- 수정·삭제·행 추가 (자동화시스템 시트와 재고수불대장에 함께 반영) --- */
   ledgerRow: id => LedgerData.byId.get(id) || null,
-  async reloadAll() { App.reloadLedger(); await App.reloadBoot(); },
+  // 저장 직후 화면은 바로 갱신하고, 시트 전체 재조회는 뒤에서 진행(끝날 때까지 행 번호가 필요한 수정·삭제는 잠시 막음)
+  sync() {
+    App.syncing = true;
+    Promise.all([App.reloadBoot(), App.reloadLedger()]).finally(() => { App.syncing = false; });
+  },
+  wait() { if (App.syncing) { toast('시트 동기화 중입니다. 잠시 후 다시 시도하세요'); return true; } return false; },
   modal(title, bodyHtml, onSave) {
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:520px">
       <div class="row between mb12"><h2>${title}</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
@@ -1536,6 +1541,7 @@ const Confirm = {
     AC.bind($('cfName'), AC.products);
   },
   async saveEdit(id) {
+    if (Confirm.wait()) return;
     const r = Hist.byId.get(id); if (!r) return;
     const del = DF.get(document.querySelector('.cf-del')), name = $('cfName').value.trim(), qty = num($('cfQty').value);
     if (!del || !name || !(qty > 0)) return toast('납품일·품명·예정량을 모두 입력하세요');
@@ -1548,31 +1554,34 @@ const Confirm = {
         const lp = nameChanged ? LedgerData.forProduct(name).sort((a, b) => b.rows.length - a.rows.length)[0] : LedgerData.byKey.get(lr.sheet + '|' + lr.name);
         if (!lp) return toast(`재고수불대장에서 '${name}' 품목을 찾지 못했습니다. 품명을 확인하세요`);
         const keepQty = ['출고확정', '출고완료'].includes(lr.status) && lr.outMain ? lr.outMain : qty;
-        ledgerOps.push({ op: 'delete', id, sheet: lr.sheet, name: lr.name });
+        ledgerOps.push({ op: 'delete', id, sheet: lr.sheet, name: lr.name, row: lr.row });
         ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id, status: lr.status || '출고예정', sorted: true, fields: { outDate: del, outMain: keepQty, outSample: lr.outSample || 0, unit: lr.unit || r.unit, expiry: lr.expiry || '' } });
       } else if (!['출고확정', '출고완료'].includes(lr.status)) {
-        ledgerOps.push({ op: 'update', id, sheet: lr.sheet, name: lr.name, fields: { outMain: qty } });
+        ledgerOps.push({ op: 'update', id, sheet: lr.sheet, name: lr.name, row: lr.row, fields: { outMain: qty } });
       }
     }
     Busy.start('수정 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
       const res = await Api.post('ledger', { action: 'planEdit', ref: { id: r.id, src: r.src, row: r.row, name: r.name }, fields: { delDate: del, name, planEa: qty, planKg: kg }, ledgerOps });
       Confirm.closeModal();
-      await Confirm.reloadAll();
+      Object.assign(r, { delDate: del, name, planEa: qty, planKg: kg }); Hist.derive(r); Hist.reindex(); Confirm.render();
+      Confirm.sync();
       toast(res.ledger.failed ? `수정 저장. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '수정했습니다 (재고수불대장 반영 완료)', 5000);
     } catch (e) { toast('수정 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
   },
 
   async remove(id) {
+    if (Confirm.wait()) return;
     const r = Hist.byId.get(id); if (!r) return;
     const lr = Confirm.ledgerRow(id);
     if (!confirm(`${r.delDate ? D.short(r.delDate) : ''} ${r.unit} · ${r.name} 행을 삭제합니다.\n확정량 입력(자동화시스템 시트)${lr ? '과 재고수불대장' : ''}에서 모두 지워지며 되돌릴 수 없습니다. 계속할까요?`)) return;
     Busy.start('삭제 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'planDelete', refs: [{ id: r.id, src: r.src, row: r.row, name: r.name }], ledgerOps: lr ? [{ op: 'delete', id, sheet: lr.sheet, name: lr.name }] : [] });
+      const res = await Api.post('ledger', { action: 'planDelete', refs: [{ id: r.id, src: r.src, row: r.row, name: r.name }], ledgerOps: lr ? [{ op: 'delete', id, sheet: lr.sheet, name: lr.name, row: lr.row }] : [] });
       Confirm.dirty.delete(id);
-      await Confirm.reloadAll();
+      Hist.records = Hist.records.filter(x => x.id !== id); Hist.byId.delete(id); Hist.reindex(); Confirm.render();
+      Confirm.sync();
       toast(res.deleted ? `삭제했습니다${res.ledger.failed ? ` (재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')})` : ''}` : '시트에서 행을 찾지 못했습니다. 새로고침 후 다시 시도하세요', 5000);
     } catch (e) { toast('삭제 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
@@ -1604,7 +1613,9 @@ const Confirm = {
     try {
       const res = await Api.post('ledger', { action: 'planSave', rows: [{ values: [id, del, cat, name, '', '', '', '', '', unit, '', '', '', App.prefs.unitType[name] || 'kg', ''], confEa: qty, confKg: kg }], ledgerOps });
       Confirm.closeModal();
-      await Confirm.reloadAll();
+      const rec = { id, src: 'plan', delDate: del, mealDate: '', cat, name, unit, planEa: null, planKg: null, confEa: qty, confKg: kg, price: p?.price || null, unitType: App.prefs.unitType[name] || 'kg', simple: null };
+      Hist.derive(rec); Hist.records.push(rec); Hist.reindex(); Confirm.render();
+      Confirm.sync();
       toast(res.ledger.failed ? `행 추가. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '추가했습니다 (재고수불대장 출고확정 반영 완료)', 5000);
     } catch (e) { toast('추가 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
