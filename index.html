@@ -2542,10 +2542,17 @@ const Logi = {
     const keys = trs.map(tr => Logi.inKey(Logi.plans.in[+tr.dataset.i].o));   // 저장 뒤 목록이 다시 그려지므로 미리 키를 잡아 둔다
     if (await Logi.send('in', ops, entries)) { keys.forEach(k => delete Logi.inDraft[k]); Logi.renderInPlans(); }
   },
+  // 오늘 저장한 입출고: 재고수불대장에 실제로 있는 줄만, 재고수불대장의 현재 값(수정·삭제 반영)으로 보여 준다
   renderToday() {
-    const t = D.today(); const today = Logi.log.filter(x => x.ts.slice(0, 10) === t || x.date === t).slice(-50).reverse();
-    Logi.todayItems = today;
-    $('logiToday').innerHTML = today.length ? today.map((x, i) => `<div class="list-row editable" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">${x.kind === 'in' ? '입고' : '출고'} · ${esc(x.name)}</div><div class="l-sub">${D.short(x.date)} ${esc(x.unit || '')} ${x.expiry ? '소비기한 ' + D.short(x.expiry) : ''}</div></div><div class="num"><b>${fmtN(x.qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag done">반영</span>'}</div></div></div>`).join('') : '<div class="empty">오늘 저장한 입출고가 없습니다</div>';
+    const t = D.today();
+    const today = Logi.log.filter(x => x.ts.slice(0, 10) === t || x.date === t).slice(-50).reverse()
+      .map(x => { const r = x.ok === false ? null : Logi.findRow(x); return { x, r }; })
+      .filter(({ x, r }) => x.ok === false || r || !Logi.inYear(x));
+    Logi.todayItems = today.map(({ x }) => x);
+    $('logiToday').innerHTML = today.length ? today.map(({ x, r }, i) => {
+      const qty = r ? (x.kind === 'in' ? r.inQty : r.outMain) || x.qty : x.qty, date = r ? (x.kind === 'in' ? r.inDate : r.outDate) || x.date : x.date, exp = r && x.kind === 'in' ? r.expiry : x.expiry;
+      return `<div class="list-row editable" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">${x.kind === 'in' ? '입고' : '출고'} · ${esc(x.name)}</div><div class="l-sub">${D.short(date)} ${esc(x.unit || '')} ${exp ? '소비기한 ' + D.short(exp) : ''}</div></div><div class="num"><b>${fmtN(qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag done">반영</span>'}</div></div></div>`;
+    }).join('') : '<div class="empty">오늘 저장한 입출고가 없습니다</div>';
   },
   findRow(x) {
     if (x.id && LedgerData.byId.has(x.id)) return LedgerData.byId.get(x.id);
