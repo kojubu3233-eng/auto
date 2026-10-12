@@ -31,7 +31,7 @@ h3 { font-size:13px; font-weight:700; }
 .btn { padding:8px 14px; border:none; border-radius:8px; font-weight:600; cursor:pointer; color:#fff; background:var(--accent); font-size:13px; }
 .btn:hover { opacity:.88; }
 .btn:focus-visible, .tab-btn:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
-.btn.ok { background:var(--ok); } .btn.danger { background:var(--danger); } .btn.gray { background:#6B6660; }
+.btn.ok { background:var(--ok); } .btn.danger { background:var(--danger); }
 .btn.light { background:var(--surface-alt); color:var(--ink); border:1px solid var(--border); }
 .btn.sm { padding:5px 10px; font-size:12px; }
 .btn[disabled] { opacity:.5; cursor:default; }
@@ -156,9 +156,6 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .prod-box .p-sub { font-size:11px; color:var(--muted); }
 .cat-box .p-name { font-size:15px; }
 .cat-box .p-stock { font-size:13px; font-weight:600; color:var(--muted); }
-.chips { display:flex; gap:6px; flex-wrap:wrap; }
-.chip { border:1px solid var(--border); background:var(--surface); border-radius:14px; padding:4px 10px; font-size:12px; cursor:pointer; }
-.chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
 #reportTable td { white-space:nowrap; }
 #reportTable tr.chg td { color:var(--plan); }
 #reportTable td.grp { background:var(--surface-alt); font-weight:700; }
@@ -180,7 +177,6 @@ tr.edit-row td { background:#FFFBEB !important; }
 .modal { background:var(--surface); border-radius:12px; max-width:760px; width:100%; max-height:88vh; overflow:auto; padding:20px; }
 .toast { position:fixed; right:16px; bottom:16px; background:var(--ink); color:#fff; padding:10px 14px; border-radius:8px; font-size:13px; z-index:300; max-width:420px; white-space:pre-line; }
 .banner { background:var(--warn-soft); border:1px solid #F0DFC4; color:var(--warn); padding:8px 12px; border-radius:8px; font-size:12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
-.loading { color:var(--muted-2); font-size:12px; }
 .editable { cursor:pointer; } tr.editable:hover td, .list-row.editable:hover { background:var(--accent-soft); }
 .re-card { border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; background:var(--surface); }
 .re-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
@@ -389,7 +385,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <button class="btn sm" onclick="Ledger.addInbound()">추가</button>
     </div>
     <div class="table-wrap" style="max-height:560px">
-      <table id="ldTable"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
+      <table><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
     </div>
     <div class="row mt8 between"><span class="hint">납품 줄을 누르면 입고일·수량·소비기한을 적을 수 있고, 입고일을 적으면 입고결정 체크박스가 나타납니다. 출고는 예정량·확정량 입력과 자동 연동됩니다(적색 예정 · 청색 확정 · 검정 완료).</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
     <div class="reco mt12" id="ldReco">
@@ -487,7 +483,9 @@ tr.edit-row td { background:#FFFBEB !important; }
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { if (typeof v === 'number') return v; const n = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(n) ? null : n; };
-const fmtN = (v, d = 0) => (v === null || v === undefined || v === '' || isNaN(v)) ? '-' : Number(v).toLocaleString('ko-KR', { maximumFractionDigits: d, minimumFractionDigits: 0 });
+// 숫자 서식: Intl.NumberFormat을 소수 자릿수별로 한 번만 만들어 재사용한다 (toLocaleString을 매번 부르면 표가 클 때 매우 느리다)
+const NF = {};
+const fmtN = (v, d = 0) => (v === null || v === undefined || v === '' || isNaN(v)) ? '-' : (NF[d] || (NF[d] = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: d, minimumFractionDigits: 0 }))).format(Number(v));
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
 function toast(msg, ms = 3200) {
@@ -537,18 +535,25 @@ async function simpleSheet(filename, sheetName, header, rows, widths) {
 const D = {
   pad: n => String(n).padStart(2, '0'),
   iso(y, m, d) { return `${y}-${D.pad(m)}-${D.pad(d)}`; },
-  today() { const t = new Date(); return D.iso(t.getFullYear(), t.getMonth() + 1, t.getDate()); },
+  // 오늘 날짜는 자정이 지날 때까지 한 번만 계산한다 (표를 그리는 동안 수천 번 불린다)
+  today() {
+    const n = Date.now(); if (n < D._next) return D._today;
+    const t = new Date(); D._today = D.iso(t.getFullYear(), t.getMonth() + 1, t.getDate()); D._year = t.getFullYear(); D._next = new Date(t.getFullYear(), t.getMonth(), t.getDate() + 1).getTime();
+    return D._today;
+  },
+  _today: '', _year: 0, _next: 0,
+  dn: iso => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000,   // 날짜 → 일 번호 (Date 객체를 만들지 않고 계산)
   valid(y, m, d) { if (m < 1 || m > 12 || d < 1) return false; return d <= new Date(y, m, 0).getDate(); },
   toDate(iso) { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d); },
   fromDate(dt) { return D.iso(dt.getFullYear(), dt.getMonth() + 1, dt.getDate()); },
   add(iso, days) { const dt = D.toDate(iso); dt.setDate(dt.getDate() + days); return D.fromDate(dt); },
   addMonths(iso, n) { const dt = D.toDate(iso); dt.setMonth(dt.getMonth() + n); return D.fromDate(dt); },
-  diff(a, b) { return Math.round((D.toDate(a) - D.toDate(b)) / 86400000); },
-  wd: iso => '일월화수목금토'[D.toDate(iso).getDay()],
+  diff(a, b) { return Math.round(D.dn(a) - D.dn(b)); },
+  wd: iso => '일월화수목금토'[(((Math.floor(D.dn(iso)) + 4) % 7) + 7) % 7],
   short(iso) {
     if (!iso) return '';
     const [y, m, d] = iso.split('-');
-    return (Number(y) === new Date().getFullYear() ? `${m}.${d}` : `${y.slice(2)}.${m}.${d}`) + `(${D.wd(iso)})`;
+    D.today(); return (Number(y) === D._year ? `${m}.${d}` : `${y.slice(2)}.${m}.${d}`) + `(${D.wd(iso)})`;
   },
   isIso: s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')),
   // 입력 문자열을 ISO로. mode: 'near'(오늘 기준 가까운 해) | 'future'(오늘 이후로)
@@ -671,8 +676,14 @@ const Store = {
       r.onsuccess = () => ok(r.result ?? null); r.onerror = () => ok(null);
     });
   },
-  set(key, val) { if (Store.db) Store.db.transaction('kv', 'readwrite').objectStore('kv').put(val, key); }
+  set(key, val) { if (Store.db) Store.db.transaction('kv', 'readwrite').objectStore('kv').put(val, key); },
+  // 큰 데이터(전체 시트 사본)는 저장할 때마다 바로 쓰지 않고 잠시 모았다가 한 번만 쓴다 (연속 저장 시 화면이 멈추지 않게)
+  pending: {}, timer: 0,
+  setSoon(key, val) { Store.pending[key] = val; clearTimeout(Store.timer); Store.timer = setTimeout(Store.flush, 1500); },
+  flush() { clearTimeout(Store.timer); const p = Store.pending; Store.pending = {}; Object.keys(p).forEach(k => Store.set(k, p[k])); }
 };
+addEventListener('pagehide', () => Store.flush());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Store.flush(); });
 
 /* ---------- 서버 ---------- */
 const Api = {
@@ -1049,13 +1060,13 @@ const App = {
     Holidays.map = boot.holidays || {};
     Names.load(boot.products, boot.units);
     Hist.load(boot);
-    if (!fromCache) Store.set('boot', boot);
+    if (!fromCache) Store.setSoon('boot', boot);
   },
   applyLedger(ledger, fromCache) {
     App.ledger = ledger;
     App.years = ledger.years || []; App.currentYear = ledger.currentYear || String(new Date().getFullYear()); App.settings = ledger.settings || { dueSoonDays: 30 };
     LedgerData.load(ledger);
-    if (!fromCache) Store.set('ledger', ledger);
+    if (!fromCache) Store.setSoon('ledger', ledger);
   },
   async reload(force) {
     const y = new Date().getFullYear();
@@ -1173,8 +1184,8 @@ const Link = {
 const Home = {
   open: { age: null, due: null },
   lots() {
-    const out = [];
-    LedgerData.standard().forEach(p => p.lots.forEach(l => out.push({ p, l })));
+    const out = [], t = D.today();   // 보관일수(age)·납품기한까지 남은 일수(left)는 한 번만 계산해 둔다
+    LedgerData.standard().forEach(p => p.lots.forEach(l => out.push({ p, l, age: l.inDate ? D.diff(t, l.inDate) : null, left: l.deadline ? D.diff(l.deadline, t) : null })));
     return out;
   },
   render() {
@@ -1183,14 +1194,14 @@ const Home = {
     const lots = Home.lots();
 
     const ageDefs = [['30일 이내', 0, 30], ['31~60일', 31, 60], ['61~90일', 61, 90], ['91~180일', 91, 180], ['180일 초과', 181, 1e9]];
-    Home.age = ageDefs.map(([label, lo, hi]) => ({ label, items: lots.filter(x => x.l.inDate && D.diff(t, x.l.inDate) >= lo && D.diff(t, x.l.inDate) <= hi) }));
+    Home.age = ageDefs.map(([label, lo, hi]) => ({ label, items: lots.filter(x => x.age !== null && x.age >= lo && x.age <= hi) }));
     const noDate = lots.filter(x => !x.l.inDate);
     if (noDate.length) Home.age.push({ label: '입고일 없음', items: noDate });
     $('ageBuckets').innerHTML = Home.age.map((b, i) => `<button class="bucket ${i === 4 ? 'warn' : ''} ${Home.open.age === i ? 'on' : ''}" onclick="Home.detail('age',${i})">
       <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div></button>`).join('');
 
     const dueDefs = [['초과', -1e9, -1, 'danger'], ['1개월', 0, 30, 'warn'], ['2개월', 31, 60, ''], ['3개월', 61, 90, ''], ['4개월 이상', 91, 1e9, '']];
-    Home.due = dueDefs.map(([label, lo, hi, cls]) => ({ label, cls, items: lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) >= lo && D.diff(x.l.deadline, t) <= hi) }));
+    Home.due = dueDefs.map(([label, lo, hi, cls]) => ({ label, cls, items: lots.filter(x => x.left !== null && x.left >= lo && x.left <= hi) }));
     const unknown = lots.filter(x => !x.l.deadline);
     if (unknown.length) Home.due.push({ label: '정보 없음', cls: '', items: unknown, note: '소비기한 또는 품목정보(보관방법·소비기한) 미입력' });
     $('dueBuckets').innerHTML = Home.due.map((b, i) => `<button class="bucket ${b.cls} ${Home.open.due === i ? 'on' : ''}" onclick="Home.detail('due',${i})" title="${esc(b.note || '')}">
@@ -1198,8 +1209,8 @@ const Home = {
     if (Home.open.age !== null) Home.detail('age', Home.open.age, true);
     if (Home.open.due !== null) Home.detail('due', Home.open.due, true);
 
-    const rowsAll = LedgerData.standard().flatMap(p => p.rows.map(o => ({ p, o })));
-    const inSch = rowsAll.filter(x => x.o.inSt === '입고결정').sort((a, b) => String(a.o.inDate).localeCompare(String(b.o.inDate)));
+    const inSch = []; LedgerData.standard().forEach(p => p.rows.forEach(o => { if (o.inSt === '입고결정') inSch.push({ p, o }); }));
+    inSch.sort((a, b) => String(a.o.inDate).localeCompare(String(b.o.inDate)));
     $('inSchedule').innerHTML = inSch.length ? inSch.map(({ p, o }) => `<div class="list-row"><div><div class="l-name">${esc(p.name)}</div><div class="l-sub">${esc(p.sheet)} ${esc(p.company)}</div></div>
       <div class="num"><b>${fmtN(o.inQty)}</b><div class="l-sub">${o.inDate ? D.short(o.inDate) : '일자 미정'} ${o.inDate && o.inDate < t ? '<span class="tag danger">지연</span>' : ''}</div></div></div>`).join('') : '<div class="empty">결정된 입고 예정이 없습니다</div>';
 
@@ -1208,10 +1219,10 @@ const Home = {
     $('outToday').innerHTML = outRows.length ? outRows.map(({ p, o }) => `<div class="list-row"><div><div class="l-name">${esc(p.name)}</div><div class="l-sub">${esc(o.unit || '')}</div></div>
       <div class="num"><b>${fmtN(o.outTotal)}</b><div class="l-sub">${tagOf(o.status)}</div></div></div>`).join('') : '<div class="empty">오늘 출고가 없습니다</div>';
 
-    const soon = lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) >= 0 && D.diff(x.l.deadline, t) <= dueDays()).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
-    const past = lots.filter(x => x.l.deadline && D.diff(x.l.deadline, t) < 0).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
+    const soon = lots.filter(x => x.left !== null && x.left >= 0 && x.left <= dueDays()).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
+    const past = lots.filter(x => x.left !== null && x.left < 0).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
     const dueRow = (x, cls) => `<div class="list-row"><div><div class="l-name">${esc(x.p.name)}</div><div class="l-sub">소비기한 ${D.short(x.l.expiry)} · 납품기한 ${D.short(x.l.deadline)}</div></div>
-      <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${D.diff(x.l.deadline, t) < 0 ? D.diff(t, x.l.deadline) + '일 초과' : D.diff(x.l.deadline, t) + '일 남음'}</span></div></div></div>`;
+      <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${x.left < 0 ? -x.left + '일 초과' : x.left + '일 남음'}</span></div></div></div>`;
     $('dueSoon').innerHTML = soon.length ? soon.map(x => dueRow(x, 'warn')).join('') : `<div class="empty">${dueDays()}일 이내 납품기한 재고가 없습니다</div>`;
     $('duePast').innerHTML = past.length ? past.map(x => dueRow(x, 'danger')).join('') : '<div class="empty">납품기한이 지난 재고가 없습니다</div>';
   },
@@ -1225,10 +1236,10 @@ const Home = {
     const items = [...b.items];
     if (kind === 'age') {
       items.sort((a, c) => String(a.l.inDate).localeCompare(String(c.l.inDate)));
-      $('ageDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td>${x.l.inDate ? D.short(x.l.inDate) : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td class="num">${x.l.inDate ? D.diff(t, x.l.inDate) + '일' : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
+      $('ageDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td>${x.l.inDate ? D.short(x.l.inDate) : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td class="num">${x.age !== null ? x.age + '일' : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
     } else {
       items.sort((a, c) => String(a.l.deadline || '9').localeCompare(String(c.l.deadline || '9')));
-      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.l.deadline ? D.diff(x.l.deadline, t) + '일' : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
+      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left !== null ? x.left + '일' : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
     }
   },
   closeDetail(kind) {
@@ -1636,7 +1647,7 @@ const Confirm = {
   modal(title, bodyHtml, onSave) {
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:520px">
       <div class="row between mb12"><h2>${title}</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
-      <div id="cfForm" style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">${bodyHtml}</div>
+      <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">${bodyHtml}</div>
       <div class="row mt12" style="justify-content:flex-end"><button class="btn light" onclick="Confirm.closeModal()">취소</button><button class="btn ok" id="cfSave">저장</button></div></div></div>`;
     $('cfSave').onclick = onSave;
   },
@@ -2216,7 +2227,7 @@ const Carry = {
     if (!froms.length) return toast('이월할 이전 연도 파일이 없습니다. Apps Script에서 연도 파일을 등록하세요');
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Carry.close()"><div class="modal" style="max-width:980px">
       <div class="row between mb12"><h2>연도 이월</h2><button class="btn light sm" onclick="Carry.close()">닫기</button></div>
-      <div class="muted mb12">원본 연도 파일에 남은 재고와 미완료 입고·출고 예정 건을 현재 연도(${cur}년) 파일로 옮깁니다. 원래 입고일과 소비기한이 그대로 유지되고, 이미 이월한 건은 다시 만들지 않습니다.</div>
+      <div class="muted mb12">원본 연도 파일에 남은 재고와 미완료 입고·출고 예정 건을 현재 연도(${cur}년) 파일로 옮깁니다. 원래 입고일과 소비기한이 그대로 유지되고, 출고 탭의 소비기한 배분·출고일과 입고결정 상태도 함께 옮겨집니다. 이미 이월한 건은 다시 만들지 않습니다.</div>
       <div class="controls"><label class="lbl" for="carryFrom">원본 연도</label><select id="carryFrom">${froms.map(y => `<option value="${y}">${y}년</option>`).join('')}</select><span class="hint">대상: ${cur}년(현재 연도) 파일</span></div>
       <div id="carrySummary" class="muted mb8">불러오는 중</div>
       <div class="table-wrap" style="max-height:48vh"><table><thead><tr><th class="sel-col"></th><th>상태</th><th>대분류</th><th>품명</th><th>구분</th><th>입고일</th><th>소비기한</th><th>수량</th><th>비고</th></tr></thead><tbody id="carryBody"></tbody></table></div>
@@ -2240,15 +2251,19 @@ const Carry = {
     } catch (e) { if (Carry.from === year) $('carrySummary').textContent = '불러오지 못했습니다: ' + e.message; }
   },
   build(data, raw) {
-    const compact = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== null && v !== undefined && v !== 0));
+    const compact = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== null && v !== undefined && v !== 0 && v !== false));
     const items = [];
     data.standard().forEach(p => {
       // 출고확정 건은 새 파일에서 다시 완료 처리하므로, 이월 잔량에는 그만큼을 되돌려 계산한다
       const a = data.allocate(p, Math.max(0, p.stock + p.confirmedOut));
       a.lots.forEach(l => items.push({ kind: 'lot', sheet: p.sheet, name: p.name, company: l.row.company || p.company, srcId: l.row.id || '', row: l.row.row, qty: l.remain, inDate: l.inDate, expiry: l.expiry, status: '이월', fields: compact({ inDate: l.inDate, inQty: l.remain, expiry: l.expiry }) }));
       if (a.rest > 0) items.push({ kind: 'lot', rest: true, sheet: p.sheet, name: p.name, company: p.company, srcId: 'REST|' + p.sheet + '|' + p.name, qty: a.rest, inDate: '', expiry: '', status: '이월', fields: compact({ inQty: a.rest }) });
-      p.rows.filter(o => CARRY_PENDING.has(o.status)).forEach(o => items.push({ kind: 'plan', sheet: p.sheet, name: p.name, company: o.company || p.company, srcId: o.id || '', row: o.row, qty: o.inQty || o.outTotal || 0, inDate: o.inDate, expiry: o.expiry, status: o.status,
-        fields: compact({ inDate: o.inDate, inQty: o.inQty, outDate: o.outDate, outMain: o.outMain, outSample: o.outSample, unit: o.unit, expiry: o.expiry }) }));
+      p.rows.filter(o => CARRY_PENDING.has(o.status)).forEach(o => {
+        // 납품 줄에 함께 적은 입고가 이미 완료(입고완료)된 경우, 그 입고분은 위 잔량(lot)으로 이월되므로 다시 넣지 않는다
+        const keepIn = !(o.comb && o.inSt === '입고완료');
+        items.push({ kind: 'plan', sheet: p.sheet, name: p.name, company: o.company || p.company, srcId: o.id || '', row: o.row, qty: (keepIn && o.inQty) || o.outTotal || 0, inDate: keepIn ? o.inDate : '', expiry: keepIn ? o.expiry : '', status: o.status,
+          fields: compact({ inDate: keepIn && o.inDate, inQty: keepIn && o.inQty, outDate: o.outDate, outMain: o.outMain, outSample: o.outSample, unit: o.unit, expiry: keepIn && o.expiry, ships: o.ships, inState: keepIn && o.inState }) });   // ships(출고 탭 소비기한 배분·출고일)·inState(입고결정 여부)도 함께 옮긴다
+      });
     });
     items.forEach(it => {
       it.newId = it.srcId ? (it.kind === 'lot' ? 'C' + it.srcId : it.srcId) : '';
@@ -2309,7 +2324,7 @@ const Logi = {
       const b = e.target.closest('[data-sub]'); if (!b) return;
       document.querySelectorAll('#logiTabs .tab-btn').forEach(x => x.classList.toggle('active', x === b));
       document.querySelectorAll('[data-subpane]').forEach(p => p.classList.toggle('hidden', p.dataset.subpane !== b.dataset.sub));
-      if (b.dataset.sub === 'backup') { Logi.renderLog(); Snap.render(); }
+      Logi.show(b.dataset.sub);
     });
     DF.mount($('printDate'), 'print-date', D.today());
     document.querySelectorAll('[data-all]').forEach(c => c.addEventListener('change', () => $(c.dataset.all + 'Body').querySelectorAll('.pk').forEach(x => { x.checked = c.checked; })));
@@ -2355,7 +2370,15 @@ const Logi = {
     Logi.log = (await Store.get('logiLog')) || [];
     await Snap.load(); Snap.init();
   },
-  render() { Estate.render(); Snap.auto(); Logi.renderToday(); Logi.renderInPlans(); Logi.renderOut(); },
+  // 하위 탭(입고·출고·일지 출력·백업)은 보이는 것만 그리고, 나머지는 열 때 그린다 (저장·새로고침마다 모든 표를 다시 만들지 않는다)
+  sub: 'in', stale: new Set(),
+  render() { Snap.auto(); Logi.renderToday(); Logi.stale = new Set(['in', 'out', 'print']); Logi.show(Logi.sub); },
+  show(sub) {
+    Logi.sub = sub;
+    if (sub === 'backup') { Logi.renderLog(); Snap.render(); return; }
+    if (!Logi.stale.delete(sub)) return;
+    if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') Estate.render();
+  },
   deadlineHtml: dl => dl ? `${D.short(dl)}${D.diff(dl, D.today()) < 0 ? ' <span class="tag danger">경과</span>' : ''}` : '-',
   async send(kind, ops, entries) {
     try {
@@ -2412,12 +2435,12 @@ const Logi = {
     const q = c => DF.get(document.querySelector('.' + c)), dF = q('outfdelfrom'), dT = q('outfdelto'), sF = q('outfshipfrom'), sT = q('outfshipto');
     const groups = [];
     LedgerData.standard().forEach(p => {
-      const sug = Logi.suggest(p, today);
+      let sug = null;   // 소비기한 자동 배분은 이 품목에 표시할 건이 있을 때만 계산한다
       p.rows.forEach(o => {
         if (!PEND_OUT.has(o.status) || !o.outTotal || !o.outDate || o.outDate < today || D.diff(o.outDate, today) > OUT_DAYS) return;   // 납품일 5일 전부터 나타나고, 납품일이 지나면 사라진다
         if ((un && !Names.norm(o.unit).includes(un)) || (nm && !Names.norm(p.name).includes(nm))) return;
         if ((dF && o.outDate < dF) || (dT && o.outDate > dT)) return;
-        const key = Logi.outKey(o), base = o.lines ? o.lines.map(l => ({ ...l })) : (sug.get(o) || [{ exp: '', qty: o.outTotal, ship: '' }]);
+        const key = Logi.outKey(o), base = o.lines ? o.lines.map(l => ({ ...l })) : ((sug || (sug = Logi.suggest(p, today))).get(o) || [{ exp: '', qty: o.outTotal, ship: '' }]);
         const lines = Logi.outDraft[key] || base, dirty = !!Logi.outDraft[key];
         if ((sF || sT) && !lines.some(l => l.ship && (!sF || l.ship >= sF) && (!sT || l.ship <= sT))) return;
         groups.push({ p, o, lines, base, dirty });
@@ -2428,7 +2451,8 @@ const Logi = {
     if (!groups.length) { body.innerHTML = '<tr><td colspan="11" class="empty">출고 예정이 없습니다 (납품일 5일 전부터 나타납니다)</td></tr>'; return; }
     body.innerHTML = groups.map((g, gi) => {
       const { p, o, lines, dirty } = g, n = lines.length;
-      const lotOpts = sel => { const opts = p.lots.filter(l => l.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(l => ({ v: l.expiry, t: `${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})` })); if (sel && !opts.some(x => x.v === sel)) opts.push({ v: sel, t: D.short(sel) }); return '<option value="">미지정</option>' + opts.map(x => `<option value="${x.v}"${x.v === sel ? ' selected' : ''}>${esc(x.t)}</option>`).join(''); };
+      const baseOpts = p.lots.filter(l => l.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(l => ({ v: l.expiry, t: `${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})` }));
+      const lotOpts = sel => { const opts = sel && !baseOpts.some(x => x.v === sel) ? baseOpts.concat({ v: sel, t: D.short(sel) }) : baseOpts; return '<option value="">미지정</option>' + opts.map(x => `<option value="${x.v}"${x.v === sel ? ' selected' : ''}>${esc(x.t)}</option>`).join(''); };
       return lines.map((l, li) => {
         const done = l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">예정</span>${l.ship ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
         const head = li === 0 ? `<td rowspan="${n}">${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${fmtN(o.outMain)}</td><td rowspan="${n}" class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>` : '';
@@ -2728,6 +2752,8 @@ const Estate = {
     LedgerData.standard().forEach(p => {
       const pl = [];   // 출고예정: 출고 탭에서 출고일을 입력했고 아직 그날이 오지 않은 수량
       p.rows.forEach(o => { if (PEND_OUT.has(o.status) && o.lines) o.lines.forEach(l => { if (l.ship && l.ship > today) pl.push({ exp: l.exp || '', date: l.ship, qty: l.qty, unit: o.unit }); }); });
+      const planned = pl.reduce((a, x) => a + x.qty, 0);
+      if (hide && !p.stock && !planned) return;
       const used = new Set(), key = x => x.expiry || '9999';
       const rows = p.lots.slice().sort((a, b) => key(a).localeCompare(key(b))).map(l => {
         const mine = pl.filter(x => x.exp === (l.expiry || '')); mine.forEach(x => used.add(x));
@@ -2737,8 +2763,6 @@ const Estate = {
       if (rest > 0) rows.push({ expiry: '', deadline: '', stock: rest, ships: pl.filter(x => !x.exp && !used.has(x)).map(x => (used.add(x), x)) });
       const orphan = pl.filter(x => !used.has(x));
       if (orphan.length) rows.push({ expiry: orphan[0].exp, deadline: Names.deadline(orphan[0].exp, p.product) || '', stock: 0, ships: orphan });
-      const planned = pl.reduce((a, x) => a + x.qty, 0);
-      if (hide && !p.stock && !planned) return;
       if (!rows.length) rows.push({ expiry: '', deadline: '', stock: Math.max(p.stock, 0), ships: [] });
       items.push({ p, rows, stock: p.stock, planned });
     });
@@ -2821,7 +2845,7 @@ const Snap = {
       if (JSON.stringify(snap) !== JSON.stringify(Snap.data[t])) { Snap.data[t] = snap; Snap.persist(); }
       const pane = document.querySelector('[data-subpane="backup"]');
       if (pane && !pane.classList.contains('hidden')) Snap.render();
-    }, 800);
+    }, 2500);
   },
   saveToday() { const t = D.today(); Snap.data[t] = Snap.make(t); Snap.persist(); Snap.render(); toast(`${D.short(t)} 현황을 백업했습니다`); },
   async fill() {
@@ -2873,7 +2897,7 @@ const Snap = {
     if (!Snap.open) { $('snapView').innerHTML = '<div class="hint">달력의 날짜를 누르면 그날의 입출고 및 재고현황이 나옵니다.</div>'; return; }
     const snap = Snap.data[sel], head = `<h3>${D.short(sel)} 입출고 및 재고현황 <span class="hint">(백업 기준)</span></h3>`;
     if (!snap) { $('snapView').innerHTML = `${head}<div class="empty">이 날짜의 백업이 없습니다.${sel <= t ? ' <button type="button" class="btn light sm" onclick="Snap.makeDay()">현재 시트 기준으로 만들기</button>' : ''}</div>`; return; }
-    $('snapView').innerHTML = `${head}<div class="table-wrap" style="max-height:560px"><table id="snapTable"><thead>
+    $('snapView').innerHTML = `${head}<div class="table-wrap" style="max-height:560px"><table><thead>
       <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">부대 사용기한</th><th rowspan="2">전일재고</th><th rowspan="2">총계</th><th colspan="2">금일 입고내역</th><th colspan="2">금일 출고내역</th><th colspan="2">금일 재고현황</th></tr>
       <tr><th style="top:33px">소비기한</th><th style="top:33px">입고량</th><th style="top:33px">출고량</th><th style="top:33px">출고 부대</th><th style="top:33px">재고</th><th style="top:33px">총계</th></tr>
       </thead><tbody>${Report.tableHtml(Snap.pick(snap), false)}</tbody></table></div>`;
