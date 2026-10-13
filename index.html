@@ -106,13 +106,13 @@ tr.picked td { background:#FFFBEB !important; }
 .list-box { border:1px solid var(--border); border-radius:8px; max-height:320px; overflow:auto; }
 .empty { padding:14px; color:var(--muted-2); font-size:12px; text-align:center; }
 .tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; }
-.tag.plan { background:var(--danger-soft); color:var(--plan); } .tag.conf { background:#E8EEFB; color:var(--conf); } .tag.done { background:var(--ok-soft); color:var(--ok); }
+.tag.dec { background:#E9E7E1; color:var(--ink); } .tag.plan { background:var(--danger-soft); color:var(--plan); } .tag.conf { background:#E8EEFB; color:var(--conf); } .tag.done { background:var(--ok-soft); color:var(--ok); }
 .tag.carry { background:#EEE; color:#000; } .prod-box.due-box.soon { border-color:var(--warn); } .prod-box.due-box.past { border-color:var(--danger); } .prod-box.due-box.on { box-shadow:0 0 0 2px var(--ink) inset; }
 .tag.warn { background:var(--warn-soft); color:var(--warn); }
 tr.row-grey td { background:#F1F1EF !important; color:#9A9A94 !important; } tr.row-grey .tag { opacity:.6; }
 .over-btn { border:1px solid var(--danger); background:var(--danger-soft); color:var(--danger); border-radius:6px; padding:2px 8px; font-weight:700; cursor:pointer; font-size:12px; } .over-btn:hover { background:var(--danger); color:#fff; }
 td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap;cursor:pointer;margin-left:4px}
-.reco-now{font-size:13px;margin-bottom:6px}
+.reco-now{font-size:13px;margin-bottom:6px}.reco-sel{font-size:13px;margin:6px 0 8px}.reco-sel .neg{color:#c0392b}
 .reco-rec{padding:10px 12px;border:1px solid var(--line,#ddd);border-radius:8px;margin-bottom:10px;background:#f6faf6}
 .reco-rec.need{background:#fff4f2;border-color:#e5a39b}
 .reco-rec b{font-size:20px}
@@ -443,7 +443,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
     <div class="row mt8 between"><span class="hint">납품 줄을 누르면 입고일·수량·소비기한을 적을 수 있고, 상태 칸의 입고결정 체크로 그 입고일에 받기로 결정합니다(체크 해제 시 예정). 출고는 예정량·확정량 입력과 자동 연동됩니다(적색 예정 · 청색 확정 · 검정 완료).</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
     <div class="reco mt12" id="ldReco">
-      <div class="row mb8"><b>발주량 추천</b><span class="ac-wrap"><input type="text" id="ldRecoUnit" placeholder="부대 선택" autocomplete="off" style="width:170px"><span class="ac-list"></span></span></div>
+      <div class="row mb8"><b>발주량 추천</b><span class="hint">납품(출고) 줄을 누르면 그 건 하나의 추천 발주량이 나옵니다</span></div>
       <div id="ldRecoBody"></div>
     </div>
   </div>
@@ -1040,7 +1040,7 @@ function makeLedgerData() {
     // 납품 줄에 입고일을 적으면 입고결정 체크박스가 뜬다(canDecide). 체크하면 별도 줄을 만들지 않고 같은 줄이 입고결정(inState)이 된다
     p.rows.forEach(o => {
       o.comb = !!(o.outTotal && PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT && (o.inQty || o.inDate));
-      o.inSt = o.comb ? (o.inState || (o.inDate && o.inDate >= today ? '입고예정' : '입고완료')) : o.status;
+      o.inSt = o.comb ? (o.inState === '입고완료' && o.inDate && o.inDate > today ? '입고예정' : o.inState || (o.inDate && o.inDate >= today ? '입고예정' : '입고완료')) : (o.status === '입고완료' && o.inQty && o.inDate && o.inDate > today ? '입고예정' : o.status);   // 입고일이 오늘 이후면 '입고완료'라고 적혀 있어도 아직 받지 않은 것(오늘 기준 재고에 넣지 않는다)
       o.canDecide = !!(o.outTotal && PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT && !(o.comb && o.inSt === '입고완료'));
       o.pendingIn = !!(o.comb && o.inQty && PLAN_IN.has(o.inSt));
     });
@@ -1266,7 +1266,7 @@ const Home = {
     const inSch = []; LedgerData.standard().forEach(p => p.rows.forEach(o => { if (o.inSt === '입고결정') inSch.push({ p, o }); }));
     inSch.sort((a, b) => String(a.o.inDate).localeCompare(String(b.o.inDate)));
     $('inSchedule').innerHTML = inSch.length ? inSch.map(({ p, o }) => `<div class="list-row"><div><div class="l-name">${esc(p.name)}</div><div class="l-sub">${esc(p.sheet)} ${esc(p.company)}</div></div>
-      <div class="num"><b>${fmtN(o.inQty)}</b><div class="l-sub">${o.inDate ? D.short(o.inDate) : '일자 미정'} ${o.inDate && o.inDate < t ? '<span class="tag danger">지연</span>' : ''}</div></div></div>`).join('') : '<div class="empty">결정된 입고 예정이 없습니다</div>';
+      <div class="num"><b>${fmtN(o.inQty)}</b><div class="l-sub">${o.inDate ? D.short(o.inDate) : '일자 미정'} ${o.inDate && o.inDate < t ? '<span class="tag danger">입고일 경과 · 입고 완료 처리 필요</span>' : ''}</div></div></div>`).join('') : '<div class="empty">결정된 입고 예정이 없습니다</div>';
 
     const outRows = LedgerData.products.flatMap(p => p.rows.filter(o => o.outDate === t && o.outTotal).map(o => ({ p, o })));
     const tagOf = s => s === '출고예정' ? '<span class="tag plan">예정</span>' : s === '출고확정' ? '<span class="tag conf">확정</span>' : '<span class="tag done">완료</span>';
@@ -1863,8 +1863,6 @@ const Ledger = {
       const tr = e.target.closest('tr'), r = tr && Estate.refs[+tr.dataset.k]; if (!r) return;
       const v = DF.get(e.target); if (v !== (r.expiry || '')) Estate.editExpiry(r, v);
     });
-    AC.bind($('ldRecoUnit'), AC.units, Ledger.renderReco);
-    $('ldRecoUnit').addEventListener('change', Ledger.renderReco);
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape' || App.tab !== 'ledger' || e.target.classList?.contains('dinput')) return;
       if (Ledger.editing) { Ledger.editing = null; Ledger.renderDetail(); } else if (Ledger.key) Ledger.close(); else if (Ledger.due) Ledger.closeDue();
@@ -2029,9 +2027,9 @@ const Ledger = {
     const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
     const statusCell = o => {
       if (o.unit === EXPIRED_UNIT) return '<span class="tag danger">초과처리</span> <button type="button" class="btn sm light" data-undo="1">되돌리기</button>';
-      const s = o.status || (o.inQty ? '입고완료' : '');
-      const tag = s === '이월' ? 'carry' : s.endsWith('예정') ? 'plan' : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
-      const decide = (((o.status === '입고예정' || o.status === '입고결정') && o.inDate) || o.canDecide) ? ` <label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
+      const s = (!PEND_OUT.has(o.status) && o.inSt && o.inSt !== o.status ? o.inSt : o.status) || (o.inQty ? '입고완료' : '');
+      const tag = s === '이월' ? 'carry' : s.endsWith('예정') ? (o.comb !== undefined && o.inSt === '입고결정' ? 'dec' : 'plan') : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
+      const decide = (((PLAN_IN.has(o.inSt) && !PEND_OUT.has(o.status)) && o.inDate) || o.canDecide) ? ` <label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
       return s ? `<span class="tag ${tag}">${s.replace(/^(입고|출고)/, '')}</span>${decide}` : '<span class="hint">기존</span>';
     };
     const rowHtml = (item, i) => {
@@ -2067,7 +2065,7 @@ const Ledger = {
   editRow(item, i) {
     const o = item.o, outEd = o.isOut, inEd = o.isIn || !o.isOut || (PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT);
     const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
-    const st = o.status === '입고예정' || o.status === '입고결정', cmb = !st && inEd && outEd && o.inSt !== '입고완료';   // st: 입고 줄 / cmb: 납품 줄(입고일을 적으면 입고결정 가능)
+    const st = !PEND_OUT.has(o.status) && PLAN_IN.has(o.inSt), cmb = !st && inEd && outEd && o.inSt !== '입고완료';   // st: 입고 줄 / cmb: 납품 줄(입고일을 적으면 입고결정 가능)
     const decide = (st || cmb) ? `<label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
       <td>${inEd ? `${DF.html('e-inDate', o.inDate || '')}<div class="hint">소비기한</div>${DF.html('e-expiry', o.expiry || '', 'future')}` : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` : ''}</td>
@@ -2081,7 +2079,7 @@ const Ledger = {
     const ds = e.target.dataset || {};
     if (ds.dec) {
       e.stopPropagation(); const on = e.target.checked, o = item.o, msg = on ? '입고 결정으로 변경했습니다' : '입고 결정을 취소했습니다';
-      if (!(o.status === '입고예정' || o.status === '입고결정')) {   // 납품 줄: 별도 줄을 만들지 않고 같은 줄에서 결정한다 (수정 줄이 열려 있으면 적은 값도 함께 저장)
+      if (PEND_OUT.has(o.status)) {   // 납품 줄: 별도 줄을 만들지 않고 같은 줄에서 결정한다 (수정 줄이 열려 있으면 적은 값도 함께 저장)
         const fields = { inState: on ? '입고결정' : '입고예정' };
         if (tr.dataset.edit) Object.assign(fields, Ledger.readIn(tr));
         if (on && !((fields.inQty ?? o.inQty) && (fields.inDate ?? o.inDate))) { e.target.checked = false; return toast('이 줄을 눌러 입고일과 수량을 먼저 입력하세요'); }
@@ -2104,7 +2102,7 @@ const Ledger = {
       return;
     }
     if (e.target.closest('input,label,button')) return;
-    Ledger.editing = item.o; if (item.o.unit && item.o.unit !== EXPIRED_UNIT) $('ldRecoUnit').value = item.o.unit; Ledger.renderDetail();
+    Ledger.editing = item.o; Ledger.recoKey = Ledger.rowKey(item.o); Ledger.renderDetail();
   },
   // 수정 줄의 입고 입력값 (납품 줄에 입고를 함께 적는다: 입고일·수량·소비기한, 비우면 입고 정보와 입고 상태를 지운다)
   readIn(tr) {
@@ -2195,21 +2193,23 @@ const Ledger = {
     await simpleSheet(`재고현황_${today}.xlsx`, '재고현황', ['대분류', '품명', '업체', '현재고(오늘)', '입고예정', '출고예정', '납품기한 임박', '납품기한 초과', '가장 빠른 납품기한'], rows, [14, 24, 12, 12, 10, 10, 14, 14, 16]);
   },
 
-  /* --- 발주량 추천: 부대를 고르면 해당 부대·동일 구분 품목의 과거 예정·확정·증감율 --- */
-  recoMode: 'mid',
+  /* --- 발주량 추천: 납품(출고) 줄 한 건을 누르면 그 건만 계산한다 (그 부대의 과거 확정/예정 이력 기준) --- */
+  recoMode: 'mid', recoKey: '',
+  rowKey: o => o.id || (o.sheet + '#' + o.row),
   setRecoMode(m) { Ledger.recoMode = m; Ledger.renderReco(); },
   renderReco() {
     const box = $('ldRecoBody'); if (!box) return;
     const p = Ledger.d().byKey.get(Ledger.key); if (!p || p.type !== 'standard') { box.innerHTML = ''; return; }
-    const unit = Names.matchUnit($('ldRecoUnit').value.trim());
     const pname = p.product ? p.product.name : p.name, cat = p.product && p.product.category;
     const today = D.today(), rateOf = (plan, conf) => plan ? (conf - plan) / plan * 100 : null;
     const hasConf = r => r.confEa !== null && r.confEa !== undefined && r.planEa;
-    // 예상 증감율: 해당 부대의 과거 확정/예정 비율. 부대별 특성이므로 다른 부대 이력은 쓰지 않는다
-    //  1순위 이 부대의 같은 품목 2건 이상 → 2순위 이 부대의 같은 구분 2건 이상 → 없으면 예정량 그대로
-    // 이례적 변동 제외(자동): ① 확정이 예정의 0.5배 미만·2배 초과  ② 4건 이상일 때 중앙값에서 크게 벗어난 건 (중앙값 ± max(15%p, 편차 중앙값의 3.7배))
-    // 선택지: 적게(하위 25%) · 중앙값(기본, 재고 0에 수렴) · 많게(상위 25%)
-    const base = Hist.records.filter(r => hasConf(r));
+    const row = Ledger.recoKey ? p.rows.find(o => Ledger.rowKey(o) === Ledger.recoKey && PEND_OUT.has(o.status) && o.outTotal && o.unit && o.unit !== EXPIRED_UNIT) : null;
+    const unit = row ? row.unit : '';
+    const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
+    // 예상 증감율: 해당 부대의 과거 확정/예정 비율. 1순위 이 부대의 같은 품목 2건 이상 → 2순위 이 부대의 같은 구분 2건 이상 → 없으면 예정량 그대로
+    // 이례적 변동 제외(자동): ① 확정이 예정의 0.5배 미만·2배 초과  ② 4건 이상일 때 중앙값에서 크게 벗어난 건
+    // 선택지: 적게(하위 25%) · 중앙값(기본) · 많게(상위 25%)
+    const base = Hist.records.filter(hasConf);
     const tiers = [
       { label: '이 부대의 같은 품목', f: (r, u) => r.name === pname && r.unit === u },
       { label: '이 부대의 같은 구분(' + (cat || '-') + ')', f: (r, u) => cat && r.cat === cat && r.unit === u }
@@ -2225,48 +2225,39 @@ const Ledger = {
       }
       return { low: 0, mid: 0, high: 0, n: 0, out: 0, label: '이 부대 이력 부족 → 예정량 그대로' };
     };
-    const byUnit = new Map();
-    p.rows.forEach(o => { if (o.status === '출고예정' && o.outTotal && o.unit) { const x = byUnit.get(o.unit) || { main: 0, total: 0 }; x.main += o.outMain || 0; x.total += o.outTotal; byUnit.set(o.unit, x); } });
-    let plannedTotal = 0;
-    const est = [...byUnit.entries()].map(([u, x]) => { plannedTotal += x.total; return { u, x, r: rateFor(u) }; });
-    const fixedOut = p.planOut - plannedTotal;
-    const outBy = m => fixedOut + est.reduce((a, e) => a + e.x.total + Math.round(e.x.main * e.r[m]), 0);
-    // 추천 발주량 = 선택한 부대가 출고할 때 필요한 전체 수량 (현재고·입고예정은 빼지 않는다)
-    // 부대가 아직 출고예정에 없으면 그 부대의 가장 최근 확정량을 기준으로 한다. 부대를 고르지 않으면 전체 예상 출고
-    const unitEst = unit ? est.find(e => e.u === unit) : null;
-    const lastConf = unit ? ((Hist.records.filter(r => r.name === pname && r.unit === unit && hasConf(r)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)))[0] || {}).confEa || 0) : 0;
-    const outFor = m => unit ? (unitEst ? unitEst.x.total + Math.round(unitEst.x.main * unitEst.r[m]) : lastConf) : outBy(m);
-    const recBy = m => Math.max(0, Math.ceil(outFor(m)));
     const MODES = [['low', '적게'], ['mid', '중앙값 (권장)'], ['high', '많게']];
-    const mode = Ledger.recoMode || 'mid', rec = recBy(mode);
-    const shown = unit ? est.filter(e => e.u === unit) : est;
-    const unitOut = unit ? p.rows.reduce((a, o) => a + (o.unit === unit && o.outTotal ? plannedOut(o, today) : 0), 0) : 0;
+    const mode = Ledger.recoMode || 'mid', modeLabel = MODES.find(x => x[0] === mode)[1].replace(' (권장)', '');
+    // 이 건의 예상 출고: 예정 건은 과거 증감율을 적용, 이미 확정된 건은 확정 수량 그대로
+    const isPlan = row && row.status === '출고예정', r = row ? (isPlan ? rateFor(unit) : { low: 0, mid: 0, high: 0, n: 0, out: 0, label: '이미 확정된 건 → 확정 수량 그대로' }) : null;
+    const outFor = m => row ? row.outTotal + Math.round((row.outMain || 0) * r[m]) : 0;
+    const recBy = m => Math.max(0, Math.ceil(outFor(m))), rec = recBy(mode);
+    const left = row && row.stock !== '' && row.stock !== null && row.stock !== undefined ? row.stock : null;   // 이 건을 처리한 뒤의 재고(표의 재고 칸)
     const pc = v => (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
-    // 화면 위에 계속 보이는 요약줄 (입력·수정 중에도 현재 보유고와 해당 부대 발주량을 볼 수 있다)
-    $('ldSticky').innerHTML = `<span><b>${esc(p.name)}</b></span><span>현재 보유고 <b>${fmtN(p.stock)}</b></span><span>입고예정 <b>${fmtN(p.planIn)}</b></span><span>출고예정·확정 <b>${fmtN(p.planOut)}</b></span>${unit ? `<span>${esc(unit)} 발주량 <b>${fmtN(unitOut)}</b></span>` : ''}<span>예상재고 <b>${fmtN(p.stock + p.planIn - p.planOut)}</b></span><span>추천 발주량 <b class="${rec ? 'rec-b' : ''}">${fmtN(rec)}</b></span>`;
-    const head = `<div class="reco-now">현재 보유고 <b>${fmtN(p.stock)}</b>개 · 입고예정 <b>${fmtN(p.planIn)}</b>개 · 출고예정·확정 합계 <b>${fmtN(p.planOut)}</b>개${unit ? ` · <b>${esc(unit)}</b> 발주량 <b>${fmtN(unitOut)}</b>개` : ''}</div>
+    // 화면 위에 계속 보이는 요약줄 (입력·수정 중에도 보인다)
+    $('ldSticky').innerHTML = `<span><b>${esc(p.name)}</b></span><span>현재 보유고 <b>${fmtN(p.stock)}</b></span><span>입고예정 <b>${fmtN(p.planIn)}</b></span><span>출고예정·확정 <b>${fmtN(p.planOut)}</b></span><span>예상재고 <b>${fmtN(p.stock + p.planIn - p.planOut)}</b></span>${row ? `<span>${D.short(row.outDate)} ${esc(unit)} ${fmtN(row.outTotal)}개 건 추천 발주량 <b class="${rec ? 'rec-b' : ''}">${fmtN(rec)}</b></span>` : ''}`;
+    const head = `<div class="reco-now">현재 보유고(오늘 기준 · 입고 완료분) <b>${fmtN(p.stock)}</b>개 · 입고예정 <b>${fmtN(p.planIn)}</b>개 · 출고예정·확정 합계 <b>${fmtN(p.planOut)}</b>개</div>`;
+    if (!row) { box.innerHTML = head + '<div class="hint">위 표에서 납품(출고) 줄을 누르면 그 건 하나에 필요한 추천 발주량이 나옵니다.</div>'; return; }
+    const why = `${left !== null && left < 0 ? `재고가 <b>${fmtN(-left)}개 부족</b>하므로 ` : ''}${r.n ? `과거 이력(${esc(r.label)} ${r.n}건) 기준 <b>${modeLabel}</b>` : esc(r.label) + ' → '} <b>${fmtN(rec)}개</b>가 필요합니다.`;
+    let html = head + `<div class="reco-sel"><b>${md(row.outDate)} · ${esc(unit)}</b> · ${esc(row.status)} ${fmtN(row.outTotal)}개${left !== null ? ` · 이 건 처리 후 재고 <b class="${left < 0 ? 'neg' : ''}">${fmtN(left)}</b>개` : ''}</div>
       <div class="rec-modes">${MODES.map(([m, t]) => `<button type="button" class="rec-mode ${m === mode ? 'on' : ''}" onclick="Ledger.setRecoMode('${m}')"><div>${t}</div><b>${fmtN(recBy(m))}개</b></button>`).join('')}</div>
-      <div class="reco-rec ${rec ? 'need' : ''}"><span>추천 발주량</span> <b>${fmtN(rec)}개</b></div>
-      ${shown.length ? `<div class="table-wrap" style="max-height:200px"><table><thead><tr><th>부대</th><th>출고예정</th><th>적용 증감율</th><th>예상 구간</th><th>근거(확정 이력)</th><th>예상 출고</th></tr></thead><tbody>${shown.map(e => `<tr><td>${esc(e.u)}</td><td class="num">${fmtN(e.x.total)}</td><td class="num">${e.r.n ? pc(e.r[mode]) : '-'}</td><td class="num">${e.r.n ? `${pc(e.r.low)} ~ ${pc(e.r.high)}` : '-'}</td><td style="text-align:left">${esc(e.r.label)}${e.r.n ? ` · ${e.r.n}건${e.r.out ? ` (이례적 ${e.r.out}건 제외)` : ''}` : ''}</td><td class="num"><b>${fmtN(e.x.total + Math.round(e.x.main * e.r[mode]))}</b></td></tr>`).join('')}${fixedOut && !unit ? `<tr><td>확정분</td><td class="num">${fmtN(fixedOut)}</td><td class="num">-</td><td class="num">-</td><td style="text-align:left">이미 확정 (보정 없음)</td><td class="num"><b>${fmtN(fixedOut)}</b></td></tr>` : ''}</tbody></table></div>` : ''}`;
-    if (!unit) { box.innerHTML = head; return; }
+      <div class="reco-rec ${rec ? 'need' : ''}"><span>이 건 추천 발주량</span> <b>${fmtN(rec)}개</b><div class="hint" style="margin-top:4px;font-size:12px">${why}</div></div>
+      <div class="table-wrap" style="max-height:200px"><table><thead><tr><th>부대</th><th>이 건 수량</th><th>적용 증감율</th><th>예상 구간</th><th>근거(확정 이력)</th><th>예상 출고</th></tr></thead><tbody><tr><td>${esc(unit)}</td><td class="num">${fmtN(row.outTotal)}</td><td class="num">${r.n ? pc(r[mode]) : '-'}</td><td class="num">${r.n ? `${pc(r.low)} ~ ${pc(r.high)}` : '-'}</td><td style="text-align:left">${esc(r.label)}${r.n ? ` · ${r.n}건${r.out ? ` (이례적 ${r.out}건 제외)` : ''}` : ''}</td><td class="num"><b>${fmtN(outFor(mode))}</b></td></tr></tbody></table></div>`;
     // 이 부대·이 품목의 과거 납품이력 (없으면 표시하지 않음)
-    const hasC = hasConf, rateP = rateOf;
-    const same = Hist.records.filter(r => r.name === pname && r.planEa != null && r.unit === unit);
-    const past = same.filter(r => hasC(r) || (r.delDate && r.delDate < today)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
+    const same = Hist.records.filter(x => x.name === pname && x.planEa != null && x.unit === unit);
+    const past = same.filter(x => hasConf(x) || (x.delDate && x.delDate < today)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
     const fmtRate = v => v === null ? '-' : `<span style="color:${v > 0 ? 'var(--warn)' : 'var(--conf)'}">${v > 0 ? '+' : ''}${v.toFixed(1)}%</span>`;
-    const done = past.filter(hasC);
-    let html = head;
+    const done = past.filter(hasConf);
     if (past.length) html += `<div class="reco-title">${esc(unit)}의 ${esc(pname)} 과거 납품이력</div>
-      <div class="table-wrap" style="max-height:220px"><table><thead><tr><th>납품일</th><th>예정(개)</th><th>확정(개)</th><th>증감율</th></tr></thead><tbody>${past.slice(0, 12).map(r => `<tr><td>${r.delDate ? D.short(r.delDate) : '-'}</td><td class="num">${fmtN(r.planEa)}</td><td class="num">${r.confEa === null || r.confEa === undefined ? '-' : fmtN(r.confEa)}</td><td class="num">${hasC(r) ? fmtRate(rateP(r.planEa, r.confEa)) : '-'}</td></tr>`).join('')}</tbody></table></div>`;
+      <div class="table-wrap" style="max-height:220px"><table><thead><tr><th>납품일</th><th>예정(개)</th><th>확정(개)</th><th>증감율</th></tr></thead><tbody>${past.slice(0, 12).map(x => `<tr><td>${x.delDate ? D.short(x.delDate) : '-'}</td><td class="num">${fmtN(x.planEa)}</td><td class="num">${x.confEa === null || x.confEa === undefined ? '-' : fmtN(x.confEa)}</td><td class="num">${hasConf(x) ? fmtRate(rateOf(x.planEa, x.confEa)) : '-'}</td></tr>`).join('')}</tbody></table></div>`;
     // 이 품목 이력이 2건 미만이면 같은 구분의 다른 품목 이력이 증감율 근거가 되므로 함께 보여 준다
     if (done.length < 2) {
       const peers = new Map();
-      Hist.records.filter(r => r.unit === unit && cat && r.cat === cat && r.name !== pname && hasC(r)).forEach(r => {
-        const x = peers.get(r.name) || { n: 0, plan: 0, conf: 0 }; x.n++; x.plan += r.planEa; x.conf += r.confEa; peers.set(r.name, x);
+      Hist.records.filter(x => x.unit === unit && cat && x.cat === cat && x.name !== pname && hasConf(x)).forEach(x => {
+        const e = peers.get(x.name) || { n: 0, plan: 0, conf: 0 }; e.n++; e.plan += x.planEa; e.conf += x.confEa; peers.set(x.name, e);
       });
       const list = [...peers.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 10);
       if (list.length) html += `<div class="reco-title mt12">${esc(unit)}의 같은 구분(${esc(cat)}) 다른 품목 이력</div>
-        <div class="table-wrap" style="max-height:240px"><table><thead><tr><th>품명</th><th>확정 건수</th><th>예정 합계</th><th>확정 합계</th><th>증감율</th></tr></thead><tbody>${list.map(([n, x]) => `<tr><td style="text-align:left">${esc(n)}</td><td class="num">${x.n}</td><td class="num">${fmtN(x.plan)}</td><td class="num">${fmtN(x.conf)}</td><td class="num">${fmtRate(rateP(x.plan, x.conf))}</td></tr>`).join('')}</tbody></table></div>`;
+        <div class="table-wrap" style="max-height:240px"><table><thead><tr><th>품명</th><th>확정 건수</th><th>예정 합계</th><th>확정 합계</th><th>증감율</th></tr></thead><tbody>${list.map(([n, e]) => `<tr><td style="text-align:left">${esc(n)}</td><td class="num">${e.n}</td><td class="num">${fmtN(e.plan)}</td><td class="num">${fmtN(e.conf)}</td><td class="num">${fmtRate(rateOf(e.plan, e.conf))}</td></tr>`).join('')}</tbody></table></div>`;
     }
     box.innerHTML = html;
   },
@@ -2580,7 +2571,7 @@ const Logi = {
     }));
     items.sort((a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name));
     Logi.plans = Logi.plans || {}; Logi.plans.in = items;
-    $('inPastNote').innerHTML = past && !showPast ? `<span class="tag warn">입고일이 지난 미완료 ${past}건</span> <span class="hint">위의 '입고일이 지난 미완료 건도 표시'를 체크하면 볼 수 있습니다</span>` : '';
+    $('inPastNote').innerHTML = past && !showPast ? `<span class="tag danger">입고일이 지났는데 입고 완료 처리가 안 된 건 ${past}건</span> <span class="hint">실제로 받았다면 위의 '입고일이 지난 미완료 건도 표시'를 체크해 입고 완료를 눌러야 재고에 들어갑니다</span>` : '';
     if (!items.length) { body.innerHTML = '<tr><td colspan="10" class="empty">입고결정된 예정 건이 없습니다 (재고수불대장에서 입고결정을 체크하면 나타납니다)</td></tr>'; return; }
     body.innerHTML = items.map(({ p, o, d }, i) => {
       const info = p.product, dr = Logi.inDraft[Logi.inKey(o)] || {}, exp = dr.exp !== undefined ? dr.exp : (o.expiry || '');
@@ -2603,7 +2594,7 @@ const Logi = {
     const ops = [], entries = [], today = D.today(); let noExp = 0;
     for (const tr of trs) {
       const i = +tr.dataset.i, { p, o } = Logi.plans.in[i];
-      const date = DF.get(tr.querySelector('.pdate')) || o.inDate || today;
+      const date0 = DF.get(tr.querySelector('.pdate')) || o.inDate || today, date = date0 > today ? today : date0;   // '입고 완료'는 실제로 받은 것이므로 입고일이 오늘 이후면 오늘로 기록한다
       const lines = [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')) }];
       body.querySelectorAll(`tr.plan-extra[data-i="${i}"]`).forEach(x => lines.push({ qty: num(x.querySelector('.pq').value), exp: DF.get(x.querySelector('.pexp')) }));
       if (lines.some(l => !l.qty)) return toast(`${p.name}: 입고 수량을 입력하세요 (필요 없는 한 줄은 삭제하세요)`);
