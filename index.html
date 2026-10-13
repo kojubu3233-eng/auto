@@ -41,6 +41,7 @@ input[type=text], input[type=number], input[type=date], input[type=month], selec
 input:focus, select:focus { border-color:var(--accent); background:var(--accent-soft); }
 input[readonly] { color:var(--muted); background:var(--surface-alt) !important; }
 input.g-hc.manual { color:var(--warn); font-weight:700; }
+tr.editing td { background:#FFFBEB; }
 input.dirty { background:#FEF9C3 !important; border-color:#F59E0B !important; }
 input.invalid { border-color:var(--danger) !important; }
 
@@ -1583,7 +1584,7 @@ const Predict = {
 
 /* ---------- 확정량 입력 ---------- */
 const Confirm = {
-  sel: { del: new Set(), cat: new Set(), unit: new Set() }, picked: new Set(), sort: { key: 'delDate', dir: 1 }, rows: [], dirty: new Map(),
+  sel: { del: new Set(), cat: new Set(), unit: new Set() }, picked: new Set(), sort: { key: 'delDate', dir: 1 }, rows: [], dirty: new Map(), editId: null,
   init() {
     const t = D.today(); $('confirmMonth').value = t.slice(0, 7);
     $('confirmMonth').addEventListener('change', () => { Confirm.sel.del.clear(); Confirm.render(); });
@@ -1605,7 +1606,13 @@ const Confirm = {
     });
     $('confirmBody').addEventListener('click', e => {
       const b = e.target.closest('[data-act]'); if (!b) return;
-      if (b.dataset.act === 'edit') Confirm.openEdit(b.dataset.id); else if (b.dataset.act === 'del') Confirm.remove(b.dataset.id);
+      const a = b.dataset.act;
+      if (a === 'edit') Confirm.startEdit(b.dataset.id); else if (a === 'save') Confirm.saveEdit(b.dataset.id); else if (a === 'cancel') Confirm.cancelEdit(); else if (a === 'del') Confirm.remove(b.dataset.id);
+    });
+    $('confirmBody').addEventListener('keydown', e => {
+      if (!Confirm.editId || !e.target.closest('tr.editing')) return;
+      if (e.key === 'Escape') Confirm.cancelEdit();
+      else if (e.key === 'Enter' && !e.target.closest('.ac-wrap')?.querySelector('.ac-list div.on')) Confirm.saveEdit(Confirm.editId);
     });
   },
   monthRecs() { const m = $('confirmMonth').value; return Hist.records.filter(r => !m || String(r.delDate).startsWith(m)); },
@@ -1632,14 +1639,18 @@ const Confirm = {
     $('confirmBody').innerHTML = Confirm.rows.map(r => {
       const pr = Confirm.price(r), cEa = Confirm.dirty.get(r.id)?.confEa ?? r.confEa;
       const confCls = r.confEa !== null || r.confKg !== null ? 'c-conf' : '';
-      return `<tr data-id="${esc(r.id)}"><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
-        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan">${fmtN(r.planEa)}</td><td class="num c-plan">${fmtN(r.planKg, 2)}</td>
+      const ed = Confirm.editId === r.id;
+      return `<tr data-id="${esc(r.id)}"${ed ? ' class="editing"' : ''}><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${ed ? '<span class="ie-del"></span>' : r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${ed ? `<span class="ac-wrap"><input type="text" class="ie-name" value="${esc(r.name)}" autocomplete="off" style="width:100%;min-width:150px"><span class="ac-list"></span></span>` : esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
+        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan">${ed ? `<input type="number" step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
         <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
         <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '-')}</td>
-        <td style="white-space:nowrap"><button class="btn sm light" data-act="edit" data-id="${esc(r.id)}">수정</button> <button class="btn sm danger" data-act="del" data-id="${esc(r.id)}">삭제</button></td></tr>`;
+        <td style="white-space:nowrap">${ed ? `<button class="btn sm ok" data-act="save" data-id="${esc(r.id)}">저장</button> <button class="btn sm light" data-act="cancel" data-id="${esc(r.id)}">취소</button>` : `<button class="btn sm light" data-act="edit" data-id="${esc(r.id)}">수정</button> <button class="btn sm danger" data-act="del" data-id="${esc(r.id)}">삭제</button>`}</td></tr>`;
     }).join('') || '<tr><td colspan="18" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
     $('confirmAll').checked = Confirm.rows.length > 0 && Confirm.rows.every(r => Confirm.picked.has(r.id));
+    const er = Confirm.editId && Confirm.rows.find(r => r.id === Confirm.editId);
+    if (er) { DF.mount(document.querySelector('#confirmBody .ie-del'), 'cf-del', er.delDate || ''); AC.bind(document.querySelector('#confirmBody .ie-name'), AC.products); }
+    else Confirm.editId = null;
     const sum = list.reduce((a, r) => { const pr = Confirm.price(r) || 0; a.planQty += r.planEa || 0; a.confQty += r.confEa || 0; a.plan += pr * (r.planEa || 0); a.conf += pr * (r.confEa || 0); return a; }, { planQty: 0, confQty: 0, plan: 0, conf: 0 });
     const box = (label, val, sub) => `<div class="stat-box"><div class="b-label">${label}</div><div class="b-val">${val}</div><div class="b-sub">${sub}</div></div>`;
     $('confirmStats').innerHTML = box('예정 수량', fmtN(sum.planQty) + '<span class="hint"> 개</span>', '조건에 맞는 ' + list.length.toLocaleString() + '건') + box('예정 금액', fmtN(sum.plan) + '<span class="hint"> 원</span>', '단가 × 예정 수량') +
@@ -1708,20 +1719,17 @@ const Confirm = {
   },
   closeModal() { $('modalRoot').innerHTML = ''; },
 
-  openEdit(id) {
-    const r = Hist.byId.get(id); if (!r) return;
-    Confirm.modal(`수정 · ${esc(r.name)}`, `
-      <label>납품일</label><span id="cfDel"></span>
-      <label>품명</label><span class="ac-wrap"><input type="text" id="cfName" value="${esc(r.name)}" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
-      <label>예정량(개)</label><input type="number" id="cfQty" value="${r.planEa ?? ''}" style="width:140px">
-      <div class="hint" style="grid-column:1/-1">부대 ${esc(r.unit)} · 예정(kg)은 포장단위로 자동 계산됩니다. 재고수불대장의 출고 행도 함께 수정됩니다.</div>`, () => Confirm.saveEdit(id));
-    DF.mount($('cfDel'), 'cf-del', r.delDate || '');
-    AC.bind($('cfName'), AC.products);
+  startEdit(id) {
+    if (Confirm.wait()) return;
+    Confirm.editId = id; Confirm.renderRows();
+    const q = document.querySelector('#confirmBody tr.editing .ie-qty'); if (q) { q.focus(); q.select(); }
   },
+  cancelEdit() { Confirm.editId = null; Confirm.renderRows(); },
   async saveEdit(id) {
     if (Confirm.wait()) return;
     const r = Hist.byId.get(id); if (!r) return;
-    const del = DF.get(document.querySelector('.cf-del')), name = $('cfName').value.trim(), qty = num($('cfQty').value);
+    const row = document.querySelector('#confirmBody tr.editing'); if (!row) return;
+    const del = DF.get(row.querySelector('.cf-del')), name = row.querySelector('.ie-name').value.trim(), qty = num(row.querySelector('.ie-qty').value);
     if (!del || !name || !(qty > 0)) return toast('납품일·품명·예정량을 모두 입력하세요');
     const pack = (Names.product(name) || {}).pack || Confirm.pack(r);
     const kg = pack ? Math.round(qty * pack * 100) / 100 : r.planKg;
@@ -1741,7 +1749,7 @@ const Confirm = {
     Busy.start('수정 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
       const res = await Api.post('ledger', { action: 'planEdit', ref: { id: r.id, src: r.src, row: r.row, name: r.name }, fields: { delDate: del, name, planEa: qty, planKg: kg }, ledgerOps });
-      Confirm.closeModal();
+      Confirm.editId = null;
       Object.assign(r, { delDate: del, name, planEa: qty, planKg: kg }); Hist.derive(r); Hist.reindex(); Confirm.render();
       Confirm.sync(res);
       toast(res.ledger.failed ? `수정 저장. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '수정했습니다 (재고수불대장 반영 완료)', 5000);
@@ -1820,12 +1828,67 @@ const Confirm = {
     } catch (e) { toast('추가 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
   },
+  // 참고 양식(10월 부대조달 납품일정)과 같은 모양의 엑셀로 내려받는다
   async exportExcel() {
-    const list = Confirm.filtered(); if (!list.length) return toast('내보낼 데이터가 없습니다');
-    await simpleSheet(`확정량_${$('confirmMonth').value || D.today()}.xlsx`, '확정량',
-      ['납품일', '부대', '품명', '구분', '단위', '단순산술값', '예정(개)', '예정(kg)', '확정(개)', '확정(kg)', '단가', '예정매출', '확정매출', '오차율(%)', '급식일'],
-      list.map(r => { const pr = Confirm.price(r); return [r.delDate, r.unit, r.name, r.cat, Confirm.unitLabel(r), r.simple, r.planEa, r.planKg, r.confEa, r.confKg, pr, pr && r.planEa ? pr * r.planEa : null, pr && r.confEa !== null ? pr * r.confEa : null, r.rate === null ? null : Math.round(r.rate * 10) / 10, r.mealDate || r.rawMeal]; }),
-      [11, 14, 22, 10, 10, 10, 9, 9, 9, 9, 9, 12, 12, 9, 11]);
+    const list = Confirm.filtered().slice().sort((x, y) => String(x.delDate).localeCompare(String(y.delDate)) || String(x.unit).localeCompare(String(y.unit)));
+    if (!list.length) return toast('내보낼 데이터가 없습니다');
+    await loadExcel();
+    const mon = +(($('confirmMonth').value || list[0].delDate || D.today()).slice(5, 7));
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet(`${mon}월`);
+    const NUM = '_-* #,##0_-;\\-* #,##0_-;_-* "-"_-;_-@_-', NUM1 = '_-* #,##0.0_-;\\-* #,##0.0_-;_-* "-"_-;_-@_-', DT = 'mm"월"\\ dd"일"';
+    const thin = { style: 'thin' }, BORDER = { top: thin, left: thin, bottom: thin, right: thin };
+    const fill = c => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } });
+    const BLUE = 'FFDAE3F3', GRAY = 'FFF2F2F2';
+    [15.5, 11, 41, 11.5, 14, 11, 16, 11, 14, 20.6, 17, 23, 17, 72, 17, 12.5].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+    const first = 6, last = first + list.length - 1;
+    const sty = (addr, o = {}) => { const c = ws.getCell(addr); c.border = BORDER; c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; if (o.fill) c.fill = fill(o.fill); if (o.bold) c.font = { bold: true }; if (o.fmt) c.numFmt = o.fmt; return c; };
+    // 제목
+    ws.mergeCells('A1:J1'); const t = ws.getCell('A1'); t.value = `${mon}월 부대조달및 다수공급 군납 납품일정`; t.font = { bold: true, size: 14 }; t.fill = fill('FFEDEDED'); t.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(1).height = 26;
+    // 위쪽 합계 (수식)
+    let sumL = 0, sumF = 0, sumM = 0, sumH = 0;
+    const packOf = r => Confirm.pack(r);
+    const body = list.map(r => {
+      const pk = packOf(r), pr = Confirm.price(r);
+      const f = pk && r.planEa !== null && r.planEa !== undefined ? Math.round(r.planEa * pk * 1000) / 1000 : r.planKg;
+      const h = pk && r.confEa !== null && r.confEa !== undefined ? Math.round(r.confEa * pk * 1000) / 1000 : r.confKg;
+      const l = pr && r.planEa ? pr * r.planEa : null, m = pr && r.confEa !== null && r.confEa !== undefined ? pr * r.confEa : null;
+      sumL += l || 0; sumF += f || 0; sumM += m || 0; sumH += h || 0;
+      return { r, pk, pr, f, h, l, m };
+    });
+    [['E2', '매출계획', 'G2', `SUM(L${first}:L${last})`, sumL], ['E3', '발주계획량', 'G3', `SUM(F${first}:F${last})`, sumF]].forEach(([la, lt, va, fm, res]) => {
+      ws.mergeCells(`${la}:F${la.slice(1)}`); sty(la, { fill: BLUE }).value = lt;
+      ws.mergeCells(`${va}:H${va.slice(1)}`); const c = sty(va, { bold: true, fmt: NUM }); c.value = { formula: fm, result: res };
+    });
+    [['I2', '출고금', 'J2', `SUM(M${first}:M${last})`, sumM], ['I3', '실 출고량', 'J3', `SUM(H${first}:H${last})`, sumH]].forEach(([la, lt, va, fm, res]) => {
+      sty(la, { fill: BLUE }).value = lt; const c = sty(va, { fmt: NUM }); c.value = { formula: fm, result: res };
+    });
+    // 머리글 (4~5행)
+    [['A', '납품일'], ['B', '구분'], ['C', '품명'], ['D', '단위'], ['I', '급식일'], ['J', '부대'], ['K', '판매단가'], ['L', '매출계획\nVAT제외'], ['M', '매출'], ['N', '나라장터'], ['O', '검사검수'], ['P', '대금청구']].forEach(([c, v]) => {
+      ws.mergeCells(`${c}4:${c}5`); sty(`${c}4`, { fill: 'KLMD'.includes(c) || 'DI'.includes(c) ? ('KLM'.includes(c) ? GRAY : BLUE) : undefined, bold: true }).value = v; sty(`${c}5`);
+    });
+    ws.mergeCells('E4:H4'); sty('E4', { fill: BLUE, bold: true }).value = '발주량'; ['F4', 'G4', 'H4'].forEach(a => sty(a));
+    [['E5', '계획량'], ['F5', 'kg'], ['G5', '출고량'], ['H5', 'kg']].forEach(([a, v]) => { sty(a, { fill: BLUE, bold: true }).value = v; });
+    ws.getRow(4).height = 30;
+    // 본문
+    body.forEach(({ r, pk, pr, f, h, l, m }, i) => {
+      const n = first + i, put = (col, v, o = {}) => { const c = sty(col + n, o); if (v !== null && v !== undefined && v !== '') c.value = v; return c; };
+      const dt = iso => iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))) : null;
+      put('A', dt(r.delDate), { fmt: DT }); put('B', r.cat); put('C', r.name).alignment = { horizontal: 'left', vertical: 'middle' }; put('D', Confirm.unitLabel(r));
+      put('E', r.planEa, { fmt: NUM });                                          // 계획량 = 단순산술값 = 예정(개)
+      const F = put('F', null, { fmt: NUM1 }); if (r.planEa !== null && r.planEa !== undefined && pk) F.value = { formula: `E${n}*${pk}`, result: f }; else if (f !== null && f !== undefined) F.value = f;
+      put('G', r.confEa, { fmt: NUM, bold: true });                              // 출고량 = 확정(개)
+      const H = put('H', null, { fmt: NUM1 }); if (r.confEa !== null && r.confEa !== undefined && pk) H.value = { formula: `G${n}*${pk}`, result: h }; else if (h !== null && h !== undefined) H.value = h;
+      const md = dt(r.mealDate); if (md) put('I', md, { fmt: DT }); else put('I', r.rawMeal || '');
+      put('J', r.unit); put('K', pr, { fmt: NUM });
+      const L = put('L', null, { fmt: NUM }); if (pr) L.value = { formula: `E${n}*K${n}`, result: l || 0 };
+      const M = put('M', null, { fmt: NUM }); if (pr && r.confEa !== null && r.confEa !== undefined) M.value = { formula: `G${n}*K${n}`, result: m || 0 };
+      put('N', ((Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id)) ? Confirm.dirty.get(r.id).note : r.note) || '').alignment = { horizontal: 'left', vertical: 'middle' };
+      put('O', ''); put('P', '');
+    });
+    ws.autoFilter = `A5:P${last}`;
+    ws.views = [{ state: 'frozen', ySplit: 5 }];
+    await downloadWorkbook(wb, `확정량_${$('confirmMonth').value || D.today()}.xlsx`);
   }
 };
 
