@@ -397,7 +397,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <thead><tr>
           <th style="width:34px"><input type="checkbox" id="confirmAll" title="화면에 보이는 행 전체 선택"></th><th data-sort="delDate">납품일</th><th data-sort="unit">부대</th><th data-sort="name">품명</th><th data-sort="cat">구분</th><th>단위</th>
           <th>단순산술값</th><th>예정(개)</th><th>예정(kg)</th><th>확정(개)</th><th>확정(kg)</th>
-          <th>단가</th><th>예정매출</th><th>확정매출</th><th data-sort="rate">오차율</th><th data-sort="mealDate">급식일</th><th>관리</th>
+          <th>단가</th><th>예정매출</th><th>확정매출</th><th style="min-width:260px">비고</th><th data-sort="rate">오차율</th><th data-sort="mealDate">급식일</th><th>관리</th>
         </tr></thead>
         <tbody id="confirmBody"></tbody>
       </table>
@@ -930,7 +930,7 @@ const Hist = {
       planEa: f(x => x.includes('예정') && x.includes('개')), planKg: f(x => x.includes('예정') && x.toLowerCase().includes('kg')),
       confEa: f(x => x.includes('확정') && x.includes('개')), confKg: f(x => x.includes('확정') && x.toLowerCase().includes('kg')),
       meal: f(x => x.includes('급식')), unit: f(x => x.includes('부대')), price: f(x => x === '단가'),
-      unitType: f(x => x === '단위'), simple: f(x => x.includes('산술'))
+      unitType: f(x => x === '단위'), simple: f(x => x.includes('산술')), note: f(x => x === '비고')
     };
     let year = null, month = null;
     const at = (row, k) => c[k] < 0 ? '' : row[c[k]];
@@ -962,7 +962,7 @@ const Hist = {
         id: String(at(row, 'id') || '').trim() || `${src}:${r + 1}`, src, row: r + 1,
         delDate: del, mealDate: meal, rawMeal, cat: String(at(row, 'cat') || '').trim(), name, unit: normUnit(at(row, 'unit')),
         planEa: num(at(row, 'planEa')), planKg: num(at(row, 'planKg')), confEa: num(at(row, 'confEa')), confKg: num(at(row, 'confKg')),
-        price: num(at(row, 'price')), unitType: String(at(row, 'unitType') || '').trim(), simple: num(at(row, 'simple'))
+        note: String(at(row, 'note') ?? '').trim(), price: num(at(row, 'price')), unitType: String(at(row, 'unitType') || '').trim(), simple: num(at(row, 'simple'))
       };
       if (rec.planEa === null && rec.planKg === null && rec.confEa === null && rec.confKg === null) continue;
       Hist.derive(rec); out.push(rec);
@@ -1635,10 +1635,10 @@ const Confirm = {
       return `<tr data-id="${esc(r.id)}"><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
         <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan">${fmtN(r.planEa)}</td><td class="num c-plan">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
-        <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td>
+        <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
         <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '-')}</td>
         <td style="white-space:nowrap"><button class="btn sm light" data-act="edit" data-id="${esc(r.id)}">수정</button> <button class="btn sm danger" data-act="del" data-id="${esc(r.id)}">삭제</button></td></tr>`;
-    }).join('') || '<tr><td colspan="17" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
+    }).join('') || '<tr><td colspan="18" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
     $('confirmAll').checked = Confirm.rows.length > 0 && Confirm.rows.every(r => Confirm.picked.has(r.id));
     const sum = list.reduce((a, r) => { const pr = Confirm.price(r) || 0; a.planQty += r.planEa || 0; a.confQty += r.confEa || 0; a.plan += pr * (r.planEa || 0); a.conf += pr * (r.confEa || 0); return a; }, { planQty: 0, confQty: 0, plan: 0, conf: 0 });
     const box = (label, val, sub) => `<div class="stat-box"><div class="b-label">${label}</div><div class="b-val">${val}</div><div class="b-sub">${sub}</div></div>`;
@@ -1650,6 +1650,7 @@ const Confirm = {
     const t = e.target; const id = t.dataset.id; if (!id || t.classList.contains('c-pick')) return;
     const r = Hist.byId.get(id); const tr = t.closest('tr');
     const d = Confirm.dirty.get(id) || {}; const v = t.value.trim() === '' ? null : num(t.value);
+    if (t.classList.contains('c-note')) { d.note = t.value; t.classList.add('dirty'); Confirm.dirty.set(id, d); return; }
     const pack = Confirm.pack(r);
     if (t.classList.contains('c-confEa')) {
       d.confEa = v;
@@ -1663,9 +1664,9 @@ const Confirm = {
     const pr = Confirm.price(r); tr.querySelector('.o-sales').textContent = fmtN(pr && d.confEa !== null ? pr * d.confEa : null);
   },
   async save() {
-    if (!Confirm.dirty.size) return toast('변경된 확정량이 없습니다');
-    const ups = [...Confirm.dirty.entries()].map(([id, d]) => { const r = Hist.byId.get(id); return { r, d, u: { id: /^(hist|plan):/.test(id) ? '' : id, delDate: r.delDate, mealDate: r.mealDate, unit: r.unit, name: r.name, confQty: d.confEa ?? '', confQtyKg: d.confKg ?? '' } }; });
-    if (!confirm(`확정량 ${ups.length}건을 저장합니다. 계속할까요?`)) return;
+    if (!Confirm.dirty.size) return toast('변경된 확정량·비고가 없습니다');
+    const ups = [...Confirm.dirty.entries()].map(([id, d]) => { const r = Hist.byId.get(id); return { r, d, u: { id: /^(hist|plan):/.test(id) ? '' : id, delDate: r.delDate, mealDate: r.mealDate, unit: r.unit, name: r.name, confQty: d.confEa ?? '', confQtyKg: d.confKg ?? '', ...('note' in d ? { note: d.note.trim() } : {}) } }; });
+    if (!confirm(`확정량·비고 ${ups.length}건을 저장합니다. 계속할까요?`)) return;
     // 재고수불대장에 이미 있는 출고 예정·확정 행은 확정 수량(청색)으로 함께 바꾼다
     const ledgerOps = ups.filter(x => LedgerData.byId.has(x.r.id) && ['출고예정', '출고확정'].includes(LedgerData.byId.get(x.r.id).status) && x.d.confEa !== null && x.d.confEa !== undefined)
       .map(x => ({ op: 'update', id: x.r.id, status: '출고확정', fields: { outMain: x.d.confEa } }));
@@ -1676,7 +1677,7 @@ const Confirm = {
       res.results.forEach((x, i) => {
         const { r, d } = ups[i];
         if (!x.updated) { miss.push(r.name + '(' + r.unit + ')'); return; }
-        if (d.confEa !== undefined) r.confEa = d.confEa; if (d.confKg !== undefined) r.confKg = d.confKg;
+        if (d.confEa !== undefined) r.confEa = d.confEa; if (d.confKg !== undefined) r.confKg = d.confKg; if (d.note !== undefined) r.note = d.note.trim();
         Hist.derive(r); Confirm.dirty.delete(r.id);
       });
       Hist.reindex();
@@ -3024,7 +3025,7 @@ document.addEventListener('DOMContentLoaded', () => App.init());
       [...tr.cells].forEach((td, i) => {
         if (td.colSpan > 1 || td.classList.contains('m-tail')) return;
         const l = hs[i] || ''; td.dataset.label = l;
-        if (l === '' || l === '품명' || l === '제품' || l === '소비기한' || l === '관리') td.classList.add('m-wide');
+        if (l === '' || l === '품명' || l === '제품' || l === '소비기한' || l === '비고' || l === '관리') td.classList.add('m-wide');
         if (l === '관리') td.classList.add('m-row'); else if (l === '단순산술값') td.classList.add('m-skip');
       });
     }
