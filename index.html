@@ -522,6 +522,10 @@ tr.edit-row td { background:#FFFBEB !important; }
           <div class="row"><h2>재산대장</h2><label class="row muted"><input type="checkbox" id="estateHideZero" checked> 재고·출고예정 없는 품목 숨기기</label></div>
           <button class="btn light" onclick="Estate.exportExcel()">엑셀 다운로드</button>
         </div>
+        <div class="controls mb8">
+          <div class="ms-wrap" data-ms="estcat"><button type="button" class="ms-btn">구분 전체</button><div class="ms-panel hidden"></div></div>
+          <input type="text" id="estateName" placeholder="품명 검색" style="width:200px">
+        </div>
 
         <div class="table-wrap" style="max-height:640px"><table id="estateTable"><thead>
           <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">납품기한</th><th rowspan="2">재고</th><th colspan="2">출고예정</th></tr>
@@ -2958,12 +2962,13 @@ const Report = {
 /* ---------- 재산대장 (오늘 기준 · 소비기한별 재고 + 출고예정) ---------- */
 const Estate = {
   build() {
-    const today = D.today(), hide = $('estateHideZero').checked, items = [];
+    const today = D.today(), hide = $('estateHideZero').checked, kw = Names.norm($('estateName').value), items = [];
     LedgerData.standard().forEach(p => {
       const pl = [];   // 출고예정: 출고 탭에서 출고일을 입력했고 아직 그날이 오지 않은 수량
       p.rows.forEach(o => { if (PEND_OUT.has(o.status) && o.lines) o.lines.forEach(l => { if (l.ship && l.ship > today) pl.push({ exp: l.exp || '', date: l.ship, qty: l.qty, unit: o.unit }); }); });
       const planned = pl.reduce((a, x) => a + x.qty, 0);
       if (hide && !p.stock && !planned) return;
+      if ((Estate.sel.size && !Estate.sel.has(p.sheet)) || (kw && !Names.norm(p.name).includes(kw))) return;
       const used = new Set(), key = x => x.expiry || '9999';
       const rows = p.lots.slice().sort((a, b) => key(a).localeCompare(key(b))).map(l => {
         const mine = pl.filter(x => x.exp === (l.expiry || '')); mine.forEach(x => used.add(x));
@@ -2978,7 +2983,7 @@ const Estate = {
     });
     return { day: today, items };
   },
-  refs: [],
+  refs: [], sel: new Set(), bound: false,
   // 소비기한 수정: 그 재고가 들어온 입고 줄의 소비기한을 바꾸고, 같은 소비기한으로 잡혀 있던 출고 배분(출고 탭)도 함께 옮긴다
   async editExpiry(r, val) {
     const o = r.o, old = o.expiry || '', ops = [{ ...Ledger.ref(o), op: 'update', fields: { expiry: val } }];
@@ -2990,6 +2995,12 @@ const Estate = {
   },
   dlClass(dl) { if (!dl) return ''; const d = D.diff(dl, D.today()); return d < 0 ? 'dl-over' : d <= dueDays() ? 'dl-soon' : ''; },
   render() {
+    if (!Estate.bound) {
+      Estate.bound = true;
+      $('estateHideZero').addEventListener('change', () => Estate.render());
+      $('estateName').addEventListener('input', debounce(() => Estate.render(), 200));
+    }
+    MS.setup(document.querySelector('[data-ms=estcat]'), '구분', [...new Set(LedgerData.standard().map(p => p.sheet))], Estate.sel, Estate.render);
     const { items } = Estate.build(); Estate.refs = [];
     let html = '', last = null; const cnt = {};
     items.forEach(it => { cnt[it.p.sheet] = (cnt[it.p.sheet] || 0) + it.rows.length + 1; });
