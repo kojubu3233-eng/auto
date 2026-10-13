@@ -411,7 +411,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="row mt8"><span class="muted" id="confirmSummary"></span></div>
   </div>
   <div class="panel hidden" id="confirmZone">
-    <div class="row between mb12"><h2>권역별 출고</h2><div class="row"><button class="btn light" onclick="Zone.exportExcel()">엑셀 다운로드 (물류사 전달용)</button></div></div>
+    <div class="row between mb12"><h2>권역별 출고</h2><div class="row"><button class="btn light" onclick="Zone.exportInvoice()">거래명세서 (물류비)</button><button class="btn light" onclick="Zone.exportExcel()">엑셀 다운로드 (물류사 전달용)</button></div></div>
     <div class="controls">
       <input type="month" id="zoneMonth">
       <div class="ms-wrap" data-ms="zdel"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
@@ -1968,6 +1968,78 @@ const Zone = {
     }).join('') || '<tr><td colspan="13" class="empty">해당 조건의 출고 건이 없습니다</td></tr>';
     const miss = all.filter(x => x.wh === '미지정'); const un = new Set(miss.map(x => x.r.unit));
     $('zoneSummary').textContent = `${list.length.toLocaleString()}건${list.length > 800 ? ' (화면에는 800건까지 표시, 엑셀에는 전부 담깁니다)' : ''}${Confirm.dirty.size ? ` · 확정량 미저장 ${Confirm.dirty.size}건은 저장 후 반영됩니다` : ''}${un.size ? ` · 지역·창고 미지정 부대: ${[...un].slice(0, 5).join(', ')}${un.size > 5 ? ' 외' : ''} (부대별정보 시트 D·E열에 입력)` : ''}`;
+  },
+  // 물류사 거래명세서(월 물류비): 부대별 출고 kg × 단가(일반 300원, 두부 350원) + 세액 10%. 양식은 JIB 거래명세서와 같다
+  fee: { gen: 300, tofu: 350 },
+  supplier: { regNo: '5 6 0 - 3 1 - 0 0 5 4 4 ', name: 'J.I.B물류', ceo: '백종인', addr: '경기도 양주시 옥정서로 130 902동 1402호', kind: '운수업', item: '화물운송', tel: '010-6345-8712', buyer: '㈜코주부씨엔에프' },
+  async exportInvoice() {
+    const list = Zone.filtered(Zone.base()); if (!list.length) return toast('내보낼 데이터가 없습니다');
+    await loadExcel();
+    const ym = $('zoneMonth').value || list[0].r.delDate.slice(0, 7), yy = ym.slice(2, 4), mon = +ym.slice(5, 7), F = Zone.fee, S = Zone.supplier;
+    // 부대별 kg 합계 (확정 kg가 있으면 확정, 없으면 계획 kg). 두부류는 따로 묶는다
+    const gen = new Map(), tofu = new Map();
+    list.forEach(x => { const kg = x.r.confKg !== null && x.r.confKg !== undefined ? x.r.confKg : (x.r.planKg || 0), m = /두부/.test(x.r.name) ? tofu : gen; m.set(x.r.unit, (m.get(x.r.unit) || 0) + kg); });
+    const sorted = m => [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const rows = [...sorted(gen).map(([u, kg]) => ({ label: u, kg, price: F.gen })), ...sorted(tofu).map(([u, kg]) => ({ label: '두부/' + u, kg, price: F.tofu }))];
+    rows.forEach(r => { r.kg = Math.round(r.kg * 100) / 100; r.sup = r.kg * r.price; r.tax = r.sup * 0.1; });
+    const NC = 42, first = 13, tot = first + rows.length, lastRow = tot + 2;   // 0부터 센 행 번호 (lastRow = 맨 아래 빈 칸 2줄 중 끝)
+    const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet(`${mon}월`);
+    for (let c = 0; c < NC; c++) ws.getColumn(c + 1).width = 1.8;
+    [[3, 2.3], [13, 1], [18, 6.4], [39, 2.5], [41, 2.5]].forEach(([c, w]) => { ws.getColumn(c + 1).width = w; });
+    const H = { 0: 23, 1: 9, 2: 30, 3: 9, 4: 9, 5: 24, 6: 24, 7: 24, 8: 24, 9: 24, 10: 29, 11: 12, 12: 12 };
+    for (let r = 0; r <= lastRow; r++) ws.getRow(r + 1).height = H[r] || (r === tot ? 21 : r > tot ? 18 : 15);
+    const thin = { style: 'thin' }, med = { style: 'medium' }, FONT = '돋움';
+    const cell = (r, c) => ws.getCell(r + 1, c + 1), L = c => ws.getColumn(c + 1).letter;
+    const box = (r1, r2, c1, c2, o = {}) => {   // [r1,r2) × [c1,c2) 범위를 합치고 값·서식·테두리를 준다
+      if (r2 - r1 > 1 || c2 - c1 > 1) ws.mergeCells(r1 + 1, c1 + 1, r2, c2);
+      for (let r = r1; r < r2; r++) for (let c = c1; c < c2; c++) { const k = cell(r, c); if (o.border !== false) k.border = { top: thin, left: thin, bottom: thin, right: thin }; if (o.fill) k.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: o.fill } }; }
+      const m = cell(r1, c1); if (o.v !== undefined && o.v !== null) m.value = o.v;
+      m.font = { name: FONT, size: o.size || 11, bold: !!o.bold }; m.alignment = { horizontal: o.h || 'center', vertical: o.va || 'middle', wrapText: !!o.wrap }; if (o.fmt) m.numFmt = o.fmt;
+      return m;
+    };
+    const NUM0 = '_-* #,##0_-;\\-* #,##0_-;_-* "-"_-;_-@_-', NUM2 = '_-* #,##0.00_-;\\-* #,##0.00_-;_-* "-"_-;_-@_-', Y = 'FFFFFFCC', GOLD = 'FFFFCC00', NB = { border: false };
+    // 제목
+    box(0, 1, 0, NC, { ...NB, v: `${yy}년   ${mon}월 군납(JIB)물류비`, size: 18, bold: true });
+    box(1, 5, 12, 31, { ...NB, v: '거 래 명 세 서', size: 18, bold: true });
+    box(2, 3, 1, 3, { ...NB, v: 'NO.', size: 10 }); for (let c = 1; c < 3; c++) cell(2, c).border = { bottom: thin };
+    // 작성일
+    const t = new Date();
+    box(5, 6, 1, 4, { ...NB, v: t.getFullYear(), h: 'right' }); box(5, 6, 4, 5, { ...NB, v: '년', h: 'left' }); box(5, 6, 5, 7, { ...NB, v: t.getMonth() + 1, h: 'right' });
+    box(5, 6, 7, 8, { ...NB, v: '월', h: 'left' }); box(5, 6, 8, 10, { ...NB, v: t.getDate(), h: 'right' }); box(5, 6, 10, 11, { ...NB, v: '일', h: 'left' });
+    // 받는 곳
+    box(7, 8, 1, 13, { ...NB, v: S.buyer, size: 14, bold: true }); for (let c = 1; c < 13; c++) cell(7, c).border = { bottom: thin };
+    box(7, 8, 13, 14, { ...NB, v: '귀하', size: 10, h: 'left' }); box(9, 10, 1, 13, { ...NB, v: '아래와 같이 계산합니다.', size: 10, h: 'left' });
+    // 공급자
+    box(5, 10, 17, 19, { v: '공\n\n급\n\n자', size: 10, wrap: true });
+    box(5, 6, 19, 24, { v: '등 록 번 호', size: 10 }); box(5, 6, 24, 42, { v: S.regNo });
+    box(6, 7, 19, 24, { v: '상호(법인명)', size: 10 }); box(6, 7, 24, 31, { v: S.name }); box(6, 7, 31, 33, { v: '성명', size: 10 }); box(6, 7, 33, 40, { v: S.ceo }); box(6, 7, 40, 42, { v: '(인)', size: 10 });
+    box(7, 8, 19, 24, { v: '사업장주소', size: 10 }); box(7, 8, 24, 42, { v: S.addr, size: 10 });
+    box(8, 9, 19, 24, { v: '업 태', size: 10 }); box(8, 9, 24, 31, { v: S.kind }); box(8, 9, 31, 33, { v: '종목', size: 10 }); box(8, 9, 33, 42, { v: S.item });
+    box(9, 10, 19, 24, { v: '전화번호', size: 10 }); box(9, 10, 24, 42, { v: S.tel });
+    // 일금
+    const X = L(23), AH = L(33), O = L(14), T = L(19);
+    box(10, 11, 0, 9, { v: '(공급가액+세액)', size: 11 }); box(10, 11, 9, 31, { v: '일금 정', size: 12, bold: true }); box(10, 11, 31, 33, { v: '( ', h: 'right' });
+    const sumSup = rows.reduce((a, r) => a + r.sup, 0), sumTax = rows.reduce((a, r) => a + r.tax, 0), sumKg = rows.reduce((a, r) => a + r.kg, 0);
+    box(10, 11, 33, 41, { v: { formula: `${X}${tot + 1}+${AH}${tot + 1}`, result: Math.round(sumSup + sumTax) }, bold: true, fill: GOLD, fmt: '[$₩-412]#,##0', h: 'right' }); box(10, 11, 41, 42, { v: ')', h: 'left' });
+    // 머리글
+    [[0, 4, '납품월'], [4, 14, '부대명'], [14, 19, '수 량(kg)'], [19, 23, '단 가'], [23, 33, '공 급 가 액'], [33, 42, '세 액']].forEach(([a, b, v]) => box(11, 13, a, b, { v, size: 10 }));
+    // 본문
+    rows.forEach((r, i) => {
+      const n = first + i, e = n + 1;
+      box(n, n + 1, 0, 4, { v: `${mon}월`, fmt: NUM0 }); box(n, n + 1, 4, 14, { v: r.label });
+      box(n, n + 1, 14, 19, { v: r.kg, fmt: NUM2, fill: Y, h: 'right' }); box(n, n + 1, 19, 23, { v: r.price, fmt: NUM0 });
+      box(n, n + 1, 23, 33, { v: { formula: `${O}${e}*${T}${e}`, result: r.sup }, fmt: NUM0, h: 'right' }); box(n, n + 1, 33, 42, { v: { formula: `${X}${e}*0.1`, result: r.tax }, fmt: NUM0, h: 'right' });
+    });
+    // 합계
+    const a = first + 1, b = tot;
+    box(tot, tot + 1, 0, 14, { v: '계', bold: true }); box(tot, tot + 1, 14, 19, { v: { formula: `SUM(${O}${a}:${O}${b})`, result: sumKg }, fmt: NUM2, bold: true, h: 'right' }); box(tot, tot + 1, 19, 23, {});
+    box(tot, tot + 1, 23, 33, { v: { formula: `SUM(${X}${a}:${X}${b})`, result: sumSup }, fmt: NUM0, bold: true, h: 'right' }); box(tot, tot + 1, 33, 42, { v: { formula: `SUM(${AH}${a}:${AH}${b})`, result: sumTax }, fmt: NUM0, bold: true, h: 'right' });
+    box(tot + 1, tot + 3, 0, NC, { border: false });
+    // 바깥 굵은 테두리
+    for (let r = 1; r <= tot + 2; r++) { const l = cell(r, 0), rt = cell(r, NC - 1); l.border = { ...l.border, left: med }; rt.border = { ...rt.border, right: med }; }
+    for (let c = 0; c < NC; c++) { const k = cell(0, c); k.border = { ...k.border, bottom: med }; const z = cell(tot + 2, c); z.border = { ...z.border, bottom: med }; }
+    ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } };
+    await downloadWorkbook(wb, `JIB물류비_거래명세서_${ym}.xlsx`);
   },
   async exportExcel() {
     const list = Zone.filtered(Zone.base()); if (!list.length) return toast('내보낼 데이터가 없습니다');
