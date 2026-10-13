@@ -412,7 +412,6 @@ tr.edit-row td { background:#FFFBEB !important; }
   </div>
   <div class="panel hidden" id="confirmZone">
     <div class="row between mb12"><h2>권역별 출고</h2><div class="row"><button class="btn light" onclick="Zone.exportExcel()">엑셀 다운로드 (물류사 전달용)</button></div></div>
-    <div class="buckets mb12" id="zoneStats"></div>
     <div class="controls">
       <input type="month" id="zoneMonth">
       <div class="ms-wrap" data-ms="zdel"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
@@ -1959,14 +1958,12 @@ const Zone = {
     MS.setup(document.querySelector('[data-ms=zreg]'), '지역', uniq(x => x.reg).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })), Zone.sel.reg, Zone.render);
     MS.setup(document.querySelector('[data-ms=zunit]'), '부대', uniq(x => x.r.unit).sort((a, b) => a.localeCompare(b, 'ko')), Zone.sel.unit, Zone.render);
     const list = Zone.filtered(all), shown = list.slice(0, 800);
-    const box = (label, t) => `<div class="stat-box"><div class="b-label">${esc(label)}</div><div class="b-val">${fmtN(t.plan, 1)}<span class="hint"> kg</span></div><div class="b-sub">${t.n}건 · 출고 ${fmtN(t.conf, 1)}kg</div></div>`;
-    $('zoneStats').innerHTML = box('전체', Zone.sums(Zone.filtered(all))) + whs.map(w => box(w, Zone.sums(Zone.filtered(all.filter(x => x.wh === w && (!Zone.wh || Zone.wh === w)))))).join('');
     let prev = '';
     $('zoneBody').innerHTML = shown.map(x => {
       const r = x.r, first = r.delDate !== prev; prev = r.delDate;
       const unitNo = x.wh === '미지정' ? ' style="color:var(--warn)"' : '';
       return `<tr${first ? ' class="day-first"' : ''}><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
-        <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 1)}</td><td class="num c-conf">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num c-conf">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 1)}</td>
+        <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 2)}</td><td class="num c-conf">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num c-conf">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 2)}</td>
         <td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '')}</td><td>${esc(r.unit)}</td><td${unitNo}>${esc(x.reg)}</td><td style="text-align:left">${esc(x.note)}</td></tr>`;
     }).join('') || '<tr><td colspan="13" class="empty">해당 조건의 출고 건이 없습니다</td></tr>';
     const miss = all.filter(x => x.wh === '미지정'); const un = new Set(miss.map(x => x.r.unit));
