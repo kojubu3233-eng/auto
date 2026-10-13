@@ -42,6 +42,7 @@ input:focus, select:focus { border-color:var(--accent); background:var(--accent-
 input[readonly] { color:var(--muted); background:var(--surface-alt) !important; }
 input.g-hc.manual { color:var(--warn); font-weight:700; }
 tr.editing td { background:#FFFBEB; }
+#zoneTable tr.day-first td { border-top:2px solid var(--border); }
 input.dirty { background:#FEF9C3 !important; border-color:#F59E0B !important; }
 input.invalid { border-color:var(--danger) !important; }
 
@@ -113,7 +114,7 @@ tr.picked td { background:#FFFBEB !important; }
 tr.row-grey td { background:#F1F1EF !important; color:#9A9A94 !important; } tr.row-grey .tag { opacity:.6; }
 .over-btn { border:1px solid var(--danger); background:var(--danger-soft); color:var(--danger); border-radius:6px; padding:2px 8px; font-weight:700; cursor:pointer; font-size:12px; } .over-btn:hover { background:var(--danger); color:#fff; }
 td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap;cursor:pointer;margin-left:4px}
-.reco-now{font-size:13px;margin-bottom:6px}.reco-sel{font-size:13px;margin:6px 0 8px}.reco-sel .neg{color:#c0392b}
+.reco-sel{font-size:13px;margin:6px 0 8px}.reco-sel .neg{color:#c0392b}
 .reco-rec{padding:10px 12px;border:1px solid var(--line,#ddd);border-radius:8px;margin-bottom:10px;background:#f6faf6}
 .reco-rec.need{background:#fff4f2;border-color:#e5a39b}
 .reco-rec b{font-size:20px}
@@ -299,7 +300,7 @@ tr.edit-row td { background:#FFFBEB !important; }
 <section id="tab-home">
   <div class="home-grid">
     <div class="panel">
-      <div class="row between mb12"><h2>보관일수 현황</h2><span class="hint">입고일 기준 경과일수, 현재 남은 수량</span></div>
+      <div class="row between mb12"><h2>보관일수 현황</h2></div>
       <div class="buckets" id="ageBuckets"></div>
       <div class="mt12 hidden" id="ageDetailWrap">
         <div class="row between mb8"><h3 id="ageDetailTitle"></h3><button class="btn light sm" onclick="Home.closeDetail('age')">닫기</button></div>
@@ -307,7 +308,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       </div>
     </div>
     <div class="panel">
-      <div class="row between mb12"><h2>잔여 납품기한 현황</h2><span class="hint">소비기한 남은 비율 냉동 2/3, 냉장·상온 1/2 기준</span></div>
+      <div class="row between mb12"><h2>잔여 납품기한 현황</h2></div>
       <div class="buckets" id="dueBuckets"></div>
       <div class="mt12 hidden" id="dueDetailWrap">
         <div class="row between mb8"><h3 id="dueDetailTitle"></h3><button class="btn light sm" onclick="Home.closeDetail('due')">닫기</button></div>
@@ -315,7 +316,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       </div>
     </div>
     <div class="panel">
-      <div class="row between mb12"><h2>입고 스케줄</h2><span class="hint">입고 결정된 건</span></div>
+      <div class="row between mb12"><h2>입고 스케줄</h2></div>
       <div class="list-box" id="inSchedule"><div class="empty">불러오는 중</div></div>
     </div>
     <div class="panel">
@@ -323,7 +324,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="list-box" id="outToday"><div class="empty">불러오는 중</div></div>
     </div>
     <div class="panel">
-      <div class="row between mb12"><h2>납품기한 임박</h2><span class="hint">30일 이내</span></div>
+      <div class="row between mb12"><h2>납품기한 임박</h2></div>
       <div class="list-box" id="dueSoon"><div class="empty">불러오는 중</div></div>
     </div>
     <div class="panel">
@@ -379,7 +380,11 @@ tr.edit-row td { background:#FFFBEB !important; }
 
 <!-- 확정량 입력 -->
 <section id="tab-confirm" class="hidden">
-  <div class="panel">
+  <div class="sub-tabs" id="confirmTabs">
+    <button class="tab-btn active" data-ctab="main">확정량입력</button>
+    <button class="tab-btn" data-ctab="zone">권역별출고</button>
+  </div>
+  <div class="panel" id="confirmMain">
     <div class="row between mb12">
       <h2>확정량 입력</h2>
       <div class="row"><button class="btn light" onclick="Confirm.openAdd()">+ 행 추가 (급발주 등)</button><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn danger" onclick="Confirm.removeSelected()">선택 삭제</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
@@ -405,6 +410,25 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
     <div class="row mt8"><span class="muted" id="confirmSummary"></span></div>
   </div>
+  <div class="panel hidden" id="confirmZone">
+    <div class="row between mb12"><h2>권역별 출고</h2><div class="row"><button class="btn light" onclick="Zone.exportExcel()">엑셀 다운로드 (물류사 전달용)</button></div></div>
+    <div class="buckets mb12" id="zoneStats"></div>
+    <div class="controls">
+      <input type="month" id="zoneMonth">
+      <div class="ms-wrap" data-ms="zdel"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
+      <div class="ms-wrap" data-ms="zreg"><button type="button" class="ms-btn">지역 전체</button><div class="ms-panel hidden"></div></div>
+      <div class="ms-wrap" data-ms="zunit"><button type="button" class="ms-btn">부대 전체</button><div class="ms-panel hidden"></div></div>
+      <input type="text" id="zoneName" placeholder="품명 검색" style="flex:1;min-width:120px">
+    </div>
+    <div class="sub-tabs" id="zoneWh" style="margin-bottom:10px"></div>
+    <div class="table-wrap" style="max-height:640px">
+      <table id="zoneTable">
+        <thead><tr><th>납품일</th><th>창고</th><th>품명</th><th>보관</th><th>단위</th><th>계획량(EA)</th><th>kg</th><th>출고량(EA)</th><th>kg</th><th>급식일</th><th>부대명</th><th>지역</th><th style="min-width:220px">비고</th></tr></thead>
+        <tbody id="zoneBody"></tbody>
+      </table>
+    </div>
+    <div class="row mt8"><span class="muted" id="zoneSummary"></span></div>
+  </div>
 </section>
 
 <!-- 재고수불대장 -->
@@ -422,7 +446,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="row between mb12"><h2 id="ldDueTitle"></h2>
       <div class="row"><span id="ldDueCfg" class="row"><label class="lbl muted">임박 기준</label><input type="number" id="ldDueDays" min="1" max="365" style="width:70px"><span class="muted">일</span><button class="btn sm" onclick="Ledger.saveDueDays()">저장</button></span><button class="btn light sm" onclick="Ledger.closeDue()">닫기</button></div></div>
     <div class="table-wrap" style="max-height:480px"><table><thead><tr><th>대분류</th><th>품명</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>상태</th><th>잔량</th></tr></thead><tbody id="ldDueBody"></tbody></table></div>
-    <div class="hint mt8">홈 화면의 임박·초과 목록과 같은 기준입니다. 행을 누르면 해당 품목 상세로 이동합니다. 임박 기준은 서버에 저장되어 모든 기기에 적용됩니다.</div>
+
   </div>
   <div class="panel hidden" id="ledgerDetail">
     <div class="row between mb12">
@@ -442,9 +466,9 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="table-wrap" style="max-height:560px">
       <table class="m-card m-led" data-labels="업체,제품,입고일,입고수량,납품일,소계,본품,샘플,부대,재고,납품기한 임박,납품기한 초과,상태"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
     </div>
-    <div class="row mt8 between"><span class="hint">납품 줄을 누르면 입고일·수량·소비기한을 적을 수 있고, 상태 칸의 입고결정 체크로 그 입고일에 받기로 결정합니다(체크 해제 시 예정). 출고는 예정량·확정량 입력과 자동 연동됩니다(적색 예정 · 청색 확정 · 검정 완료).</span><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
+    <div class="row mt8" style="justify-content:flex-end"><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
     <div class="reco mt12" id="ldReco">
-      <div class="row mb8"><b>발주량 추천</b><span class="hint">납품(출고) 줄을 누르면 그 건 하나의 추천 발주량이 나옵니다</span></div>
+      <div class="row mb8"><b>발주량 추천</b></div>
       <div id="ldRecoBody"></div>
     </div>
   </div>
@@ -461,7 +485,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
 
     <div data-subpane="in">
-      <div class="row mb8"><h3>입고 예정</h3><span class="hint">재고수불대장에서 '입고결정'한 건이 오늘부터 자동으로 나타납니다. 실제 입고 수량·소비기한을 입력하고 체크한 뒤 '입고 완료'를 누르세요</span></div>
+      <div class="row mb8"><h3>입고 예정</h3></div>
       <div class="controls mb8">
         <label class="lbl">품목</label><input type="text" id="inFilterName" placeholder="품명 검색" style="width:160px">
         <label class="lbl">입고일</label><span id="inFrom"></span><span>~</span><span id="inTo"></span>
@@ -476,7 +500,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     </div>
 
     <div data-subpane="out" class="hidden">
-      <div class="row mb8"><h3>출고 예정</h3><span class="hint">납품일 5일 전부터 예정·확정 건이 자동으로 나타납니다. 소비기한은 빠른 것부터 자동 배분되며 수량은 고칠 수 있습니다. 출고일을 입력하면 저장되고, 출고일이 되면 출고처리·재고 감소가 자동으로 됩니다. 납품일이 지나면 목록에서 사라집니다</span></div>
+      <div class="row mb8"><h3>출고 예정</h3></div>
       <div class="controls mb8">
         <label class="lbl">부대</label><input type="text" id="outFUnit" placeholder="부대 검색" style="width:120px">
         <label class="lbl">품목</label><input type="text" id="outFName" placeholder="품명 검색" style="width:150px">
@@ -492,13 +516,13 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div data-subpane="print" class="hidden">
       <div class="row mb12"><label class="lbl muted">일자</label><span id="printDate"></span>
         <button class="btn" onclick="Logi.printJournal()">입출고 일지 엑셀</button></div>
-      <div class="muted">해당 일자의 입고 완료 내역과 출고(출고일 기준, 출고일이 없으면 납품일) 내역을 한 장의 입출고 일지(입고 / 출고 구분)로 내려받습니다.</div>
+
       <div class="mt12">
         <div class="row between mb12">
-          <div class="row"><h2>재산대장</h2><span class="muted">오늘 기준</span><label class="row muted"><input type="checkbox" id="estateHideZero" checked> 재고·출고예정 없는 품목 숨기기</label></div>
+          <div class="row"><h2>재산대장</h2><label class="row muted"><input type="checkbox" id="estateHideZero" checked> 재고·출고예정 없는 품목 숨기기</label></div>
           <button class="btn light" onclick="Estate.exportExcel()">엑셀 다운로드</button>
         </div>
-        <div class="hint mb8">소비기한·납품기한별로 줄이 나뉩니다(소비기한 칸을 눌러 수정할 수 있습니다). 출고예정은 출고 탭에서 출고일을 입력한 건이 자동으로 나타나고, 출고일이 되면 재고에서 빠지며 출고예정 칸은 비워집니다. 납품기한 = 소비기한 − 제품 소비기한(개월) × 2/3 (냉장·상온 1/2)</div>
+
         <div class="table-wrap" style="max-height:640px"><table id="estateTable"><thead>
           <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">납품기한</th><th rowspan="2">재고</th><th colspan="2">출고예정</th></tr>
           <tr><th style="top:33px">출고일</th><th style="top:33px">수량</th></tr>
@@ -515,7 +539,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <button class="btn" onclick="Logi.backup()">백업 파일 받기</button>
         <label class="btn light">백업 파일 불러오기<input type="file" accept=".json" class="hidden" onchange="Logi.restore(event)"></label>
       </div>
-      <div class="hint mb8">입출고 및 재고현황을 날짜별로 이 기기에 자동 저장합니다(오늘 날짜는 열 때마다 최신으로 갱신). 아래 달력에서 점이 있는 날짜가 백업이 있는 날입니다.</div>
+      <div class="hint mb8">날짜별로 이 기기에 자동 저장됩니다. 점이 있는 날짜가 백업일입니다.</div>
       <div id="snapCal" class="snap-cal mb12"></div>
       <div id="snapView"></div>
       <details class="mt12"><summary class="muted" style="cursor:pointer">입출고 저장 기록 (시트에 없는 건 다시 반영)</summary>
@@ -1594,6 +1618,8 @@ const Confirm = {
       const k = e.target.closest('th')?.dataset.sort; if (!k) return;
       Confirm.sort = { key: k, dir: Confirm.sort.key === k ? -Confirm.sort.dir : 1 }; Confirm.renderRows();
     });
+    $('confirmTabs').addEventListener('click', e => { const b = e.target.closest('[data-ctab]'); if (b) Zone.show(b.dataset.ctab === 'zone'); });
+    Zone.init();
     $('confirmBody').addEventListener('input', Confirm.onInput);
     $('confirmBody').addEventListener('change', e => {
       const c = e.target.closest('.c-pick'); if (!c) return;
@@ -1652,9 +1678,10 @@ const Confirm = {
     if (er) { DF.mount(document.querySelector('#confirmBody .ie-del'), 'cf-del', er.delDate || ''); AC.bind(document.querySelector('#confirmBody .ie-name'), AC.products); }
     else Confirm.editId = null;
     const sum = list.reduce((a, r) => { const pr = Confirm.price(r) || 0; a.planQty += r.planEa || 0; a.confQty += r.confEa || 0; a.plan += pr * (r.planEa || 0); a.conf += pr * (r.confEa || 0); return a; }, { planQty: 0, confQty: 0, plan: 0, conf: 0 });
-    const box = (label, val, sub) => `<div class="stat-box"><div class="b-label">${label}</div><div class="b-val">${val}</div><div class="b-sub">${sub}</div></div>`;
-    $('confirmStats').innerHTML = box('예정 수량', fmtN(sum.planQty) + '<span class="hint"> 개</span>', '조건에 맞는 ' + list.length.toLocaleString() + '건') + box('예정 금액', fmtN(sum.plan) + '<span class="hint"> 원</span>', '단가 × 예정 수량') +
-      box('확정 수량', fmtN(sum.confQty) + '<span class="hint"> 개</span>', '확정량이 입력된 건 합계') + box('확정 금액', fmtN(sum.conf) + '<span class="hint"> 원</span>', '단가 × 확정 수량');
+    const box = (label, val, sub) => `<div class="stat-box"><div class="b-label">${label}</div><div class="b-val">${val}</div>${sub ? `<div class="b-sub">${sub}</div>` : ''}</div>`;
+    $('confirmStats').innerHTML = box('예정 수량', fmtN(sum.planQty) + '<span class="hint"> 개</span>', '') + box('예정 금액', fmtN(sum.plan) + '<span class="hint"> 원</span>', '') +
+      box('확정 수량', fmtN(sum.confQty) + '<span class="hint"> 개</span>', '') + box('확정 금액', fmtN(sum.conf) + '<span class="hint"> 원</span>', '');
+    if (Zone.active) Zone.render();
     $('confirmSummary').textContent = `${list.length.toLocaleString()}건${list.length > 400 ? ' (화면에는 400건까지 표시, 필터로 좁혀 보세요)' : ''} · 미저장 ${Confirm.dirty.size}건`;
   },
   onInput(e) {
@@ -1802,7 +1829,7 @@ const Confirm = {
       <label>품명</label><span class="ac-wrap"><input type="text" id="cfName" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
       <label>구분</label><input type="text" id="cfCat" placeholder="자동">
       <label>확정량(개)</label><input type="number" id="cfQty" style="width:140px">
-      <div class="hint" style="grid-column:1/-1">추가하면 확정량 입력과 재고수불대장(출고확정, 납품일 순서)에 함께 들어가 재고가 바로 갱신됩니다.</div>`, Confirm.saveAdd);
+`, Confirm.saveAdd);
     DF.mount($('cfDel'), 'cf-del', '');
     AC.bind($('cfUnit'), AC.units);
     AC.bind($('cfName'), AC.products, () => { const p = Names.product($('cfName').value.trim()); if (p && !$('cfCat').value) $('cfCat').value = p.category || ''; });
@@ -1889,6 +1916,83 @@ const Confirm = {
     ws.autoFilter = `A5:P${last}`;
     ws.views = [{ state: 'frozen', ySplit: 5 }];
     await downloadWorkbook(wb, `확정량_${$('confirmMonth').value || D.today()}.xlsx`);
+  }
+};
+
+/* ---------- 권역별 출고 (확정량 입력의 소 탭: 확정량 데이터를 지역·창고별로 보여 주기만 한다) ---------- */
+const Zone = {
+  active: false, wh: '', sel: { del: new Set(), reg: new Set(), unit: new Set() },
+  init() {
+    $('zoneMonth').value = $('confirmMonth').value;
+    $('zoneMonth').addEventListener('change', () => { Zone.sel.del.clear(); Zone.render(); });
+    $('zoneName').addEventListener('input', debounce(() => Zone.render(), 200));
+    $('zoneWh').addEventListener('click', e => { const b = e.target.closest('[data-wh]'); if (b) { Zone.wh = b.dataset.wh; Zone.render(); } });
+  },
+  show(on) {
+    Zone.active = on;
+    document.querySelectorAll('#confirmTabs .tab-btn').forEach(b => b.classList.toggle('active', (b.dataset.ctab === 'zone') === on));
+    $('confirmMain').classList.toggle('hidden', on); $('confirmZone').classList.toggle('hidden', !on);
+    if (on) { $('zoneMonth').value = $('confirmMonth').value; Zone.sel.del.clear(); Zone.render(); }
+  },
+  info(r) { const u = Names.unitMap.get(r.unit) || {}; return { reg: u.region || '', wh: u.warehouse || '' }; },
+  rec(r) {   // 확정량 화면과 같은 저장 데이터에서 한 줄을 만든다 (미저장 입력값은 반영하지 않는다)
+    const i = Zone.info(r), p = Names.product(r.name);
+    return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
+  },
+  base() { const m = $('zoneMonth').value; return Hist.records.filter(r => r.delDate && (!m || String(r.delDate).startsWith(m))).map(Zone.rec); },
+  filtered(all) {
+    const kw = Names.norm($('zoneName').value), s = Zone.sel;
+    return all.filter(x => (!Zone.wh || x.wh === Zone.wh) && (!s.del.size || s.del.has(x.r.delDate)) && (!s.reg.size || s.reg.has(x.reg)) && (!s.unit.size || s.unit.has(x.r.unit)) && (!kw || Names.norm(x.r.name).includes(kw)))
+      .sort((a, b) => String(a.r.delDate).localeCompare(String(b.r.delDate)) || a.wh.localeCompare(b.wh, 'ko') || a.reg.localeCompare(b.reg, 'ko', { numeric: true }) || String(a.r.unit).localeCompare(String(b.r.unit), 'ko') || String(a.r.name).localeCompare(String(b.r.name), 'ko'));
+  },
+  sums(list) { return list.reduce((a, x) => { a.n++; a.plan += x.r.planKg || 0; a.conf += x.r.confKg || 0; return a; }, { n: 0, plan: 0, conf: 0 }); },
+  render() {
+    const all = Zone.base(), uniq = f => [...new Set(all.map(f).filter(Boolean))];
+    const whs = uniq(x => x.wh).sort((a, b) => a.localeCompare(b, 'ko'));
+    if (Zone.wh && !whs.includes(Zone.wh)) Zone.wh = '';
+    $('zoneWh').innerHTML = ['', ...whs].map(w => `<button type="button" class="tab-btn ${Zone.wh === w ? 'active' : ''}" data-wh="${esc(w)}">${w ? esc(w) : '전체'}</button>`).join('');
+    MS.setup(document.querySelector('[data-ms=zdel]'), '납품일', uniq(x => x.r.delDate).sort(), Zone.sel.del, Zone.render);
+    MS.setup(document.querySelector('[data-ms=zreg]'), '지역', uniq(x => x.reg).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })), Zone.sel.reg, Zone.render);
+    MS.setup(document.querySelector('[data-ms=zunit]'), '부대', uniq(x => x.r.unit).sort((a, b) => a.localeCompare(b, 'ko')), Zone.sel.unit, Zone.render);
+    const list = Zone.filtered(all), shown = list.slice(0, 800);
+    const box = (label, t) => `<div class="stat-box"><div class="b-label">${esc(label)}</div><div class="b-val">${fmtN(t.plan, 1)}<span class="hint"> kg</span></div><div class="b-sub">${t.n}건 · 출고 ${fmtN(t.conf, 1)}kg</div></div>`;
+    $('zoneStats').innerHTML = box('전체', Zone.sums(Zone.filtered(all))) + whs.map(w => box(w, Zone.sums(Zone.filtered(all.filter(x => x.wh === w && (!Zone.wh || Zone.wh === w)))))).join('');
+    let prev = '';
+    $('zoneBody').innerHTML = shown.map(x => {
+      const r = x.r, first = r.delDate !== prev; prev = r.delDate;
+      const unitNo = x.wh === '미지정' ? ' style="color:var(--warn)"' : '';
+      return `<tr${first ? ' class="day-first"' : ''}><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
+        <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 1)}</td><td class="num c-conf">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num c-conf">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 1)}</td>
+        <td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '')}</td><td>${esc(r.unit)}</td><td${unitNo}>${esc(x.reg)}</td><td style="text-align:left">${esc(x.note)}</td></tr>`;
+    }).join('') || '<tr><td colspan="13" class="empty">해당 조건의 출고 건이 없습니다</td></tr>';
+    const miss = all.filter(x => x.wh === '미지정'); const un = new Set(miss.map(x => x.r.unit));
+    $('zoneSummary').textContent = `${list.length.toLocaleString()}건${list.length > 800 ? ' (화면에는 800건까지 표시, 엑셀에는 전부 담깁니다)' : ''}${Confirm.dirty.size ? ` · 확정량 미저장 ${Confirm.dirty.size}건은 저장 후 반영됩니다` : ''}${un.size ? ` · 지역·창고 미지정 부대: ${[...un].slice(0, 5).join(', ')}${un.size > 5 ? ' 외' : ''} (부대별정보 시트 D·E열에 입력)` : ''}`;
+  },
+  async exportExcel() {
+    const list = Zone.filtered(Zone.base()); if (!list.length) return toast('내보낼 데이터가 없습니다');
+    await loadExcel();
+    const mon = +(($('zoneMonth').value || list[0].r.delDate).slice(5, 7));
+    const wb = new ExcelJS.Workbook();
+    const NUM = '#,##0.##', DT = 'mm"월"\\ dd"일"', thin = { style: 'thin' }, B = { top: thin, left: thin, bottom: thin, right: thin };
+    const fill = c => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } });
+    const heads = ['납품일', '창고', '품명', '보관', '단위', '계획량(EA)', 'kg', '출고량(EA)', 'kg', '급식일', '부대명', '지역', '비고'], widths = [12, 8, 26, 7, 7, 11, 9, 11, 9, 11, 14, 9, 40];
+    const dt = iso => iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10))) : null;
+    const sheet = (name, rows) => {
+      const ws = wb.addWorksheet(name.slice(0, 30)); widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+      const t = Zone.sums(rows);
+      ws.mergeCells('A1:G1'); Object.assign(ws.getCell('A1'), { value: `${mon}월 부대조달 및 다수공급 군납 납품일정${name === '전체' ? '' : ' (' + name + ')'}` }); ws.getCell('A1').font = { bold: true, size: 14 };
+      ws.getCell('E2').value = '발주계획량(kg)'; ws.getCell('G2').value = Math.round(t.plan * 100) / 100; ws.getCell('H2').value = '실 출고량(kg)'; ws.getCell('J2').value = Math.round(t.conf * 100) / 100;
+      ['E2', 'G2', 'H2', 'J2'].forEach(a => { ws.getCell(a).font = { bold: true }; ws.getCell(a).numFmt = NUM; });
+      const hr = ws.getRow(3); heads.forEach((h, i) => { const c = hr.getCell(i + 1); c.value = h; c.font = { bold: true }; c.fill = fill('FFDAE3F3'); c.border = B; c.alignment = { horizontal: 'center', vertical: 'middle' }; });
+      rows.forEach((x, k) => {
+        const r = x.r, row = ws.getRow(4 + k), vals = [dt(r.delDate), x.wh, r.name, x.store, x.unit, r.planEa, r.planKg, r.confEa, r.confKg, dt(r.mealDate) || r.rawMeal || '', r.unit, x.reg, x.note];
+        vals.forEach((v, i) => { const c = row.getCell(i + 1); if (v !== null && v !== undefined && v !== '') c.value = v; c.border = B; c.alignment = { horizontal: i === 2 || i === 12 ? 'left' : 'center', vertical: 'middle' }; if (i === 0 || i === 9) c.numFmt = DT; if ([5, 6, 7, 8].includes(i)) { c.numFmt = NUM; c.alignment = { horizontal: 'right' }; } });
+      });
+      ws.autoFilter = `A3:M${3 + rows.length}`; ws.views = [{ state: 'frozen', ySplit: 3 }];
+    };
+    sheet('전체', list);
+    [...new Set(list.map(x => x.wh))].sort((a, b) => a.localeCompare(b, 'ko')).forEach(w => sheet(w, list.filter(x => x.wh === w)));
+    await downloadWorkbook(wb, `권역별출고_${$('zoneMonth').value || D.today()}.xlsx`);
   }
 };
 
@@ -2069,14 +2173,11 @@ const Ledger = {
     // 입력·수정 중에도 보이는 재고 현황 (오늘 기준, 예정 입출고는 따로 표시)
     const sumOf = f => p.lots.filter(f).reduce((a, l) => a + l.remain, 0);
     const soonQ = sumOf(l => l.deadline && D.diff(l.deadline, today) >= 0 && D.diff(l.deadline, today) <= days), overQ = sumOf(l => l.deadline && D.diff(l.deadline, today) < 0);
-    const box = (label, val, sub, cls = '') => `<div class="stat-box ${cls}"><div class="b-label">${label}</div><div class="b-val">${val}</div><div class="b-sub">${sub}</div></div>`;
-    $('ldStats').innerHTML = box('현재고', fmtN(p.stock), '오늘 기준 (예정 제외)') + box('입고예정', fmtN(p.planIn), '예정·결정 합계') + box('출고예정', fmtN(p.planOut), '예정·확정(납품 전) 합계') +
-      box('예상재고', fmtN(p.stock + p.planIn - p.planOut), p.stock + p.planIn - p.planOut < 0 ? '부족 ' + fmtN(p.planOut - p.stock - p.planIn) + '개 (발주 필요)' : '입출고 예정 모두 반영 시', p.stock + p.planIn - p.planOut < 0 ? 'danger' : '') + box('납품기한 임박', fmtN(soonQ) + '<span class="hint"> 개</span>', `${days}일 이내`, soonQ ? 'warn' : '') + box('납품기한 초과', fmtN(overQ) + '<span class="hint"> 개</span>', '숫자를 눌러 출고 처리', overQ ? 'danger' : '');
+    const box = (label, val, sub, cls = '') => `<div class="stat-box ${cls}"><div class="b-label">${label}</div><div class="b-val">${val}</div>${sub ? `<div class="b-sub">${sub}</div>` : ''}</div>`;
+    $('ldStats').innerHTML = box('현재고', fmtN(p.stock)) + box('입고예정', fmtN(p.planIn)) + box('출고예정', fmtN(p.planOut)) +
+      box('예상재고', fmtN(p.stock + p.planIn - p.planOut), '', p.stock + p.planIn - p.planOut < 0 ? 'danger' : '') + box('납품기한 임박', fmtN(soonQ) + '<span class="hint"> 개</span>', `${days}일 이내`, soonQ ? 'warn' : '') + box('납품기한 초과', fmtN(overQ) + '<span class="hint"> 개</span>', '', overQ ? 'danger' : '');
     const lack = p.planOut - p.stock - p.planIn, alerts = [];
-    if (lack > 0) alerts.push(`<span class="tag danger">부족 ${fmtN(lack)}개</span> 출고예정·확정 ${fmtN(p.planOut)}개 − (현재고 ${fmtN(p.stock)}개 + 입고예정 ${fmtN(p.planIn)}개) → <b>${fmtN(lack)}개 발주(입고) 필요</b>`);
-    else if (p.planOut) alerts.push(`<span class="tag done">여유 ${fmtN(-lack)}개</span> 출고예정·확정을 모두 내보내고도 ${fmtN(-lack)}개 남습니다`);
-    if (overQ) alerts.push(`<span class="tag danger">초과 ${fmtN(overQ)}개</span> 납품기한이 지난 재고입니다. 표의 '초과' 칸 숫자를 누르면 출고 처리합니다`);
-    if (soonQ) alerts.push(`<span class="tag warn">임박 ${fmtN(soonQ)}개</span> ${days}일 이내에 납품기한이 닿는 재고입니다`);
+    if (lack > 0) alerts.push(`<span class="tag danger">부족 ${fmtN(lack)}개</span> 발주(입고) 필요`);
     $('ldAlert').innerHTML = alerts.map(a => `<div>${a}</div>`).join('');
     $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="2">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th colspan="2">납품기한 주의</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">납품일</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th><th style="top:33px">임박</th><th style="top:33px">초과</th></tr>';
     const shown = [];
@@ -2299,13 +2400,12 @@ const Ledger = {
     const pc = v => (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
     // 화면 위에 계속 보이는 요약줄 (입력·수정 중에도 보인다)
     $('ldSticky').innerHTML = `<span><b>${esc(p.name)}</b></span><span>현재 보유고 <b>${fmtN(p.stock)}</b></span><span>입고예정 <b>${fmtN(p.planIn)}</b></span><span>출고예정·확정 <b>${fmtN(p.planOut)}</b></span><span>예상재고 <b>${fmtN(p.stock + p.planIn - p.planOut)}</b></span>${row ? `<span>${D.short(row.outDate)} ${esc(unit)} ${fmtN(row.outTotal)}개 건 추천 발주량 <b class="${rec ? 'rec-b' : ''}">${fmtN(rec)}</b></span>` : ''}`;
-    const head = `<div class="reco-now">현재 보유고(오늘 기준 · 입고 완료분) <b>${fmtN(p.stock)}</b>개 · 입고예정 <b>${fmtN(p.planIn)}</b>개 · 출고예정·확정 합계 <b>${fmtN(p.planOut)}</b>개</div>`;
+    const head = '';
     if (!row) { box.innerHTML = head + '<div class="hint">위 표에서 납품(출고) 줄을 누르면 그 건 하나에 필요한 추천 발주량이 나옵니다.</div>'; return; }
-    const why = `${left !== null && left < 0 ? `재고가 <b>${fmtN(-left)}개 부족</b>하므로 ` : ''}${r.n ? `과거 이력(${esc(r.label)} ${r.n}건) 기준 <b>${modeLabel}</b>` : esc(r.label) + ' → '} <b>${fmtN(rec)}개</b>가 필요합니다.`;
+    const why = `${left !== null && left < 0 ? `재고가 <b>${fmtN(-left)}개 부족</b>하므로 ` : ''}${r.n ? `과거 이력(${esc(r.label)} ${r.n}건${r.out ? `, 이례적 ${r.out}건 제외` : ''}) 증감 ${pc(r[mode])} 적용, <b>${modeLabel}</b>` : esc(r.label) + ' → '} <b>${fmtN(rec)}개</b>가 필요합니다.`;
     let html = head + `<div class="reco-sel"><b>${md(row.outDate)} · ${esc(unit)}</b> · ${esc(row.status)} ${fmtN(row.outTotal)}개${left !== null ? ` · 이 건 처리 후 재고 <b class="${left < 0 ? 'neg' : ''}">${fmtN(left)}</b>개` : ''}</div>
       <div class="rec-modes">${MODES.map(([m, t]) => `<button type="button" class="rec-mode ${m === mode ? 'on' : ''}" onclick="Ledger.setRecoMode('${m}')"><div>${t}</div><b>${fmtN(recBy(m))}개</b></button>`).join('')}</div>
-      <div class="reco-rec ${rec ? 'need' : ''}"><span>이 건 추천 발주량</span> <b>${fmtN(rec)}개</b><div class="hint" style="margin-top:4px;font-size:12px">${why}</div></div>
-      <div class="table-wrap" style="max-height:200px"><table><thead><tr><th>부대</th><th>이 건 수량</th><th>적용 증감율</th><th>예상 구간</th><th>근거(확정 이력)</th><th>예상 출고</th></tr></thead><tbody><tr><td>${esc(unit)}</td><td class="num">${fmtN(row.outTotal)}</td><td class="num">${r.n ? pc(r[mode]) : '-'}</td><td class="num">${r.n ? `${pc(r.low)} ~ ${pc(r.high)}` : '-'}</td><td style="text-align:left">${esc(r.label)}${r.n ? ` · ${r.n}건${r.out ? ` (이례적 ${r.out}건 제외)` : ''}` : ''}</td><td class="num"><b>${fmtN(outFor(mode))}</b></td></tr></tbody></table></div>`;
+      <div class="reco-rec ${rec ? 'need' : ''}"><span>이 건 추천 발주량</span> <b>${fmtN(rec)}개</b><div class="hint" style="margin-top:4px;font-size:12px">${why}</div></div>`;
     // 이 부대·이 품목의 과거 납품이력 (없으면 표시하지 않음)
     const same = Hist.records.filter(x => x.name === pname && x.planEa != null && x.unit === unit);
     const past = same.filter(x => hasConf(x) || (x.delDate && x.delDate < today)).sort((a, b) => String(b.delDate).localeCompare(String(a.delDate)));
@@ -3042,7 +3142,7 @@ const RowEdit = {
       </div>
       <div class="row mt8" style="justify-content:flex-end"><button class="btn sm danger" data-act="del">삭제</button><button class="btn sm ok" data-act="save">저장</button></div></div>`;
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)RowEdit.close()"><div class="modal">
-      <div class="row between mb12"><div><h2>${esc(title)}</h2><div class="hint">${esc(p ? p.sheet + (p.company ? ' · ' + p.company : '') : '')} · 저장하면 재고수불대장 시트에 바로 반영됩니다</div></div><button class="btn light sm" onclick="RowEdit.close()">닫기</button></div>
+      <div class="row between mb12"><div><h2>${esc(title)}</h2><div class="hint">${esc(p ? p.sheet + (p.company ? ' · ' + p.company : '') : '')}</div></div><button class="btn light sm" onclick="RowEdit.close()">닫기</button></div>
       ${rows.map(card).join('')}</div></div>`;
     $('modalRoot').querySelector('.modal').addEventListener('click', RowEdit.onClick);
   },
