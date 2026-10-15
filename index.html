@@ -291,22 +291,22 @@ tr.edit-row td { background:#FFFBEB !important; }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 
 /* 입력칸 표시: 직접 입력·수정하는 칸은 파란 테두리 + 연한 파랑 배경 + 굵은 글씨 (조회용 필터는 기존 모양 유지) */
-:root { --edit:#2F6FDE; --edit-soft:#F3F8FF; }
+:root { --edit:#9DB3D6; --edit-soft:#FBFCFE; }
 td input[type=text]:not([readonly]):not(.dnative), td input[type=number]:not([readonly]), td input[type=month]:not([readonly]), td select:not([disabled]),
 .re-grid input[type=text]:not([readonly]), .re-grid input[type=number]:not([readonly]), .re-grid select,
 #ldAddBox input:not([readonly]):not(.dnative), #ldAddBox select, .edit-row input:not([readonly]):not(.dnative), .edit-row select {
-  border:1.5px solid var(--edit); background:var(--edit-soft); font-weight:600; font-size:13.5px; }
+  border:1px solid var(--edit); background:var(--edit-soft); }
 td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly]):focus, td select:focus, .re-grid input:focus, .re-grid select:focus, #ldAddBox input:focus, #ldAddBox select:focus {
-  border-color:#1B4FB3; background:#fff; box-shadow:0 0 0 2px rgba(47,111,222,.25); }
-.m-card tbody td input[type=text]:not([readonly]), .m-card tbody td input[type=number]:not([readonly]), .m-card tbody td select { border:1.5px solid var(--edit) !important; background:var(--edit-soft); font-weight:600; }
-.edit-legend { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); } .edit-swatch { display:inline-block; width:34px; height:16px; border:1.5px solid var(--edit); background:var(--edit-soft); border-radius:4px; }
-.stock-now { font-size:11px; font-weight:700; color:var(--conf); margin-top:2px; }
+  border-color:var(--accent); background:#fff; }
+.m-card tbody td input[type=text]:not([readonly]), .m-card tbody td input[type=number]:not([readonly]), .m-card tbody td select { border:1px solid var(--edit) !important; background:var(--edit-soft); }
+.edit-legend { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--muted-2); } .edit-swatch { display:inline-block; width:26px; height:13px; border:1px solid var(--edit); background:var(--edit-soft); border-radius:4px; }
+.stock-now { font-size:11px; color:var(--muted); margin-top:2px; }
 </style>
 </head>
 <body>
 <div class="panel header">
   <h1>자동화시스템</h1>
-  <div class="row"><span class="edit-legend"><i class="edit-swatch"></i>파란 테두리 칸 = 직접 입력·수정하는 칸</span><span id="syncState" class="muted"></span><button class="btn light sm" onclick="App.reload(true)">새로고침</button></div>
+  <div class="row"><span class="edit-legend"><i class="edit-swatch"></i>연한 파란 테두리 칸 = 입력·수정하는 칸</span><span id="syncState" class="muted"></span><button class="btn light sm" onclick="App.reload(true)">새로고침</button></div>
 </div>
 
 <nav class="tab-bar" id="tabBar">
