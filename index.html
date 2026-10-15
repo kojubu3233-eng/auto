@@ -2643,7 +2643,10 @@ const Logi = {
     $('logiTodayOut').addEventListener('click', e => { const r = e.target.closest('[data-t]'); if (r) Logi.editToday('out', +r.dataset.t); });
     $('outShowDone').addEventListener('change', () => Logi.renderOut());
     $('outPickAll').addEventListener('change', e => $('outPlanBody').querySelectorAll('.ogk').forEach(c => { c.checked = e.target.checked; }));
-    $('logiMissed').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) document.querySelector(`#logiTabs [data-sub="${b.dataset.go}"]`).click(); });
+    $('logiMissed').addEventListener('click', e => {
+      const m = e.target.closest('[data-mo]'); if (m) { const it = Logi.missedOut[+m.dataset.mo]; if (it) RowEdit.open('출고 확인 · ' + it.p.name, [it.o], it.p); return; }   // 납품일이 지난 건은 출고 탭에 없으므로 수정 창으로 연다
+      const b = e.target.closest('[data-go]'); if (b) document.querySelector(`#logiTabs [data-sub="${b.dataset.go}"]`).click();
+    });
     $('logiTabs').addEventListener('click', e => {
       const b = e.target.closest('[data-sub]'); if (!b) return;
       document.querySelectorAll('#logiTabs .tab-btn').forEach(x => x.classList.toggle('active', x === b));
@@ -2763,7 +2766,7 @@ const Logi = {
     LedgerData.standard().forEach(p => {
       let sug = null;   // 소비기한 자동 배분은 이 품목에 표시할 건이 있을 때만 계산한다
       p.rows.forEach(o => {
-        if (!o.outTotal || !o.outDate || o.unit === EXPIRED_UNIT || !(PEND_OUT.has(o.status) || (o.status === '출고완료' && o.lines))) return;   // 확정량이 입력된 건은 모두 나타난다
+        if (!o.outTotal || !o.outDate || o.outDate < today || o.unit === EXPIRED_UNIT || !(PEND_OUT.has(o.status) || (o.status === '출고완료' && o.lines))) return;   // 확정량이 입력된 건 중 납품일이 지나지 않은 건만 나타난다
         if (!showDone && !Logi.outDraft[Logi.outKey(o)] && o.lines && o.lines.every(l => l.ship && l.ship <= today)) return;   // 출고처리가 끝난 건은 '완료 건도 표시'를 켜야 보인다
         if ((un && !Names.norm(o.unit).includes(un)) || (nm && !Names.norm(p.name).includes(nm))) return;
         if (!inRange(o.outDate, dF, dT)) return;
@@ -2775,7 +2778,7 @@ const Logi = {
     });
     groups.sort((a, b) => a.o.outDate.localeCompare(b.o.outDate) || String(a.o.unit).localeCompare(String(b.o.unit)) || a.p.name.localeCompare(b.p.name));
     Logi.outGroups = groups;
-    if (!groups.length) { body.innerHTML = '<tr><td colspan="11" class="empty">출고할 건이 없습니다 (확정량 입력에서 확정량을 저장하면 나타납니다)</td></tr>'; return; }
+    if (!groups.length) { body.innerHTML = '<tr><td colspan="11" class="empty">출고할 건이 없습니다 (확정량을 입력한 건 중 납품일이 지나지 않은 건이 나타납니다)</td></tr>'; return; }
     body.innerHTML = groups.map((g, gi) => {
       const { p, o, lines, dirty } = g, n = lines.length;
       const baseOpts = p.lots.filter(l => l.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(l => ({ v: l.expiry, t: `${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})` }));
@@ -2933,7 +2936,8 @@ const Logi = {
       if (o.outTotal && o.unit !== EXPIRED_UNIT && o.outDate && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) mo.push({ p, o, d: o.outDate });
     }));
     mi.sort((a, b) => a.d.localeCompare(b.d)); mo.sort((a, b) => a.d.localeCompare(b.d));
-    const missRows = (arr, kind, go, txt) => arr.slice(0, 20).map(({ p, o, d }) => `<div class="list-row editable k-warn" data-go="${go}"><div><div class="l-name">${kind} 예정 · ${esc(p.name)}</div><div class="l-sub">${D.short(d)}${d < t ? ' (지남)' : ''} ${esc(go === 'out' ? o.unit || '' : '')}</div></div><div class="num"><b>${fmtN(go === 'out' ? o.outTotal : o.inQty)}</b><div class="l-sub"><span class="tag plan">${txt}</span></div></div></div>`).join('') + (arr.length > 20 ? `<div class="hint" style="padding:6px 10px">외 ${arr.length - 20}건</div>` : '');
+    Logi.missedOut = mo;
+    const missRows = (arr, kind, go, txt) => arr.slice(0, 20).map(({ p, o, d }, i) => `<div class="list-row editable k-warn" ${go === 'out' && d < t ? `data-mo="${i}"` : `data-go="${go}"`}><div><div class="l-name">${kind} 예정 · ${esc(p.name)}</div><div class="l-sub">${D.short(d)}${d < t ? ' (지남)' : ''} ${esc(go === 'out' ? o.unit || '' : '')}</div></div><div class="num"><b>${fmtN(go === 'out' ? o.outTotal : o.inQty)}</b><div class="l-sub"><span class="tag plan">${txt}</span></div></div></div>`).join('') + (arr.length > 20 ? `<div class="hint" style="padding:6px 10px">외 ${arr.length - 20}건</div>` : '');
     $('logiMissed').innerHTML = mi.length || mo.length
       ? `<div class="missed"><div class="row between mb8"><b>⚠ 오늘까지 처리되지 않은 예정 (입고 ${mi.length}건 · 출고 ${mo.length}건)</b><span class="hint">누르면 해당 탭으로 이동합니다</span></div><div class="list-box">${missRows(mi, '입고', 'in', '입고 미처리')}${missRows(mo, '출고', 'out', '출고 미처리')}</div></div>`
       : '<div class="missed ok"><b>✓ 오늘까지 처리되지 않은 예정이 없습니다</b></div>';
