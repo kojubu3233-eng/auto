@@ -168,6 +168,10 @@ tr.edit-row td { background:#FFFBEB !important; }
 .ms-wrap { position:relative; display:inline-block; }
 .ms-btn { border:1px solid var(--border); background:var(--surface); padding:7px 10px; border-radius:6px; font-size:12px; cursor:pointer; }
 .ms-panel { position:absolute; z-index:60; top:100%; left:0; margin-top:2px; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 10px rgba(29,27,24,.1); max-height:260px; overflow:auto; min-width:160px; padding:4px 0; }
+.ms-top { position:sticky; top:-4px; background:var(--surface); padding:6px 8px; border-bottom:1px solid var(--border); margin:-4px 0 4px; }
+.ms-q { width:100%; box-sizing:border-box; }
+.ms-ops { display:flex; gap:6px; margin-top:6px; }
+.ms-ops button { border:1px solid var(--border); background:var(--surface-alt); border-radius:6px; font-size:11px; padding:3px 7px; cursor:pointer; }
 .ms-panel label { display:flex; gap:6px; align-items:center; padding:5px 10px; font-size:12px; cursor:pointer; white-space:nowrap; }
 
 #busy { position:fixed; inset:0; z-index:500; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; cursor:progress; }
@@ -395,7 +399,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="ms-wrap" data-ms="del"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="cat"><button type="button" class="ms-btn">구분 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="unit"><button type="button" class="ms-btn">부대 전체</button><div class="ms-panel hidden"></div></div>
-      <input type="text" id="confirmName" placeholder="품명 검색" style="flex:1;min-width:120px">
+      <span class="ac-wrap" style="flex:1;min-width:120px"><input type="text" id="confirmName" autocomplete="off" placeholder="품명 검색" style="width:100%"><span class="ac-list"></span></span>
       <span class="hint">확정량(개)이나 (kg) 하나만 입력하면 나머지는 포장단위로 계산됩니다</span>
     </div>
     <div class="table-wrap" style="max-height:600px">
@@ -417,7 +421,7 @@ tr.edit-row td { background:#FFFBEB !important; }
       <div class="ms-wrap" data-ms="zdel"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="zreg"><button type="button" class="ms-btn">지역 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="zunit"><button type="button" class="ms-btn">부대 전체</button><div class="ms-panel hidden"></div></div>
-      <input type="text" id="zoneName" placeholder="품명 검색" style="flex:1;min-width:120px">
+      <span class="ac-wrap" style="flex:1;min-width:120px"><input type="text" id="zoneName" autocomplete="off" placeholder="품명 검색" style="width:100%"><span class="ac-list"></span></span>
     </div>
     <div class="sub-tabs" id="zoneWh" style="margin-bottom:10px"></div>
     <div class="table-wrap" style="max-height:640px">
@@ -438,7 +442,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <button class="btn light sm" onclick="Ledger.resetPeriod()">최근 3개월만</button><button class="btn light sm" onclick="Ledger.allPeriod()">전체기간</button></div>
     </div>
     <div id="ledgerYearBanner" class="banner hidden"></div>
-    <div class="row mb12"><input type="text" id="ledgerSearch" placeholder="전체 품명 검색" style="width:200px"><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><button class="btn light sm" onclick="Ledger.exportStock()">재고현황 엑셀</button><h2 id="ledgerCrumb"></h2></div>
+    <div class="row mb12"><span class="ac-wrap"><input type="text" id="ledgerSearch" autocomplete="off" placeholder="전체 품명 검색" style="width:200px"><span class="ac-list"></span></span><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><button class="btn light sm" onclick="Ledger.exportStock()">재고현황 엑셀</button><h2 id="ledgerCrumb"></h2></div>
     <div class="prod-grid" id="ledgerProducts"></div>
   </div>
   <div class="panel hidden" id="ledgerDue">
@@ -486,7 +490,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div data-subpane="in">
       <div class="row mb8"><h3>입고 예정</h3></div>
       <div class="controls mb8">
-        <label class="lbl">품목</label><input type="text" id="inFilterName" placeholder="품명 검색" style="width:160px">
+        <label class="lbl">품목</label><span class="ac-wrap"><input type="text" id="inFilterName" autocomplete="off" placeholder="품명 검색" style="width:160px"><span class="ac-list"></span></span>
         <label class="lbl">입고일</label><span id="inFrom"></span><span>~</span><span id="inTo"></span>
         <button class="btn light sm" onclick="Logi.resetInFilter()">필터 초기화</button>
         <label class="row muted"><input type="checkbox" id="inShowPast"> 입고일이 지난 미완료 건도 표시</label>
@@ -501,8 +505,8 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div data-subpane="out" class="hidden">
       <div class="row mb8"><h3>출고 예정</h3></div>
       <div class="controls mb8">
-        <label class="lbl">부대</label><input type="text" id="outFUnit" placeholder="부대 검색" style="width:120px">
-        <label class="lbl">품목</label><input type="text" id="outFName" placeholder="품명 검색" style="width:150px">
+        <label class="lbl">부대</label><span class="ac-wrap"><input type="text" id="outFUnit" autocomplete="off" placeholder="부대 검색" style="width:120px"><span class="ac-list"></span></span>
+        <label class="lbl">품목</label><span class="ac-wrap"><input type="text" id="outFName" autocomplete="off" placeholder="품명 검색" style="width:150px"><span class="ac-list"></span></span>
         <label class="lbl">납품일</label><span id="outFDelFrom"></span><span>~</span><span id="outFDelTo"></span>
         <label class="lbl">출고일</label><span id="outFShipFrom"></span><span>~</span><span id="outFShipTo"></span>
         <button class="btn light sm" onclick="Logi.resetOutFilter()">필터 초기화</button>
@@ -523,7 +527,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         </div>
         <div class="controls mb8">
           <div class="ms-wrap" data-ms="estcat"><button type="button" class="ms-btn">구분 전체</button><div class="ms-panel hidden"></div></div>
-          <input type="text" id="estateName" placeholder="품명 검색" style="width:200px">
+          <span class="ac-wrap"><input type="text" id="estateName" autocomplete="off" placeholder="품명 검색" style="width:200px"><span class="ac-list"></span></span>
         </div>
 
         <div class="table-wrap" style="max-height:640px"><table id="estateTable"><thead>
@@ -536,7 +540,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div data-subpane="backup" class="hidden">
       <div class="controls mb8">
         <label class="lbl">일자</label><span id="snapDate"></span>
-        <label class="lbl">품목</label><input type="text" id="snapName" placeholder="전체 품목" style="width:160px">
+        <label class="lbl">품목</label><span class="ac-wrap"><input type="text" id="snapName" autocomplete="off" placeholder="전체 품목" style="width:160px"><span class="ac-list"></span></span>
         <button class="btn light sm" onclick="Snap.saveToday()">오늘 현황 백업</button>
         <button class="btn light sm" onclick="Snap.fill()" title="입고·출고가 있었던 날짜의 현황을 현재 시트 기준으로 만들어 저장합니다">데이터 있는 날짜 모두 만들기</button>
         <button class="btn" onclick="Logi.backup()">백업 파일 받기</button>
@@ -922,18 +926,33 @@ const AC = {
     list.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
   },
   units: () => [...new Set([...Names.units.map(u => u.name), ...Hist.units()])].sort().map(n => ({ label: n })),
-  products: () => [...new Set([...Names.products.map(p => p.name), ...Hist.names()])].sort().map(n => ({ label: n }))
+  products: () => [...new Set([...Names.products.map(p => p.name), ...Hist.names()])].sort().map(n => ({ label: n })),
+  ledgerNames: () => [...new Set(LedgerData.standard().map(p => p.name))].sort().map(n => ({ label: n })),
+  outUnits: () => [...new Set(LedgerData.standard().flatMap(p => p.rows.map(o => o.unit)).filter(Boolean))].sort().map(n => ({ label: n })),
+  // 글자 입력 필터에 목록(드롭다운)을 붙인다: 칸을 누르면 목록이 뜨고, 고르면 바로 필터가 적용된다
+  filter(id, source) { const el = document.getElementById(id); if (el) AC.bind(el, source, () => el.dispatchEvent(new Event('input', { bubbles: true }))); }
 };
+const inRange = (d, f, t) => { const lo = f || t, hi = t || f; return !lo || (d >= lo && d <= hi); };   // 날짜 필터: 한쪽만 입력하면 그 하루만, 둘 다 입력하면 기간
 
 /* ---------- 다중 선택 필터 ---------- */
 const MS = {
   setup(wrap, label, options, selected, onChange) {
     const btn = wrap.querySelector('.ms-btn'), panel = wrap.querySelector('.ms-panel');
-    panel.innerHTML = options.length ? options.map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.has(o) ? 'checked' : ''}> ${esc(o)}</label>`).join('') : '<div class="empty">항목 없음</div>';
-    const upd = () => { btn.textContent = selected.size === 0 ? `${label} 전체` : `${label} ${selected.size}개`; };
-    btn.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ms-panel').forEach(p => p !== panel && p.classList.add('hidden')); panel.classList.toggle('hidden'); };
-    panel.onchange = e => { const v = e.target.value; e.target.checked ? selected.add(v) : selected.delete(v); upd(); onChange(); };
-    panel.onclick = e => e.stopPropagation();
+    const prev = panel.querySelector('.ms-q'), keepQ = prev ? prev.value : '', keepFocus = !!prev && document.activeElement === prev, keepTop = panel.scrollTop;   // 체크할 때마다 목록을 다시 그려도 검색어·위치를 유지한다
+    panel.innerHTML = options.length
+      ? `<div class="ms-top"><input type="text" class="ms-q" placeholder="검색 후 체크" autocomplete="off"><div class="ms-ops"><button type="button" data-op="all">보이는 항목 모두 선택</button><button type="button" data-op="none">선택 해제</button></div></div>` + options.map(o => `<label><input type="checkbox" value="${esc(o)}" ${selected.has(o) ? 'checked' : ''}> ${esc(o)}</label>`).join('')
+      : '<div class="empty">항목 없음</div>';
+    const q = panel.querySelector('.ms-q'), upd = () => { btn.textContent = selected.size === 0 ? `${label} 전체` : `${label} ${selected.size}개`; };
+    btn.onclick = e => { e.stopPropagation(); document.querySelectorAll('.ms-panel').forEach(p => p !== panel && p.classList.add('hidden')); panel.classList.toggle('hidden'); if (q && !panel.classList.contains('hidden')) q.focus(); };
+    if (q) q.oninput = () => { const k = Names.norm(q.value); panel.querySelectorAll('label').forEach(l => { l.style.display = !k || Names.norm(l.textContent).includes(k) ? '' : 'none'; }); };
+    if (q && keepQ) { q.value = keepQ; q.oninput(); panel.scrollTop = keepTop; if (keepFocus) q.focus(); }
+    panel.onchange = e => { if (e.target.type !== 'checkbox') return; const v = e.target.value; e.target.checked ? selected.add(v) : selected.delete(v); upd(); onChange(); };
+    panel.onclick = e => {
+      e.stopPropagation();
+      const op = e.target.dataset && e.target.dataset.op; if (!op) return;
+      panel.querySelectorAll('label').forEach(l => { const c = l.querySelector('input'); if (op === 'none') { c.checked = false; selected.delete(c.value); } else if (l.style.display !== 'none') { c.checked = true; selected.add(c.value); } });
+      upd(); onChange();
+    };
     upd();
   }
 };
@@ -1132,6 +1151,8 @@ const App = {
     if (prefs) App.prefs = prefs;
     if (skip) App.linkSkip = new Set(skip);
     Predict.init(); Confirm.init(); Ledger.init(); Logi.init();
+    AC.filter('confirmName', AC.products); AC.filter('zoneName', AC.products); AC.filter('ledgerSearch', AC.ledgerNames); AC.filter('inFilterName', AC.ledgerNames);
+    AC.filter('outFName', AC.ledgerNames); AC.filter('outFUnit', AC.outUnits); AC.filter('estateName', AC.ledgerNames); AC.filter('snapName', AC.ledgerNames);
     if (boot) App.applyBoot(boot, true);
     if (ledger) App.applyLedger(ledger, true);
     if (boot || ledger) App.refreshViews();
@@ -2722,10 +2743,10 @@ const Logi = {
       p.rows.forEach(o => {
         if (!PEND_OUT.has(o.status) || !o.outTotal || !o.outDate || o.outDate < today || D.diff(o.outDate, today) > OUT_DAYS) return;   // 납품일 5일 전부터 나타나고, 납품일이 지나면 사라진다
         if ((un && !Names.norm(o.unit).includes(un)) || (nm && !Names.norm(p.name).includes(nm))) return;
-        if ((dF && o.outDate < dF) || (dT && o.outDate > dT)) return;
+        if (!inRange(o.outDate, dF, dT)) return;
         const key = Logi.outKey(o), base = o.lines ? o.lines.map(l => ({ ...l })) : ((sug || (sug = Logi.suggest(p, today))).get(o) || [{ exp: '', qty: o.outTotal, ship: '' }]);
         const lines = Logi.outDraft[key] || base, dirty = !!Logi.outDraft[key];
-        if ((sF || sT) && !lines.some(l => l.ship && (!sF || l.ship >= sF) && (!sT || l.ship <= sT))) return;
+        if ((sF || sT) && !lines.some(l => l.ship && inRange(l.ship, sF, sT))) return;
         groups.push({ p, o, lines, base, dirty });
       });
     });
@@ -2803,7 +2824,7 @@ const Logi = {
       const d = o.inDate || today;
       if (d < today) { past++; if (!showPast) return; }
       if (nm && !Names.norm(p.name).includes(nm)) return;
-      if ((from && d < from) || (to && d > to)) return;
+      if (!inRange(d, from, to)) return;
       items.push({ p, o, d });
     }));
     items.sort((a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name));
