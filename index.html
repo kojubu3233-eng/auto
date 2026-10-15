@@ -289,12 +289,24 @@ tr.edit-row td { background:#FFFBEB !important; }
   .list-row { padding:10px; }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
+
+/* 입력칸 표시: 직접 입력·수정하는 칸은 파란 테두리 + 연한 파랑 배경 + 굵은 글씨 (조회용 필터는 기존 모양 유지) */
+:root { --edit:#2F6FDE; --edit-soft:#F3F8FF; }
+td input[type=text]:not([readonly]):not(.dnative), td input[type=number]:not([readonly]), td input[type=month]:not([readonly]), td select:not([disabled]),
+.re-grid input[type=text]:not([readonly]), .re-grid input[type=number]:not([readonly]), .re-grid select,
+#ldAddBox input:not([readonly]):not(.dnative), #ldAddBox select, .edit-row input:not([readonly]):not(.dnative), .edit-row select {
+  border:1.5px solid var(--edit); background:var(--edit-soft); font-weight:600; font-size:13.5px; }
+td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly]):focus, td select:focus, .re-grid input:focus, .re-grid select:focus, #ldAddBox input:focus, #ldAddBox select:focus {
+  border-color:#1B4FB3; background:#fff; box-shadow:0 0 0 2px rgba(47,111,222,.25); }
+.m-card tbody td input[type=text]:not([readonly]), .m-card tbody td input[type=number]:not([readonly]), .m-card tbody td select { border:1.5px solid var(--edit) !important; background:var(--edit-soft); font-weight:600; }
+.edit-legend { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); } .edit-swatch { display:inline-block; width:34px; height:16px; border:1.5px solid var(--edit); background:var(--edit-soft); border-radius:4px; }
+.stock-now { font-size:11px; font-weight:700; color:var(--conf); margin-top:2px; }
 </style>
 </head>
 <body>
 <div class="panel header">
   <h1>자동화시스템</h1>
-  <div class="row"><span id="syncState" class="muted"></span><button class="btn light sm" onclick="App.reload(true)">새로고침</button></div>
+  <div class="row"><span class="edit-legend"><i class="edit-swatch"></i>파란 테두리 칸 = 직접 입력·수정하는 칸</span><span id="syncState" class="muted"></span><button class="btn light sm" onclick="App.reload(true)">새로고침</button></div>
 </div>
 
 <nav class="tab-bar" id="tabBar">
@@ -522,8 +534,8 @@ tr.edit-row td { background:#FFFBEB !important; }
         <label class="row muted"><input type="checkbox" id="outShowDone"> 출고처리 완료 건도 표시</label>
       </div>
       <div class="row mb8"><label class="row"><input type="checkbox" id="outPickAll"> 전체 선택</label><button type="button" class="btn ok sm" onclick="Logi.bulkOut()">선택 건 일괄 출고처리</button><span class="hint">출고일을 비워 둔 줄은 오늘 출고로 처리됩니다</span></div>
-      <div class="table-wrap" style="max-height:none"><table class="grid m-card m-led" data-labels="11:납품일,부대,품명,수량(계),본품,샘플,소비기한,수량,출고일,상태,;4:소비기한,수량,출고일,상태"><thead><tr>
-        <th>납품일</th><th>부대</th><th style="min-width:140px">품명</th><th>수량(계)</th><th>본품</th><th>샘플</th><th style="min-width:170px">소비기한</th><th>수량</th><th>출고일</th><th>상태</th><th></th>
+      <div class="table-wrap" style="max-height:none"><table class="grid m-card m-led" data-labels="11:납품일,부대,품명,수량(계),본품,샘플,소비기한,출고수량,출고일,상태,;4:소비기한,출고수량,출고일,상태"><thead><tr>
+        <th>납품일</th><th>부대</th><th style="min-width:140px">품명</th><th>수량(계)</th><th>본품</th><th>샘플</th><th style="min-width:170px">소비기한</th><th>출고수량</th><th>출고일</th><th>상태</th><th></th>
       </tr></thead><tbody id="outPlanBody"></tbody></table></div>
     </div>
 
@@ -537,8 +549,10 @@ tr.edit-row td { background:#FFFBEB !important; }
           <button class="btn light" onclick="Estate.exportExcel()">엑셀 다운로드</button>
         </div>
         <div class="controls mb8">
+          <label class="lbl">기준일</label><span id="estateDate"></span><button type="button" class="btn light sm" onclick="Estate.today()">오늘</button>
           <div class="ms-wrap" data-ms="estcat"><button type="button" class="ms-btn">구분 전체</button><div class="ms-panel hidden"></div></div>
           <span class="ac-wrap"><input type="text" id="estateName" autocomplete="off" placeholder="품명 검색" style="width:200px"><span class="ac-list"></span></span>
+          <span class="hint" id="estateNote"></span>
         </div>
 
         <div class="table-wrap" style="max-height:640px"><table id="estateTable"><thead>
@@ -2786,9 +2800,9 @@ const Logi = {
       const finished = !dirty && lines.every(l => l.ship && l.ship <= today), anyDone = !dirty && lines.some(l => l.ship && l.ship <= today), btns = `<button type="button" class="btn sm ok" data-act="save">출고처리</button>${anyDone ? '<button type="button" class="btn sm light mt8" data-act="cancel">처리 취소</button>' : ''}`;
       return lines.map((l, li) => {
         const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
-        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${fmtN(o.outMain)}</td><td rowspan="${n}" class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>` : '';
+        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">현재 보유고 ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${fmtN(o.outMain)}</td><td rowspan="${n}" class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>` : '';
         const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
-        return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ' <span class="tag danger">재고 부족</span>' : ''}</td><td><input type="number" class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
+        return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="number" class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
       }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
     }).join('');
   },
@@ -3130,27 +3144,32 @@ const Report = {
 
 /* ---------- 재산대장 (오늘 기준 · 소비기한별 재고 + 출고예정) ---------- */
 const Estate = {
+  // 기준일: 비우거나 오늘 이후면 오늘(현재 재고). 지난 날짜면 그날 마감 기준 재고를 입출고 기록으로 되돌려 계산한다(출고예정은 오늘 기준에서만 표시, 소비기한 수정은 언제나 가능)
+  day() { const t = D.today(), d = DF.get(document.querySelector('.estate-date')); return !d || d > t ? t : d; },
+  today() { const el = document.querySelector('.estate-date'); if (el) DF.set(el, D.today()); },
   build() {
-    const today = D.today(), hide = $('estateHideZero').checked, kw = Names.norm($('estateName').value), items = [];
+    const today = D.today(), day = Estate.day(), past = day < today, hide = $('estateHideZero').checked, kw = Names.norm($('estateName').value), items = [];
     LedgerData.standard().forEach(p => {
+      const stk = past ? Report.stockAt(p, day) : p.stock;
       const pl = [];   // 출고예정: 출고 탭에서 출고일을 입력했고 아직 그날이 오지 않은 수량
-      p.rows.forEach(o => { if (PEND_OUT.has(o.status) && o.lines) o.lines.forEach(l => { if (l.ship && l.ship > today) pl.push({ exp: l.exp || '', date: l.ship, qty: l.qty, unit: o.unit }); }); });
+      if (!past) p.rows.forEach(o => { if (PEND_OUT.has(o.status) && o.lines) o.lines.forEach(l => { if (l.ship && l.ship > today) pl.push({ exp: l.exp || '', date: l.ship, qty: l.qty, unit: o.unit }); }); });
       const planned = pl.reduce((a, x) => a + x.qty, 0);
-      if (hide && !p.stock && !planned) return;
+      if (hide && !stk && !planned) return;
       if ((Estate.sel.size && !Estate.sel.has(p.sheet)) || (kw && !Names.norm(p.name).includes(kw))) return;
       const used = new Set(), key = x => x.expiry || '9999';
-      const rows = p.lots.slice().sort((a, b) => key(a).localeCompare(key(b))).map(l => {
+      const lots = past ? [...Report.lotsAt(p, day, stk)].map(([o, q]) => ({ row: o, expiry: o.expiry || '', deadline: Names.deadline(o.expiry, p.product) || '', remain: q })) : p.lots;
+      const rows = lots.slice().sort((a, b) => key(a).localeCompare(key(b))).map(l => {
         const mine = pl.filter(x => x.exp === (l.expiry || '')); mine.forEach(x => used.add(x));
         return { o: l.row, p, expiry: l.expiry || '', deadline: l.deadline || '', stock: l.remain, ships: mine.sort((a, b) => a.date.localeCompare(b.date)) };
       });
-      const rest = p.stock - rows.reduce((a, r) => a + r.stock, 0);
+      const rest = stk - rows.reduce((a, r) => a + r.stock, 0);
       if (rest > 0) rows.push({ expiry: '', deadline: '', stock: rest, ships: pl.filter(x => !x.exp && !used.has(x)).map(x => (used.add(x), x)) });
       const orphan = pl.filter(x => !used.has(x));
       if (orphan.length) rows.push({ expiry: orphan[0].exp, deadline: Names.deadline(orphan[0].exp, p.product) || '', stock: 0, ships: orphan });
-      if (!rows.length) rows.push({ expiry: '', deadline: '', stock: Math.max(p.stock, 0), ships: [] });
-      items.push({ p, rows, stock: p.stock, planned });
+      if (!rows.length) rows.push({ expiry: '', deadline: '', stock: Math.max(stk, 0), ships: [] });
+      items.push({ p, rows, stock: stk, planned });
     });
-    return { day: today, items };
+    return { day, past, items };
   },
   refs: [], sel: new Set(), bound: false,
   // 소비기한 수정: 그 재고가 들어온 입고 줄의 소비기한을 바꾸고, 같은 소비기한으로 잡혀 있던 출고 배분(출고 탭)도 함께 옮긴다
@@ -3162,15 +3181,17 @@ const Estate = {
     await Logi.post(ops, '소비기한을 수정했습니다');
     Estate.render();
   },
-  dlClass(dl) { if (!dl) return ''; const d = D.diff(dl, D.today()); return d < 0 ? 'dl-over' : d <= dueDays() ? 'dl-soon' : ''; },
+  dlClass(dl, day) { if (!dl) return ''; const d = D.diff(dl, day || D.today()); return d < 0 ? 'dl-over' : d <= dueDays() ? 'dl-soon' : ''; },
   render() {
     if (!Estate.bound) {
       Estate.bound = true;
       $('estateHideZero').addEventListener('change', () => Estate.render());
       $('estateName').addEventListener('input', debounce(() => Estate.render(), 200));
+      DF.mount($('estateDate'), 'estate-date', D.today()); $('estateDate').addEventListener('datechange', () => Estate.render());
     }
     MS.setup(document.querySelector('[data-ms=estcat]'), '구분', [...new Set(LedgerData.standard().map(p => p.sheet))], Estate.sel, Estate.render);
-    const { items } = Estate.build(); Estate.refs = [];
+    const { items, day, past } = Estate.build(); Estate.refs = [];
+    $('estateNote').textContent = past ? `${D.short(day)} 마감 기준 재고입니다 (입출고 기록으로 되돌려 계산한 값이며, 출고예정은 표시하지 않습니다. 소비기한은 이 화면에서 고칠 수 있습니다)` : '';
     let html = '', last = null; const cnt = {};
     items.forEach(it => { cnt[it.p.sheet] = (cnt[it.p.sheet] || 0) + it.rows.length + 1; });
     items.forEach(it => {
@@ -3179,10 +3200,10 @@ const Estate = {
         html += r.o ? `<tr data-k="${Estate.refs.push(r) - 1}">` : '<tr>';
         if (it.p.sheet !== last) { html += `<td class="grp" rowspan="${cnt[it.p.sheet]}">${esc(it.p.sheet)}</td>`; last = it.p.sheet; }
         if (i === 0) html += `<td rowspan="${n}" class="pname" style="text-align:left;font-weight:600">${esc(it.p.name)}</td><td rowspan="${n}">${it.p.product?.shelfMonths || '-'}</td>`;
-        html += `<td>${r.o ? DF.html('es-exp', r.expiry, 'future') : (r.expiry || '-')}</td><td class="${Estate.dlClass(r.deadline)}">${r.deadline || '-'}</td><td class="num">${r.stock ? fmtN(r.stock) : ''}</td>
+        html += `<td>${r.o ? DF.html('es-exp', r.expiry, 'future') : (r.expiry ? D.short(r.expiry) : '-')}</td><td class="${Estate.dlClass(r.deadline, day)}">${r.deadline || '-'}</td><td class="num">${r.stock ? fmtN(r.stock) : ''}</td>
           <td>${r.ships.map(x => `<div>${D.short(x.date)}</div>`).join('')}</td><td class="num">${r.ships.map(x => `<div title="${esc(x.unit || '')}">${fmtN(x.qty)}</div>`).join('')}</td></tr>`;
       });
-      html += `<tr class="sub"><td colspan="2" style="text-align:center">소계 (오늘 기준)</td><td class="num">${fmtN(Math.max(it.stock, 0))}</td><td></td><td class="num">${it.planned ? fmtN(it.planned) : ''}</td></tr>`;
+      html += `<tr class="sub"><td colspan="2" style="text-align:center">소계 (${past ? D.short(day) : '오늘'} 기준)</td><td class="num">${fmtN(Math.max(it.stock, 0))}</td><td></td><td class="num">${it.planned ? fmtN(it.planned) : ''}</td></tr>`;
     });
     $('estateBody').innerHTML = html || '<tr><td colspan="8" class="empty">표시할 품목이 없습니다</td></tr>';
   },
@@ -3207,7 +3228,7 @@ const Estate = {
           l.expiry ? D.toDate(l.expiry) : '', l.deadline ? D.toDate(l.deadline) : '', l.stock || '', l.ships.map(x => D.short(x.date)).join('\n'), l.ships.map(x => x.qty).join('\n')]);
         r++;
       });
-      put(r, ['', '', '', '소계 (오늘 기준)', '', Math.max(it.stock, 0), '', it.planned || '']); subRows.push(r); ws.mergeCells(`D${r}:E${r}`); r++;
+      put(r, ['', '', '', `소계 (${m}/${d} 기준)`, '', Math.max(it.stock, 0), '', it.planned || '']); subRows.push(r); ws.mergeCells(`D${r}:E${r}`); r++;
       ['B', 'C'].forEach(c => ws.mergeCells(`${c}${s0}:${c}${r - 1}`));
       sheetStart[it.p.sheet].to = r - 1;
     });
