@@ -168,6 +168,11 @@ tr.edit-row td { background:#FFFBEB !important; }
 .ms-wrap { position:relative; display:inline-block; }
 .ms-btn { border:1px solid var(--border); background:var(--surface); padding:7px 10px; border-radius:6px; font-size:12px; cursor:pointer; }
 .ms-panel { position:absolute; z-index:60; top:100%; left:0; margin-top:2px; background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 10px rgba(29,27,24,.1); max-height:260px; overflow:auto; min-width:160px; padding:4px 0; }
+.list-row.k-in { background:var(--ok-soft); border-left:4px solid var(--ok); } .list-row.k-out { background:#EEF3FD; border-left:4px solid var(--conf); }
+.tag.in { background:var(--ok-soft); color:var(--ok); } .tag.out { background:#E8EEFB; color:var(--conf); }
+.re-sec { border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:8px; } .re-t { font-weight:700; font-size:12px; margin-bottom:6px; }
+.re-in { background:var(--ok-soft); border-color:#CFE0D3; } .re-in .re-t { color:var(--ok); } .re-out { background:#EEF3FD; border-color:#D3DDF5; } .re-out .re-t { color:var(--conf); }
+.re-ships { font-size:12px; margin-top:6px; line-height:1.9; }
 .ms-top { position:sticky; top:-4px; background:var(--surface); padding:6px 8px; border-bottom:1px solid var(--border); margin:-4px 0 4px; }
 .ms-q { width:100%; box-sizing:border-box; }
 .ms-ops { display:flex; gap:6px; margin-top:6px; }
@@ -512,6 +517,7 @@ tr.edit-row td { background:#FFFBEB !important; }
         <label class="lbl">납품일</label><span id="outFDelFrom"></span><span>~</span><span id="outFDelTo"></span>
         <label class="lbl">출고일</label><span id="outFShipFrom"></span><span>~</span><span id="outFShipTo"></span>
         <button class="btn light sm" onclick="Logi.resetOutFilter()">필터 초기화</button>
+        <label class="row muted"><input type="checkbox" id="outShowDone"> 출고처리 완료 건도 표시</label>
       </div>
       <div class="table-wrap" style="max-height:none"><table class="grid m-card m-led" data-labels="11:납품일,부대,품명,수량(계),본품,샘플,소비기한,수량,출고일,상태,;4:소비기한,수량,출고일,상태"><thead><tr>
         <th>납품일</th><th>부대</th><th style="min-width:140px">품명</th><th>수량(계)</th><th>본품</th><th>샘플</th><th style="min-width:170px">소비기한</th><th>수량</th><th>출고일</th><th>상태</th><th></th>
@@ -557,9 +563,9 @@ tr.edit-row td { background:#FFFBEB !important; }
       </details>
     </div>
   </div>
-  <div class="panel">
-    <div class="row between mb8"><h2>오늘 저장한 입출고</h2></div>
-    <div class="list-box" id="logiToday"><div class="empty">불러오는 중</div></div>
+  <div class="panel" id="logiTodayPanel">
+    <div id="logiTodayWrapIn"><div class="row between mb8"><h2>오늘 입고</h2></div><div class="list-box" id="logiTodayIn"><div class="empty">불러오는 중</div></div></div>
+    <div id="logiTodayWrapOut" class="hidden"><div class="row between mb8"><h2>오늘 출고</h2></div><div class="list-box" id="logiTodayOut"><div class="empty">불러오는 중</div></div></div>
   </div>
 </section>
 
@@ -1041,7 +1047,6 @@ const PLAN_IN = new Set(['입고예정', '입고결정']);
 const PEND_OUT = new Set(['출고예정', '출고확정']);   // 납품 전이면 예정 수량, 납품일(출고일)이 되면 재고에서 빠진다
 const ACTUAL_IN = { has: s => !PLAN_IN.has(s) };
 const ACTUAL_OUT = { has: () => true };
-const OUT_DAYS = 5;   // 출고 탭에 나타나는 시점: 납품일 5일 전
 const EXPIRED_UNIT = '납품기한 초과';   // 납품기한 초과 처리로 넣은 출고 줄의 부대칸 표시
 const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입고결정': 'c-conf', '출고확정': 'c-conf', '입고완료': 'c-done', '이월': 'c-done', '출고완료': 'c-done', '': 'c-done' };
 
@@ -2630,7 +2635,9 @@ const Carry = {
 const Logi = {
   log: [],
   async init() {
-    $('logiToday').addEventListener('click', e => { const r = e.target.closest('[data-t]'); if (r) Logi.editToday(+r.dataset.t); });
+    $('logiTodayIn').addEventListener('click', e => { const r = e.target.closest('[data-t]'); if (r) Logi.editToday('in', +r.dataset.t); });
+    $('logiTodayOut').addEventListener('click', e => { const r = e.target.closest('[data-t]'); if (r) Logi.editToday('out', +r.dataset.t); });
+    $('outShowDone').addEventListener('change', () => Logi.renderOut());
     $('logiTabs').addEventListener('click', e => {
       const b = e.target.closest('[data-sub]'); if (!b) return;
       document.querySelectorAll('#logiTabs .tab-btn').forEach(x => x.classList.toggle('active', x === b));
@@ -2649,12 +2656,13 @@ const Logi = {
       if (!e.target.classList.contains('pship')) return;
       const tr = e.target.closest('tr'), gi = +tr.dataset.g, rows = [...opb.querySelectorAll(`tr.out-line[data-g="${gi}"]`)];
       if (tr === rows[0] && DF.get(e.target)) rows.slice(1).forEach(r => { const f = r.querySelector('.pship'); if (!DF.get(f)) DF.set(f, DF.get(e.target), true); });   // 첫 줄에 입력하면 비어 있는 나머지 줄도 같은 날짜로 채운다
-      Logi.markDirty(e.target); Logi.saveOutGroup(gi);
+      Logi.markDirty(e.target);   // 날짜만 바꿔서는 저장하지 않는다 ([출고처리]를 눌러야 저장)
     });
     opb.addEventListener('click', e => {
       const act = e.target.dataset && e.target.dataset.act; if (!act) return;
       const tr = e.target.closest('tr'), gi = +tr.dataset.g;
       if (act === 'save') Logi.saveOutGroup(gi);
+      if (act === 'cancel') Logi.cancelOut(gi);
       if (act === 'addline') Logi.editOutLines(gi, ls => ls.concat([{ exp: '', qty: 0, ship: '' }]));
       if (act === 'delline') Logi.editOutLines(gi, ls => ls.filter((_, k) => k !== +tr.dataset.l));
     });
@@ -2686,6 +2694,8 @@ const Logi = {
   render() { Snap.auto(); Logi.renderToday(); Logi.stale = new Set(['in', 'out', 'print']); Logi.show(Logi.sub); },
   show(sub) {
     Logi.sub = sub;
+    $('logiTodayPanel').classList.toggle('hidden', sub !== 'in' && sub !== 'out');
+    $('logiTodayWrapIn').classList.toggle('hidden', sub !== 'in'); $('logiTodayWrapOut').classList.toggle('hidden', sub !== 'out');
     if (sub === 'backup') { Logi.renderLog(); Snap.render(); return; }
     if (!Logi.stale.delete(sub)) return;
     if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') Estate.render();
@@ -2721,7 +2731,7 @@ const Logi = {
     return res;
   },
   resetOutFilter() {
-    ['outFUnit', 'outFName'].forEach(id => { $(id).value = ''; });
+    ['outFUnit', 'outFName'].forEach(id => { $(id).value = ''; }); $('outShowDone').checked = false;
     ['outfdelfrom', 'outfdelto', 'outfshipfrom', 'outfshipto'].forEach(c => DF.set(document.querySelector('.' + c), '', true));
     Logi.renderOut();
   },
@@ -2742,13 +2752,14 @@ const Logi = {
   renderOut(keep) {
     const body = $('outPlanBody'); if (!body) return;
     if (!keep) Logi.collectOut();
-    const today = D.today(), un = Names.norm($('outFUnit').value), nm = Names.norm($('outFName').value);
+    const today = D.today(), un = Names.norm($('outFUnit').value), nm = Names.norm($('outFName').value), showDone = $('outShowDone').checked;
     const q = c => DF.get(document.querySelector('.' + c)), dF = q('outfdelfrom'), dT = q('outfdelto'), sF = q('outfshipfrom'), sT = q('outfshipto');
     const groups = [];
     LedgerData.standard().forEach(p => {
       let sug = null;   // 소비기한 자동 배분은 이 품목에 표시할 건이 있을 때만 계산한다
       p.rows.forEach(o => {
-        if (!PEND_OUT.has(o.status) || !o.outTotal || !o.outDate || o.outDate < today || D.diff(o.outDate, today) > OUT_DAYS) return;   // 납품일 5일 전부터 나타나고, 납품일이 지나면 사라진다
+        if (!o.outTotal || !o.outDate || o.unit === EXPIRED_UNIT || !(PEND_OUT.has(o.status) || (o.status === '출고완료' && o.lines))) return;   // 확정량이 입력된 건은 모두 나타난다
+        if (!showDone && !Logi.outDraft[Logi.outKey(o)] && o.lines && o.lines.every(l => l.ship && l.ship <= today)) return;   // 출고처리가 끝난 건은 '완료 건도 표시'를 켜야 보인다
         if ((un && !Names.norm(o.unit).includes(un)) || (nm && !Names.norm(p.name).includes(nm))) return;
         if (!inRange(o.outDate, dF, dT)) return;
         const key = Logi.outKey(o), base = o.lines ? o.lines.map(l => ({ ...l })) : ((sug || (sug = Logi.suggest(p, today))).get(o) || [{ exp: '', qty: o.outTotal, ship: '' }]);
@@ -2759,27 +2770,37 @@ const Logi = {
     });
     groups.sort((a, b) => a.o.outDate.localeCompare(b.o.outDate) || String(a.o.unit).localeCompare(String(b.o.unit)) || a.p.name.localeCompare(b.p.name));
     Logi.outGroups = groups;
-    if (!groups.length) { body.innerHTML = '<tr><td colspan="11" class="empty">출고 예정이 없습니다 (납품일 5일 전부터 나타납니다)</td></tr>'; return; }
+    if (!groups.length) { body.innerHTML = '<tr><td colspan="11" class="empty">출고할 건이 없습니다 (확정량 입력에서 확정량을 저장하면 나타납니다)</td></tr>'; return; }
     body.innerHTML = groups.map((g, gi) => {
       const { p, o, lines, dirty } = g, n = lines.length;
       const baseOpts = p.lots.filter(l => l.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(l => ({ v: l.expiry, t: `${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})` }));
       const lotOpts = sel => { const opts = sel && !baseOpts.some(x => x.v === sel) ? baseOpts.concat({ v: sel, t: D.short(sel) }) : baseOpts; return '<option value="">미지정</option>' + opts.map(x => `<option value="${x.v}"${x.v === sel ? ' selected' : ''}>${esc(x.t)}</option>`).join(''); };
+      const anyDone = !dirty && lines.some(l => l.ship && l.ship <= today), btns = `<button type="button" class="btn sm ok" data-act="save">출고처리</button>${anyDone ? '<button type="button" class="btn sm light mt8" data-act="cancel">처리 취소</button>' : ''}`;
       return lines.map((l, li) => {
-        const done = l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">예정</span>${l.ship ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
+        const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
         const head = li === 0 ? `<td rowspan="${n}">${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${fmtN(o.outMain)}</td><td rowspan="${n}" class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>` : '';
-        const tail = li === 0 ? `<td rowspan="${n}" class="m-tail"><button type="button" class="btn sm ok" data-act="save">저장</button><br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
+        const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
         return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ' <span class="tag danger">재고 부족</span>' : ''}</td><td><input type="number" class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
-      }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
+      }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
     }).join('');
   },
-  // 한 건(그룹)의 소비기한 배분·출고일을 시트 AA열에 저장
+  // [출고처리]: 소비기한 배분·출고일(비워 두면 오늘)을 시트 AA열에 저장한다. 출고일이 오늘 이전인 수량은 재고에서 빠진 것으로 본다.
+  // 입고가 함께 적힌 줄이 아니고 모든 수량의 출고일이 지났으면 상태도 '출고완료'로 바꾼다.
   async saveOutGroup(gi) {
     const g = Logi.outGroups[gi]; if (!g) return;
-    const lines = Logi.readOutLines(gi).filter(l => l.qty > 0), total = lines.reduce((a, l) => a + l.qty, 0);
-    if (total !== g.o.outTotal) return toast(`${g.p.name} ${g.o.unit}: 소비기한별 수량 합계 ${fmtN(total)}개가 확정 수량 ${fmtN(g.o.outTotal)}개와 다릅니다. 수량을 맞춘 뒤 저장하세요`, 5000);
-    const same = !lines.some(l => l.ship) && JSON.stringify(lines.map(l => [l.exp, l.qty])) === JSON.stringify(g.base.map(l => [l.exp, l.qty]));   // 자동 배분 그대로이고 출고일이 없으면 저장하지 않고 자동 배분을 유지
-    const ok = await Logi.post([{ ...Ledger.ref(g.o), op: 'update', fields: { ships: same ? '' : fmtShips(lines) } }], lines.some(l => l.ship && l.ship <= D.today()) ? '출고일을 저장했습니다 (출고일이 된 수량은 재고에서 빠졌습니다)' : '저장했습니다');
-    if (ok) { delete Logi.outDraft[Logi.outKey(g.o)]; Logi.renderOut(true); }
+    const today = D.today(), lines = Logi.readOutLines(gi).filter(l => l.qty > 0).map(l => ({ ...l, ship: l.ship || today })), total = lines.reduce((a, l) => a + l.qty, 0);
+    if (total !== g.o.outTotal) return toast(`${g.p.name} ${g.o.unit}: 소비기한별 수량 합계 ${fmtN(total)}개가 확정 수량 ${fmtN(g.o.outTotal)}개와 다릅니다. 수량을 맞춘 뒤 출고처리하세요`, 5000);
+    const allDone = lines.every(l => l.ship <= today), pure = !(g.o.inQty || g.o.inDate);
+    const status = allDone && pure ? '출고완료' : (g.o.status === '출고완료' ? '출고예정' : '');
+    const op = { ...Ledger.ref(g.o), op: 'update', fields: { ships: fmtShips(lines) } }; if (status) op.status = status;
+    const ok = await Logi.post([op], allDone ? '출고처리했습니다 (재고에서 빠졌습니다)' : '출고일이 오늘 이후인 수량은 예정으로 저장했습니다');
+    if (ok) { delete Logi.outDraft[Logi.outKey(g.o)]; Logi.renderOut(true); Logi.renderToday(); }
+  },
+  async cancelOut(gi) {
+    const g = Logi.outGroups[gi]; if (!g) return;
+    if (!confirm(`${g.p.name} ${g.o.unit}: 출고처리를 취소하고 예정 상태로 되돌립니다. 계속할까요?`)) return;
+    const op = { ...Ledger.ref(g.o), op: 'update', fields: { ships: '' } }; if (g.o.status === '출고완료') op.status = '출고예정';
+    if (await Logi.post([op], '출고처리를 취소했습니다')) { delete Logi.outDraft[Logi.outKey(g.o)]; Logi.renderOut(true); Logi.renderToday(); }
   },
   // 재고수불대장 저장 공통(현재 연도 파일)
   async post(ops, okMsg) {
@@ -2877,27 +2898,39 @@ const Logi = {
     const keys = trs.map(tr => Logi.inKey(Logi.plans.in[+tr.dataset.i].o));   // 저장 뒤 목록이 다시 그려지므로 미리 키를 잡아 둔다
     if (await Logi.send('in', ops, entries)) { keys.forEach(k => delete Logi.inDraft[k]); Logi.renderInPlans(); }
   },
-  // 오늘 저장한 입출고: 재고수불대장에 실제로 있는 줄만, 재고수불대장의 현재 값(수정·삭제 반영)으로 보여 준다
+  // 오늘 입고: 오늘 저장한 입고 중 재고수불대장에 실제로 있는 줄만, 재고수불대장의 현재 값(수정·삭제 반영)으로 보여 준다
+  // 오늘 출고: 오늘 출고처리한(출고일이 오늘인) 수량을 재고수불대장에서 바로 읽어 온다
   renderToday() {
     const t = D.today();
-    const today = Logi.log.filter(x => x.ts.slice(0, 10) === t || x.date === t).slice(-50).reverse()
-      .map(x => { const r = x.ok === false ? null : Logi.findRow(x); return { x, r }; })
+    const ins = Logi.log.filter(x => x.kind === 'in' && (x.ts.slice(0, 10) === t || x.date === t)).slice(-50).reverse()
+      .map(x => ({ x, r: x.ok === false ? null : Logi.findRow(x) }))
       .filter(({ x, r }) => x.ok === false || r || !Logi.inYear(x));
-    Logi.todayItems = today.map(({ x }) => x);
-    $('logiToday').innerHTML = today.length ? today.map(({ x, r }, i) => {
-      const qty = r ? (x.kind === 'in' ? r.inQty : r.outMain) || x.qty : x.qty, date = r ? (x.kind === 'in' ? r.inDate : r.outDate) || x.date : x.date, exp = r && x.kind === 'in' ? r.expiry : x.expiry;
-      return `<div class="list-row editable" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">${x.kind === 'in' ? '입고' : '출고'} · ${esc(x.name)}</div><div class="l-sub">${D.short(date)} ${esc(x.unit || '')} ${exp ? '소비기한 ' + D.short(exp) : ''}</div></div><div class="num"><b>${fmtN(qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag done">반영</span>'}</div></div></div>`;
-    }).join('') : '<div class="empty">오늘 저장한 입출고가 없습니다</div>';
+    Logi.todayIn = ins.map(({ x }) => x);
+    $('logiTodayIn').innerHTML = ins.length ? ins.map(({ x, r }, i) => {
+      const qty = (r ? r.inQty : 0) || x.qty, date = (r && r.inDate) || x.date, exp = r ? r.expiry : x.expiry;
+      return `<div class="list-row editable k-in" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">입고 · ${esc(x.name)}</div><div class="l-sub">${D.short(date)} ${exp ? '소비기한 ' + D.short(exp) : ''}</div></div><div class="num"><b>${fmtN(qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag in">입고</span>'}</div></div></div>`;
+    }).join('') : '<div class="empty">오늘 입고한 내역이 없습니다</div>';
+    const outs = [];
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {
+      if (!o.outTotal || o.unit === EXPIRED_UNIT) return;
+      if (PEND_OUT.has(o.status) && !o.lines) return;   // 출고처리를 하지 않은 건은 오늘 납품일이어도 넣지 않는다
+      shipParts(o).forEach(x => { if (x.date === t) outs.push({ p, o, x }); });
+    }));
+    Logi.todayOut = outs;
+    $('logiTodayOut').innerHTML = outs.length ? outs.map(({ p, o, x }, i) =>
+      `<div class="list-row editable k-out" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">출고 · ${esc(p.name)}</div><div class="l-sub">${D.short(x.date)} ${esc(o.unit || '')} ${x.exp ? '소비기한 ' + D.short(x.exp) : ''}</div></div><div class="num"><b>${fmtN(x.qty)}</b><div class="l-sub"><span class="tag out">출고</span></div></div></div>`).join('')
+      : '<div class="empty">오늘 출고한 내역이 없습니다</div>';
   },
   findRow(x) {
     if (x.id && LedgerData.byId.has(x.id)) return LedgerData.byId.get(x.id);
     const p = LedgerData.byKey.get(x.sheet + '|' + x.name); if (!p) return null;
     return p.rows.find(o => x.kind === 'in' ? (o.inDate === x.date && o.inQty === x.qty) : (o.outDate === x.date && o.outMain === x.qty)) || null;
   },
-  editToday(i) {
-    const x = Logi.todayItems[i], o = Logi.findRow(x);
+  editToday(kind, i) {
+    if (kind === 'out') { const it = Logi.todayOut[i]; if (it) RowEdit.open('출고 수정 · ' + it.p.name, [it.o], it.p); return; }
+    const x = Logi.todayIn[i], o = x && Logi.findRow(x);
     if (!o) return toast('재고수불대장에서 해당 행을 찾지 못했습니다. 새로고침 후 다시 시도하거나 재고수불대장 탭에서 수정하세요');
-    RowEdit.open(`${x.kind === 'in' ? '입고' : '출고'} 수정 · ${x.name}`, [o], LedgerData.byKey.get(o.sheet + '|' + o.name));
+    RowEdit.open(`입고 수정 · ${x.name}`, [o], LedgerData.byKey.get(o.sheet + '|' + o.name));
   },
   inYear: x => String(x.date || x.ts).slice(0, 4) === App.currentYear,
   renderLog() {
@@ -3241,13 +3274,14 @@ const RowEdit = {
     RowEdit.rows = rows;
     const st = o => o.status || (o.inQty ? '입고완료' : '출고완료');
     const opts = o => (o.isIn && !o.isOut ? IN_STATUS : o.isOut && !o.isIn ? OUT_STATUS : [...IN_STATUS, ...OUT_STATUS]).map(s => `<option ${s === st(o) ? 'selected' : ''}>${s}</option>`).join('');
-    const card = (o, i) => `<div class="re-card ${STATUS_CLASS[o.status] || ''}" data-i="${i}">
-      <div class="row between mb8"><b>${o.isIn && !o.isOut ? '입고' : o.isOut && !o.isIn ? '출고' : '입고·출고'}</b><select class="r-status">${opts(o)}</select></div>
-      <div class="re-grid">
-        ${o.isIn ? `<label>입고일${DF.html('r-inDate', o.inDate || '')}</label><label>입고 수량<input type="number" class="r-inQty num" value="${o.inQty || ''}"></label>` : ''}
-        ${o.isOut ? `<label>출고일${DF.html('r-outDate', o.outDate || '')}</label><label>본품<input type="number" class="r-outMain num" value="${o.outMain || ''}"></label><label>샘플<input type="number" class="r-outSample num" value="${o.outSample || ''}"></label><label>부대<input type="text" class="r-unit" value="${esc(o.unit || '')}"></label>` : ''}
-        <label>소비기한${DF.html('r-expiry', o.expiry || '', 'future')}</label>
-      </div>
+    const today = D.today(), both = o => o.isIn && o.isOut;
+    const outState = o => o.lines && o.lines.every(l => l.ship && l.ship <= today) ? '출고처리' : '출고예정';
+    const shipInfo = o => !o.lines ? '' : `<div class="re-ships">${o.lines.map(l => `<div>${l.ship ? D.short(l.ship) : '날짜 미정'} 출고 · 소비기한 ${l.exp ? D.short(l.exp) : '미지정'} · ${fmtN(l.qty)}개 <span class="tag ${l.ship && l.ship <= today ? 'out' : 'plan'}">${l.ship && l.ship <= today ? '출고처리' : '예정'}</span></div>`).join('')}<div class="hint">출고일·소비기한 배분은 물류관리 > 출고 탭에서 바꿉니다</div></div>`;
+    const expiry = o => `<label>소비기한${DF.html('r-expiry', o.expiry || '', 'future')}</label>`;
+    const card = (o, i) => `<div class="re-card" data-i="${i}">
+      <div class="row between mb8"><b>${o.isIn && !o.isOut ? '입고' : o.isOut && !o.isIn ? '출고' : '입고·출고'}</b>${both(o) ? `<span class="row" style="gap:6px"><span class="tag in">입고 ${esc(o.inSt || '')}</span><span class="tag out">${outState(o)}</span></span><select class="r-status" style="display:none">${opts(o)}</select>` : `<select class="r-status">${opts(o)}</select>`}</div>
+      ${o.isIn ? `<div class="re-sec re-in"><div class="re-t">입고</div><div class="re-grid"><label>입고일${DF.html('r-inDate', o.inDate || '')}</label><label>입고 수량<input type="number" class="r-inQty num" value="${o.inQty || ''}"></label>${expiry(o)}</div></div>` : ''}
+      ${o.isOut ? `<div class="re-sec re-out"><div class="re-t">출고</div><div class="re-grid"><label>${o.lines || PEND_OUT.has(o.status) ? '납품일' : '출고일'}${DF.html('r-outDate', o.outDate || '')}</label><label>본품<input type="number" class="r-outMain num" value="${o.outMain || ''}"></label><label>샘플<input type="number" class="r-outSample num" value="${o.outSample || ''}"></label><label>부대<input type="text" class="r-unit" value="${esc(o.unit || '')}"></label>${o.isIn ? '' : expiry(o)}</div>${shipInfo(o)}</div>` : ''}
       <div class="row mt8" style="justify-content:flex-end"><button class="btn sm danger" data-act="del">삭제</button><button class="btn sm ok" data-act="save">저장</button></div></div>`;
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)RowEdit.close()"><div class="modal">
       <div class="row between mb12"><div><h2>${esc(title)}</h2><div class="hint">${esc(p ? p.sheet + (p.company ? ' · ' + p.company : '') : '')}</div></div><button class="btn light sm" onclick="RowEdit.close()">닫기</button></div>
@@ -3278,7 +3312,8 @@ const RowEdit = {
 
 Busy.wrap(Ledger, 'saveOps', '재고수불대장 저장 중입니다');
 Busy.wrap(Ledger, 'saveDueDays', '저장 중입니다');
-Busy.wrap(Logi, 'saveOutGroup', '출고 저장 중입니다');
+Busy.wrap(Logi, 'saveOutGroup', '출고처리 중입니다');
+Busy.wrap(Logi, 'cancelOut', '출고처리 취소 중입니다');
 Busy.wrap(Logi, 'completeIn', '입고 저장 중입니다');
 document.addEventListener('DOMContentLoaded', () => App.init());
 
