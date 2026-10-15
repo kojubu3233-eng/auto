@@ -396,6 +396,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="buckets mb12" id="confirmStats"></div>
     <div class="controls">
       <input type="month" id="confirmMonth">
+      <label class="lbl">납품일</label><span id="cfFrom"></span><span>~</span><span id="cfTo"></span>
       <div class="ms-wrap" data-ms="del"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="cat"><button type="button" class="ms-btn">구분 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="unit"><button type="button" class="ms-btn">부대 전체</button><div class="ms-panel hidden"></div></div>
@@ -418,6 +419,7 @@ tr.edit-row td { background:#FFFBEB !important; }
     <div class="row between mb12"><h2>권역별 출고</h2><div class="row"><button class="btn light" onclick="Zone.exportInvoice()">거래명세서 (물류비)</button><button class="btn light" onclick="Zone.exportExcel()">엑셀 다운로드 (물류사 전달용)</button></div></div>
     <div class="controls">
       <input type="month" id="zoneMonth">
+      <label class="lbl">납품일</label><span id="zFrom"></span><span>~</span><span id="zTo"></span>
       <div class="ms-wrap" data-ms="zdel"><button type="button" class="ms-btn">납품일 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="zreg"><button type="button" class="ms-btn">지역 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="zunit"><button type="button" class="ms-btn">부대 전체</button><div class="ms-panel hidden"></div></div>
@@ -1635,7 +1637,9 @@ const Confirm = {
   sel: { del: new Set(), cat: new Set(), unit: new Set() }, picked: new Set(), sort: { key: 'delDate', dir: 1 }, rows: [], dirty: new Map(), editId: null,
   init() {
     const t = D.today(); $('confirmMonth').value = t.slice(0, 7);
-    $('confirmMonth').addEventListener('change', () => { Confirm.sel.del.clear(); Confirm.render(); });
+    $('confirmMonth').addEventListener('change', () => { ['cf-from', 'cf-to'].forEach(c => DF.set(document.querySelector('.' + c), '', true)); Confirm.sel.del.clear(); Confirm.render(); });
+    DF.mount($('cfFrom'), 'cf-from', ''); DF.mount($('cfTo'), 'cf-to', '');
+    ['cfFrom', 'cfTo'].forEach(id => $(id).addEventListener('datechange', () => { Confirm.sel.del.clear(); Confirm.render(); }));
     $('confirmName').addEventListener('input', debounce(() => Confirm.renderRows(), 200));
     document.querySelectorAll('#confirmTable th[data-sort]').forEach(th => th.style.cursor = 'pointer');
     $('confirmTable').querySelector('thead').addEventListener('click', e => {
@@ -1665,7 +1669,8 @@ const Confirm = {
       else if (e.key === 'Enter' && !e.target.closest('.ac-wrap')?.querySelector('.ac-list div.on')) Confirm.saveEdit(Confirm.editId);
     });
   },
-  monthRecs() { const m = $('confirmMonth').value; return Hist.records.filter(r => !m || String(r.delDate).startsWith(m)); },
+  // 납품일을 입력하면 그 날짜(한쪽만 = 하루, 둘 다 = 기간)로, 비워 두면 선택한 월로 거른다
+  monthRecs() { const m = $('confirmMonth').value, f = DF.get(document.querySelector('.cf-from')), t = DF.get(document.querySelector('.cf-to')); return Hist.records.filter(r => (f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m))); },
   render() {
     const recs = Confirm.monthRecs();
     const opts = k => [...new Set(recs.map(r => r[k]).filter(Boolean))].sort();
@@ -1948,7 +1953,9 @@ const Zone = {
   active: false, wh: '', sel: { del: new Set(), reg: new Set(), unit: new Set() },
   init() {
     $('zoneMonth').value = $('confirmMonth').value;
-    $('zoneMonth').addEventListener('change', () => { Zone.sel.del.clear(); Zone.render(); });
+    $('zoneMonth').addEventListener('change', () => { ['z-from', 'z-to'].forEach(c => DF.set(document.querySelector('.' + c), '', true)); Zone.sel.del.clear(); Zone.render(); });
+    DF.mount($('zFrom'), 'z-from', ''); DF.mount($('zTo'), 'z-to', '');
+    ['zFrom', 'zTo'].forEach(id => $(id).addEventListener('datechange', () => { Zone.sel.del.clear(); Zone.render(); }));
     $('zoneName').addEventListener('input', debounce(() => Zone.render(), 200));
     $('zoneWh').addEventListener('click', e => { const b = e.target.closest('[data-wh]'); if (b) { Zone.wh = b.dataset.wh; Zone.render(); } });
   },
@@ -1956,14 +1963,14 @@ const Zone = {
     Zone.active = on;
     document.querySelectorAll('#confirmTabs .tab-btn').forEach(b => b.classList.toggle('active', (b.dataset.ctab === 'zone') === on));
     $('confirmMain').classList.toggle('hidden', on); $('confirmZone').classList.toggle('hidden', !on);
-    if (on) { $('zoneMonth').value = $('confirmMonth').value; Zone.sel.del.clear(); Zone.render(); }
+    if (on) { $('zoneMonth').value = $('confirmMonth').value; DF.set(document.querySelector('.z-from'), DF.get(document.querySelector('.cf-from')), true); DF.set(document.querySelector('.z-to'), DF.get(document.querySelector('.cf-to')), true); Zone.sel.del.clear(); Zone.render(); }
   },
   info(r) { const u = Names.unitMap.get(r.unit) || {}; return { reg: u.region || '', wh: u.warehouse || '' }; },
   rec(r) {   // 확정량 화면과 같은 저장 데이터에서 한 줄을 만든다 (미저장 입력값은 반영하지 않는다)
     const i = Zone.info(r), p = Names.product(r.name);
     return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
   },
-  base() { const m = $('zoneMonth').value; return Hist.records.filter(r => r.delDate && (!m || String(r.delDate).startsWith(m))).map(Zone.rec); },
+  base() { const m = $('zoneMonth').value, f = DF.get(document.querySelector('.z-from')), t = DF.get(document.querySelector('.z-to')); return Hist.records.filter(r => r.delDate && ((f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m)))).map(Zone.rec); },
   filtered(all) {
     const kw = Names.norm($('zoneName').value), s = Zone.sel;
     return all.filter(x => (!Zone.wh || x.wh === Zone.wh) && (!s.del.size || s.del.has(x.r.delDate)) && (!s.reg.size || s.reg.has(x.reg)) && (!s.unit.size || s.unit.has(x.r.unit)) && (!kw || Names.norm(x.r.name).includes(kw)))
