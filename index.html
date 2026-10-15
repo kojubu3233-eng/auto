@@ -2703,7 +2703,7 @@ const Logi = {
   render() { Snap.auto(); Logi.renderToday(); Logi.stale = new Set(['in', 'out', 'print']); Logi.show(Logi.sub); },
   show(sub) {
     Logi.sub = sub;
-    $('logiTodayWrapIn').classList.toggle('hidden', sub === 'out'); $('logiTodayWrapOut').classList.toggle('hidden', sub === 'in');   // 입고 탭=오늘 입고, 출고 탭=오늘 출고, 일지 출력·백업=둘 다
+    $('logiTodayWrapIn').classList.toggle('hidden', sub === 'out'); $('logiTodayWrapOut').classList.toggle('hidden', sub === 'in'); Logi.drawMissed();   // 입고 탭=오늘 입고, 출고 탭=오늘 출고, 일지 출력·백업=둘 다
     if (sub === 'backup') { Logi.renderLog(); Snap.render(); return; }
     if (!Logi.stale.delete(sub)) return;
     if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') Estate.render();
@@ -2917,6 +2917,15 @@ const Logi = {
     const keys = trs.map(tr => Logi.inKey(Logi.plans.in[+tr.dataset.i].o));   // 저장 뒤 목록이 다시 그려지므로 미리 키를 잡아 둔다
     if (await Logi.send('in', ops, entries)) { keys.forEach(k => delete Logi.inDraft[k]); Logi.renderInPlans(); }
   },
+  // 미처리 예정 박스: 입고 탭=입고만, 출고 탭=출고만, 일지 출력·백업=둘 다
+  drawMissed() {
+    const m = Logi.missHtml; if (!m) return;
+    const showIn = Logi.sub !== 'out', showOut = Logi.sub !== 'in', both = showIn && showOut, n = (showIn ? m.nIn : 0) + (showOut ? m.nOut : 0);
+    const what = both ? '예정' : showIn ? '입고 예정' : '출고 예정', cnt = both ? `입고 ${m.nIn}건 · 출고 ${m.nOut}건` : `${showIn ? m.nIn : m.nOut}건`;
+    $('logiMissed').innerHTML = n
+      ? `<div class="missed"><div class="row between mb8"><b>⚠ 오늘까지 처리되지 않은 ${what} (${cnt})</b><span class="hint">누르면 해당 건으로 이동·수정합니다</span></div><div class="list-box">${showIn ? m.in : ''}${showOut ? m.out : ''}</div></div>`
+      : `<div class="missed ok"><b>✓ 오늘까지 처리되지 않은 ${what}이 없습니다</b></div>`;
+  },
   // 오늘 입고: 오늘 저장한 입고 중 재고수불대장에 실제로 있는 줄만, 재고수불대장의 현재 값(수정·삭제 반영)으로 보여 준다
   // 오늘 출고: 오늘 출고처리한(출고일이 오늘인) 수량을 재고수불대장에서 바로 읽어 온다
   renderToday() {
@@ -2938,9 +2947,8 @@ const Logi = {
     mi.sort((a, b) => a.d.localeCompare(b.d)); mo.sort((a, b) => a.d.localeCompare(b.d));
     Logi.missedOut = mo;
     const missRows = (arr, kind, go, txt) => arr.slice(0, 20).map(({ p, o, d }, i) => `<div class="list-row editable k-warn" ${go === 'out' && d < t ? `data-mo="${i}"` : `data-go="${go}"`}><div><div class="l-name">${kind} 예정 · ${esc(p.name)}</div><div class="l-sub">${D.short(d)}${d < t ? ' (지남)' : ''} ${esc(go === 'out' ? o.unit || '' : '')}</div></div><div class="num"><b>${fmtN(go === 'out' ? o.outTotal : o.inQty)}</b><div class="l-sub"><span class="tag plan">${txt}</span></div></div></div>`).join('') + (arr.length > 20 ? `<div class="hint" style="padding:6px 10px">외 ${arr.length - 20}건</div>` : '');
-    $('logiMissed').innerHTML = mi.length || mo.length
-      ? `<div class="missed"><div class="row between mb8"><b>⚠ 오늘까지 처리되지 않은 예정 (입고 ${mi.length}건 · 출고 ${mo.length}건)</b><span class="hint">누르면 해당 탭으로 이동합니다</span></div><div class="list-box">${missRows(mi, '입고', 'in', '입고 미처리')}${missRows(mo, '출고', 'out', '출고 미처리')}</div></div>`
-      : '<div class="missed ok"><b>✓ 오늘까지 처리되지 않은 예정이 없습니다</b></div>';
+    Logi.missHtml = { in: missRows(mi, '입고', 'in', '입고 미처리'), out: missRows(mo, '출고', 'out', '출고 미처리'), nIn: mi.length, nOut: mo.length };
+    Logi.drawMissed();
     const outs = [];
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
       if (!o.outTotal || o.unit === EXPIRED_UNIT) return;
