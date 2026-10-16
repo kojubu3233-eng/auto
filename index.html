@@ -1040,7 +1040,6 @@ const Hist = {
         planEa: num(at(row, 'planEa')), planKg: num(at(row, 'planKg')), confEa: num(at(row, 'confEa')), confKg: num(at(row, 'confKg')),
         note: String(at(row, 'note') ?? '').trim(), price: num(at(row, 'price')), unitType: String(at(row, 'unitType') || '').trim(), simple: num(at(row, 'simple'))
       };
-      if (rec.planEa === null && rec.planKg === null && rec.confEa === null && rec.confKg === null) continue;
       Hist.derive(rec); out.push(rec);
     }
     return out;
