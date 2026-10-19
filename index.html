@@ -1628,7 +1628,7 @@ const Predict = {
     if (!confirm(msg + '\n\n계속할까요?')) return;
     Busy.start('예정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', x.r.utype, x.r.simple] })), ledgerOps });
+      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', '', x.r.utype, x.r.simple] })), ledgerOps });
       recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
       App.rendered.confirm = false;
