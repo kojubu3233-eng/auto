@@ -59,7 +59,7 @@ td { padding:4px; border:1px solid var(--border); background:var(--surface); ver
 .grid td { padding:2px; }
 .grid input, .grid select { width:100%; border:none; border-radius:0; background:transparent; }
 .num { text-align:right; font-variant-numeric:tabular-nums; }
-.c-plan { color:var(--plan); } .c-conf { color:var(--conf); } .c-done { color:var(--ink); }
+.c-plan { color:var(--plan); } .c-conf { color:var(--conf); } .c-done { color:var(--ink); } .z-out { color:#DC2626; font-weight:700; }
 
 .res-simple { color:var(--ink); background:var(--surface-alt) !important; line-height:1.3; }
 .res-simple .s-ea { font-size:15px; font-weight:700; } .res-simple .s-kg { font-size:13px; color:var(--muted); font-weight:600; }
@@ -1620,8 +1620,15 @@ const Predict = {
     const ledgerOps = [], noLedger = [];
     if (alsoLedger) recs.forEach(x => {
       const cands = LedgerData.forProduct(x.r.name);
-      if (!cands.length) { noLedger.push(x.r.name); return; }
-      const lp = cands.sort((a, b) => b.rows.length - a.rows.length)[0];
+      let target = cands.sort((a, b) => b.rows.length - a.rows.length)[0];
+      if (!target) {   // 재고수불대장에 아직 없는 신제품: 같은 구분 제품이 가장 많은 탭에 새로 만든다 (맞는 탭이 없으면 구분 이름의 새 탭)
+        const pr = Names.product(x.r.name);
+        if (!pr) { noLedger.push(x.r.name); return; }
+        const cnt = {}; LedgerData.standard().forEach(l => { if (l.product && l.product.category === pr.category) cnt[l.sheet] = (cnt[l.sheet] || 0) + 1; });
+        const best = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+        target = { sheet: best ? best[0] : (pr.category || "기타"), name: pr.name };
+      }
+      const lp = target;
       ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: x.id, status: '출고예정', sorted: true, fields: { outDate: x.del || x.r.date, outMain: x.r.qty, outSample: Predict.sample(lp, x.r.name), unit: x.r.unit } });
     });
     if (alsoLedger) msg += `\n재고수불대장 출고 예정 ${ledgerOps.length}건${noLedger.length ? `\n(재고수불대장에서 찾지 못한 품목 제외: ${[...new Set(noLedger)].join(', ')})` : ''}`;
@@ -2040,7 +2047,7 @@ const Zone = {
       const r = x.r, first = r.delDate !== prev; prev = r.delDate;
       const unitNo = x.wh === '미지정' ? ' style="color:var(--warn)"' : '';
       return `<tr${first ? ' class="day-first"' : ''}><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
-        <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 2)}</td><td class="num c-conf">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num c-conf">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 2)}</td>
+        <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 2)}</td><td class="num z-out">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num z-out">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 2)}</td>
         <td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '')}</td><td>${esc(r.unit)}</td><td${unitNo}>${esc(x.reg)}</td><td style="text-align:left">${esc(x.note)}</td></tr>`;
     }).join('') || '<tr><td colspan="13" class="empty">해당 조건의 출고 건이 없습니다</td></tr>';
     const miss = all.filter(x => x.wh === '미지정'); const un = new Set(miss.map(x => x.r.unit));
@@ -2136,7 +2143,7 @@ const Zone = {
       const hr = ws.getRow(3); heads.forEach((h, i) => { const c = hr.getCell(i + 1); c.value = h; c.font = { bold: true }; c.fill = fill('FFDAE3F3'); c.border = B; c.alignment = { horizontal: 'center', vertical: 'middle' }; });
       rows.forEach((x, k) => {
         const r = x.r, row = ws.getRow(4 + k), vals = [dt(r.delDate), x.wh, r.name, x.store, x.unit, r.planEa, r.planKg, r.confEa, r.confKg, dt(r.mealDate) || r.rawMeal || '', r.unit, x.reg, x.note];
-        vals.forEach((v, i) => { const c = row.getCell(i + 1); if (v !== null && v !== undefined && v !== '') c.value = v; c.border = B; c.alignment = { horizontal: i === 2 || i === 12 ? 'left' : 'center', vertical: 'middle' }; if (i === 0 || i === 9) c.numFmt = DT; if ([5, 6, 7, 8].includes(i)) { c.numFmt = NUM; c.alignment = { horizontal: 'right' }; } });
+        vals.forEach((v, i) => { const c = row.getCell(i + 1); if (v !== null && v !== undefined && v !== '') c.value = v; c.border = B; c.alignment = { horizontal: i === 2 || i === 12 ? 'left' : 'center', vertical: 'middle' }; if (i === 0 || i === 9) c.numFmt = DT; if ([5, 6, 7, 8].includes(i)) { c.numFmt = NUM; c.alignment = { horizontal: 'right' }; } if ((i === 7 || i === 8) && v !== null && v !== undefined && v !== '') c.font = { bold: true, color: { argb: 'FFDC2626' } }; });
       });
       ws.autoFilter = `A3:M${3 + rows.length}`; ws.views = [{ state: 'frozen', ySplit: 3 }];
     };
