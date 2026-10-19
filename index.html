@@ -2731,27 +2731,38 @@ const Alerts = {
 /* ---------- 자동화시스템 기록 ↔ 재고수불대장 줄 연결 (ID가 없는 기존 줄은 품목·납품일·부대로 찾는다) ---------- */
 const Sync = {
   prodName: name => { const pr = Names.product(name) || (Names.resolve(name) || {}).product; return pr ? pr.name : name; },
+  uKey: u => normUnit(u).replace(/[대단]/g, ''),   // '진해급양'='진해급양대', '51군지/31사단'='51군지단/31사단'
+  unitEq: (a, b) => normUnit(a) === normUnit(b) || (!!Sync.uKey(a) && Sync.uKey(a) === Sync.uKey(b)),
+  // 같은 품목·납품일의 재고수불대장 줄 후보: 부대가 같은 줄 → 부대 칸이 비어 있고 수량이 같은 줄 순으로 같은 건으로 본다
   ledgerFor(r, used) {
     const byId = LedgerData.byId.get(r.id); if (byId) return byId;
     if (!r.delDate) return null;
-    const pn = Sync.prodName(r.name), u = normUnit(r.unit), qty = r.confEa ?? r.planEa ?? 0;
-    let best = null, bd = Infinity;
+    const pn = Sync.prodName(r.name), qty = r.confEa ?? r.planEa ?? 0;
+    let best = null, bd = Infinity, blank = null;
     LedgerData.products.forEach(p => {
       if (!p.product || p.product.name !== pn) return;
       p.rows.forEach(o => {
-        if (!o.isOut || o.outDate !== r.delDate || o.unit === EXPIRED_UNIT || normUnit(o.unit) !== u || (used && used.has(o))) return;
+        if (!o.isOut || o.outDate !== r.delDate || o.unit === EXPIRED_UNIT || (used && used.has(o))) return;
         if (o.id && Hist.byId.has(o.id) && o.id !== r.id) return;   // 이미 다른 자동화시스템 건과 연결된 줄
+        if (!String(o.unit || '').trim()) { if (o.outMain === qty && !blank) blank = o; return; }
+        if (!Sync.unitEq(o.unit, r.unit)) return;
         const d = Math.abs((o.outMain || 0) - qty); if (d < bd) { bd = d; best = o; }
       });
     });
-    return best;
+    return best || blank;
+  },
+  // 같은 품목·납품일인데 부대가 비어 있거나 달라서 같은 건인지 알 수 없는 줄이 있으면 새로 추가하지 않고 보류한다
+  ambiguous(r, used) {
+    const pn = Sync.prodName(r.name); let n = 0;
+    LedgerData.products.forEach(p => { if (p.product && p.product.name === pn) p.rows.forEach(o => { if (o.isOut && o.outDate === r.delDate && o.unit !== EXPIRED_UNIT && !(used && used.has(o)) && !(o.id && Hist.byId.has(o.id))) n++; }); });
+    return n > 0;
   },
   recFor(o) {
     if (o.id && Hist.byId.has(o.id)) return Hist.byId.get(o.id);
     const p = LedgerData.byKey.get(o.sheet + '|' + o.name), pn = p && p.product && p.product.name; if (!pn || !o.outDate) return null;
-    const u = normUnit(o.unit); let best = null, bd = Infinity;
+    let best = null, bd = Infinity;
     Hist.records.forEach(r => {
-      if (r.delDate !== o.outDate || normUnit(r.unit) !== u || Sync.prodName(r.name) !== pn) return;
+      if (r.delDate !== o.outDate || !(Sync.unitEq(r.unit, o.unit) || !String(o.unit || '').trim()) || Sync.prodName(r.name) !== pn) return;
       const lr = LedgerData.byId.get(r.id); if (lr && lr !== o) return;
       const d = Math.abs((r.confEa ?? r.planEa ?? 0) - (o.outMain || 0)); if (d < bd) { bd = d; best = r; }
     });
@@ -2779,11 +2790,12 @@ const Sync = {
   },
   // 오늘 −7일 이후 납품 건을 재고수불대장과 비교한다: 없는 줄은 추가, ID 없는 줄은 연결, 확정량이 다르면 맞춘다
   plan() {
-    const from = D.add(D.today(), -7), used = new Set(), ops = [], miss = new Set(); let add = 0, link = 0, fix = 0, same = 0;
-    Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate >= from && (r.planEa || r.confEa)).sort((a, b) => a.delDate.localeCompare(b.delDate)).forEach(r => {
-      const conf = r.confEa !== null && r.confEa !== undefined, qty = conf ? r.confEa : r.planEa, lr = Sync.ledgerFor(r, used);
+    const from = D.add(D.today(), -7), used = new Set(), ops = [], miss = new Set(), hold = []; let add = 0, link = 0, fix = 0, same = 0;
+    const recs = Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate >= from && (r.planEa || r.confEa)).sort((a, b) => a.delDate.localeCompare(b.delDate)), match = new Map();
+    recs.forEach(r => { const lr = Sync.ledgerFor(r, used); if (lr) { used.add(lr); match.set(r, lr); } });   // 1단계: 모든 건의 짝을 먼저 정해 둔다 (같은 날짜 다른 부대 건이 서로의 짝을 가로채지 않도록)
+    recs.forEach(r => {
+      const conf = r.confEa !== null && r.confEa !== undefined, qty = conf ? r.confEa : r.planEa, lr = match.get(r);
       if (lr) {
-        used.add(lr);
         const needLink = lr.id !== r.id, qtyDiff = conf && lr.outMain !== r.confEa;
         if (!needLink && !qtyDiff) { same++; return; }
         const op = { ...Ledger.ref(lr), op: 'update', id: r.id, fields: qtyDiff ? { outMain: r.confEa } : {} };
@@ -2791,16 +2803,17 @@ const Sync = {
         ops.push(op); if (qtyDiff) fix++; else link++; return;
       }
       const lp = LedgerData.target(r.name); if (!lp) { miss.add(r.name); return; }
+      if (Sync.ambiguous(r, used)) { hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)}`); return; }
       ops.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: r.id, status: conf ? '출고확정' : '출고예정', sorted: true, fields: { outDate: r.delDate, outMain: qty, outSample: Predict.sample(lp, r.name), unit: r.unit } });
       add++;
     });
-    return { ops, add, link, fix, same, miss: [...miss] };
+    return { ops, add, link, fix, same, miss: [...miss], hold };
   },
   async run() {
     if (!LedgerData.raw) return toast('재고수불대장을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요');
     const pl = Sync.plan();
-    if (!pl.ops.length) return toast(`맞출 내용이 없습니다 (최근 7일 이후 납품 ${pl.same}건이 재고수불대장과 일치합니다)${pl.miss.length ? `\n재고수불대장에 맞는 탭이 없는 품목: ${pl.miss.join(', ')}` : ''}`, 6000);
-    if (!confirm(`최근 7일 이후 납품 건을 재고수불대장과 맞춥니다.\n\n· 재고수불대장에 없어서 새로 추가: ${pl.add}건\n· 기존 줄에 연결(중복 방지): ${pl.link}건\n· 확정량이 달라서 수정: ${pl.fix}건\n· 이미 일치: ${pl.same}건${pl.miss.length ? `\n· 맞는 탭이 없어 제외: ${pl.miss.join(', ')}` : ''}\n\n계속할까요?`)) return;
+    if (!pl.ops.length) return toast(`맞출 내용이 없습니다 (최근 7일 이후 납품 ${pl.same}건이 재고수불대장과 일치합니다)${pl.hold.length ? `\n확인 필요(보류) ${pl.hold.length}건: ${pl.hold.slice(0, 4).join(' / ')}` : ''}`, 8000);
+    if (!confirm(`최근 7일 이후 납품 건을 재고수불대장과 맞춥니다.\n\n· 재고수불대장에 없어서 새로 추가: ${pl.add}건\n· 기존 줄에 연결(중복 방지): ${pl.link}건\n· 확정량이 달라서 수정: ${pl.fix}건\n· 이미 일치: ${pl.same}건${pl.hold.length ? `\n· 같은 날짜에 부대가 다른(또는 빈) 줄이 있어 중복 방지를 위해 건너뜀: ${pl.hold.length}건 (직접 확인 필요)` : ''}${pl.miss.length ? `\n· 재고수불대장 관리 대상이 아니라 제외: ${pl.miss.join(', ')}` : ''}\n\n계속할까요?`)) return;
     Busy.start('재고수불대장에 반영 중입니다 (건수가 많으면 몇 분 걸릴 수 있습니다)');
     let ok = 0, fail = [];
     try {
