@@ -1094,7 +1094,7 @@ function makeLedgerData() {
           o.outTotal = o.outSub || ((o.outMain || 0) + (o.outSample || 0)); o.isIn = !!(o.inQty || o.inDate); o.isOut = !!(o.outTotal || o.outDate); if (o.stock === undefined) o.stock = '';
           o.lines = parseShips(o.ships); if (!o.lines.length) o.lines = null; else if (o.lines.reduce((a, l) => a + l.qty, 0) !== o.outTotal) { o.shipsStale = true; o.lines = null; }   // 확정 수량이 바뀌어 배분 합계가 맞지 않으면 배분을 버린다
         }
-        else { o.outDate = o.date; o.outMain = o.qty; o.outSample = o.sample || 0; o.outTotal = o.qty + (o.sample || 0); o.isOut = true; o.status = ''; }
+        else { o.outDate = o.date; o.outMain = o.qty; o.outSample = o.sample || 0; o.outTotal = o.qty + (o.sample || 0); o.isOut = true; o.status = o.status || ''; }
         const key = sh.sheet + '|' + o.name;
         let p = L.byKey.get(key);
         if (!p) { p = { key, sheet: sh.sheet, name: o.name, type: sh.type, company: '', rows: [] }; L.byKey.set(key, p); L.products.push(p); }
@@ -1159,7 +1159,7 @@ function makeLedgerData() {
   },
   standard: () => L.products.filter(p => p.type === 'standard'),
   unresolved(skip) { return L.products.filter(p => !p.link.sure && !skip.has(p.name)); },
-  forProduct(name) { return L.standard().filter(p => p.product && p.product.name === name); }
+  forProduct(name) { return L.products.filter(p => p.product && p.product.name === name); }   // 표준 탭과 두부류·떡류 같은 단순 기록 탭 모두 포함
 };
  return L;
 }
@@ -1621,12 +1621,13 @@ const Predict = {
     if (alsoLedger) recs.forEach(x => {
       const cands = LedgerData.forProduct(x.r.name);
       let target = cands.sort((a, b) => b.rows.length - a.rows.length)[0];
-      if (!target) {   // 재고수불대장에 아직 없는 신제품: 같은 구분 제품이 가장 많은 탭에 새로 만든다 (맞는 탭이 없으면 구분 이름의 새 탭)
+      if (!target) {   // 재고수불대장에 아직 없는 신제품: 같은 구분 제품이 가장 많은 탭에 새로 만든다 (맞는 탭이 없으면 반영하지 않고 알려 준다)
         const pr = Names.product(x.r.name);
         if (!pr) { noLedger.push(x.r.name); return; }
-        const cnt = {}; LedgerData.standard().forEach(l => { if (l.product && l.product.category === pr.category) cnt[l.sheet] = (cnt[l.sheet] || 0) + 1; });
+        const cnt = {}; LedgerData.products.forEach(l => { if (l.product && l.product.category === pr.category) cnt[l.sheet] = (cnt[l.sheet] || 0) + 1; });
         const best = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
-        target = { sheet: best ? best[0] : (pr.category || "기타"), name: pr.name };
+        if (!best) { noLedger.push(x.r.name); return; }
+        target = { sheet: best[0], name: pr.name };
       }
       const lp = target;
       ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: x.id, status: '출고예정', sorted: true, fields: { outDate: x.del || x.r.date, outMain: x.r.qty, outSample: Predict.sample(lp, x.r.name), unit: x.r.unit } });
