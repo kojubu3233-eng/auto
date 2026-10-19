@@ -301,6 +301,10 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 .m-card tbody td input[type=text]:not([readonly]), .m-card tbody td input[type=number]:not([readonly]), .m-card tbody td select { border:1px solid var(--edit) !important; background:var(--edit-soft); }
 .edit-legend { display:inline-flex; align-items:center; gap:6px; font-size:11px; color:var(--muted-2); } .edit-swatch { display:inline-block; width:26px; height:13px; border:1px solid var(--edit); background:var(--edit-soft); border-radius:4px; }
 .stock-now { font-size:11px; color:var(--muted); margin-top:2px; }
+.alert-bar { margin:0 0 12px; padding:10px 14px; border:1px solid #E7C9A6; background:#FFF8EE; border-radius:10px; }
+.alert-row { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:13px; flex-wrap:wrap; }
+.alert-row .grow { flex:1; min-width:200px; }
+.alert-row.warn b { color:var(--danger); }
 </style>
 </head>
 <body>
@@ -317,6 +321,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
   <button class="tab-btn" data-tab="logistics">물류관리</button>
 </nav>
 <div id="loadError" class="banner hidden" style="background:var(--danger-soft);color:var(--danger);border-color:#E9D9D6"><span id="loadErrorText"></span><button class="btn sm danger" onclick="App.reload(true)">다시 시도</button></div>
+<div id="alertBar" class="alert-bar hidden"></div>
 <div id="linkBanner" class="banner hidden"><span id="linkBannerText"></span><button class="btn sm" onclick="Link.open()">품명 연결</button></div>
 
 <!-- 홈 -->
@@ -410,7 +415,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
   <div class="panel" id="confirmMain">
     <div class="row between mb12">
       <h2>확정량 입력</h2>
-      <div class="row"><button class="btn light" onclick="Confirm.openAdd()">+ 행 추가 (급발주 등)</button><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn danger" onclick="Confirm.removeSelected()">선택 삭제</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
+      <div class="row"><button class="btn light" onclick="Sync.run()" title="자동화시스템 시트와 재고수불대장을 비교해 빠진 출고 줄을 채우고, 확정량 차이를 맞춥니다">재고수불대장 맞추기</button><button class="btn light" onclick="Confirm.openAdd()">+ 행 추가 (급발주 등)</button><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn danger" onclick="Confirm.removeSelected()">선택 삭제</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
     </div>
     <div class="buckets mb12" id="confirmStats"></div>
     <div class="controls">
@@ -1159,7 +1164,15 @@ function makeLedgerData() {
   },
   standard: () => L.products.filter(p => p.type === 'standard'),
   unresolved(skip) { return L.products.filter(p => !p.link.sure && !skip.has(p.name)); },
-  forProduct(name) { return L.products.filter(p => p.product && p.product.name === name); }   // 표준 탭과 두부류·떡류 같은 단순 기록 탭 모두 포함
+  forProduct(name) { const pr = Names.product(name) || (Names.resolve(name) || {}).product, pn = pr ? pr.name : name; return L.products.filter(p => p.product && p.product.name === pn); },   // 표준 탭과 두부류·떡류 같은 단순 기록 탭 모두 포함
+  // 재고수불대장에 넣을 품목(탭·이름): 이미 있으면 그 품목, 신제품이면 같은 구분 제품이 가장 많은 탭에 새로 만든다. 맞는 곳이 없으면 null
+  target(name) {
+    const c = L.forProduct(name).sort((a, b) => b.rows.length - a.rows.length)[0]; if (c) return c;
+    const pr = Names.product(name) || (Names.resolve(name) || {}).product; if (!pr) return null;
+    const cnt = {}; L.products.forEach(l => { if (l.product && l.product.category === pr.category) cnt[l.sheet] = (cnt[l.sheet] || 0) + 1; });
+    const best = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
+    return best ? { sheet: best[0], name: pr.name, product: pr, rows: [] } : null;
+  }
 };
  return L;
 }
@@ -1248,6 +1261,7 @@ const App = {
   refreshViews() {
     App.rendered = {};
     Link.updateBanner();
+    Alerts.render();
     App.renderTab(App.tab);
   },
   show(tab) {
@@ -1619,17 +1633,8 @@ const Predict = {
     const alsoLedger = $('alsoLedger').checked;
     const ledgerOps = [], noLedger = [];
     if (alsoLedger) recs.forEach(x => {
-      const cands = LedgerData.forProduct(x.r.name);
-      let target = cands.sort((a, b) => b.rows.length - a.rows.length)[0];
-      if (!target) {   // 재고수불대장에 아직 없는 신제품: 같은 구분 제품이 가장 많은 탭에 새로 만든다 (맞는 탭이 없으면 반영하지 않고 알려 준다)
-        const pr = Names.product(x.r.name);
-        if (!pr) { noLedger.push(x.r.name); return; }
-        const cnt = {}; LedgerData.products.forEach(l => { if (l.product && l.product.category === pr.category) cnt[l.sheet] = (cnt[l.sheet] || 0) + 1; });
-        const best = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0];
-        if (!best) { noLedger.push(x.r.name); return; }
-        target = { sheet: best[0], name: pr.name };
-      }
-      const lp = target;
+      const lp = LedgerData.target(x.r.name);
+      if (!lp) { noLedger.push(x.r.name); return; }
       ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: x.id, status: '출고예정', sorted: true, fields: { outDate: x.del || x.r.date, outMain: x.r.qty, outSample: Predict.sample(lp, x.r.name), unit: x.r.unit } });
     });
     if (alsoLedger) msg += `\n재고수불대장 출고 예정 ${ledgerOps.length}건${noLedger.length ? `\n(재고수불대장에서 찾지 못한 품목 제외: ${[...new Set(noLedger)].join(', ')})` : ''}`;
@@ -1791,8 +1796,7 @@ const Confirm = {
     const ups = [...Confirm.dirty.entries()].map(([id, d]) => { const r = Hist.byId.get(id); return { r, d, u: { id: /^(hist|plan):/.test(id) ? '' : id, delDate: r.delDate, mealDate: r.mealDate, unit: r.unit, name: r.name, confQty: d.confEa ?? '', confQtyKg: d.confKg ?? '', ...('note' in d ? { note: d.note.trim() } : {}) } }; });
     if (!confirm(`확정량·비고 ${ups.length}건을 저장합니다. 계속할까요?`)) return;
     // 재고수불대장에 이미 있는 출고 예정·확정 행은 확정 수량(청색)으로 함께 바꾼다
-    const ledgerOps = ups.filter(x => LedgerData.byId.has(x.r.id) && ['출고예정', '출고확정'].includes(LedgerData.byId.get(x.r.id).status) && x.d.confEa !== null && x.d.confEa !== undefined)
-      .map(x => ({ op: 'update', id: x.r.id, status: '출고확정', fields: { outMain: x.d.confEa } }));
+    const ledgerOps = Sync.confirmOps(ups.map(x => ({ r: x.r, conf: x.d.confEa })));
     Busy.start('확정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
       const res = await Api.post('ledger', { action: 'confirmSave', updates: ups.map(x => x.u), ledgerOps });
@@ -2684,6 +2688,125 @@ const Carry = {
 };
 
 /* ---------- 물류관리 ---------- */
+/* ---------- 알림: 입고결정 필요(D-3~D-1) + 출고 탭·자동 처리로 바뀐 내용 (모든 탭 위쪽에 표시) ---------- */
+const Alerts = {
+  list: [],
+  async load() { Alerts.list = (await Store.get('alerts')) || []; Alerts.render(); },
+  add(kind, text) {
+    Alerts.list.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), ts: new Date().toISOString(), kind, text });
+    Alerts.list = Alerts.list.slice(0, 100); Store.set('alerts', Alerts.list); Alerts.render();
+  },
+  dismiss(id) { Alerts.list = Alerts.list.filter(a => a.id !== id); Store.set('alerts', Alerts.list); Alerts.render(); },
+  clear() { Alerts.list = []; Store.set('alerts', Alerts.list); Alerts.render(); },
+  // 입고예정일이 1~3일 남았는데 아직 입고결정이 안 된 건
+  inSoon() {
+    const t = D.today(), out = [];
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {
+      if (o.inSt !== '입고예정' || !o.inQty || !o.inDate) return;
+      const d = D.diff(o.inDate, t); if (d >= 1 && d <= 3) out.push({ p, o, d });
+    }));
+    return out.sort((a, b) => a.d - b.d || a.p.name.localeCompare(b.p.name));
+  },
+  render() {
+    const box = $('alertBar'); if (!box) return;
+    const soon = LedgerData.raw ? Alerts.inSoon() : [], n = soon.length + Alerts.list.length;
+    box.classList.toggle('hidden', !n);
+    if (!n) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="row between mb8"><b>🔔 알림 ${n}건</b>${Alerts.list.length ? '<button type="button" class="btn light sm" data-alert-clear>변경 알림 모두 확인</button>' : ''}</div>`
+      + soon.map(x => `<div class="alert-row warn"><b>입고결정 필요 D-${x.d}</b><span class="grow">${esc(x.p.name)} ${fmtN(x.o.inQty)}개 · 입고예정 ${D.short(x.o.inDate)} <span class="hint">재고수불대장에서 입고결정을 체크하세요 (입고일 당일에는 입고 탭에서 바로 입고처리할 수도 있습니다)</span></span></div>`).join('')
+      + Alerts.list.map(a => `<div class="alert-row"><span class="tag plan">${esc(a.kind)}</span><span class="grow">${esc(a.text)} <span class="hint">${esc(a.ts.slice(5, 16).replace('T', ' '))}</span></span><button type="button" class="btn light sm" data-alert="${a.id}">확인</button></div>`).join('');
+  },
+  init() {
+    $('alertBar').addEventListener('click', e => {
+      const b = e.target.closest('[data-alert]'); if (b) return Alerts.dismiss(b.dataset.alert);
+      if (e.target.closest('[data-alert-clear]')) Alerts.clear();
+    });
+  }
+};
+
+/* ---------- 자동화시스템 기록 ↔ 재고수불대장 줄 연결 (ID가 없는 기존 줄은 품목·납품일·부대로 찾는다) ---------- */
+const Sync = {
+  prodName: name => { const pr = Names.product(name) || (Names.resolve(name) || {}).product; return pr ? pr.name : name; },
+  ledgerFor(r, used) {
+    const byId = LedgerData.byId.get(r.id); if (byId) return byId;
+    if (!r.delDate) return null;
+    const pn = Sync.prodName(r.name), u = normUnit(r.unit), qty = r.confEa ?? r.planEa ?? 0;
+    let best = null, bd = Infinity;
+    LedgerData.products.forEach(p => {
+      if (!p.product || p.product.name !== pn) return;
+      p.rows.forEach(o => {
+        if (!o.isOut || o.outDate !== r.delDate || o.unit === EXPIRED_UNIT || normUnit(o.unit) !== u || (used && used.has(o))) return;
+        if (o.id && Hist.byId.has(o.id) && o.id !== r.id) return;   // 이미 다른 자동화시스템 건과 연결된 줄
+        const d = Math.abs((o.outMain || 0) - qty); if (d < bd) { bd = d; best = o; }
+      });
+    });
+    return best;
+  },
+  recFor(o) {
+    if (o.id && Hist.byId.has(o.id)) return Hist.byId.get(o.id);
+    const p = LedgerData.byKey.get(o.sheet + '|' + o.name), pn = p && p.product && p.product.name; if (!pn || !o.outDate) return null;
+    const u = normUnit(o.unit); let best = null, bd = Infinity;
+    Hist.records.forEach(r => {
+      if (r.delDate !== o.outDate || normUnit(r.unit) !== u || Sync.prodName(r.name) !== pn) return;
+      const lr = LedgerData.byId.get(r.id); if (lr && lr !== o) return;
+      const d = Math.abs((r.confEa ?? r.planEa ?? 0) - (o.outMain || 0)); if (d < bd) { bd = d; best = r; }
+    });
+    return best;
+  },
+  // 확정량 저장 때 재고수불대장에 함께 반영할 줄 (ID가 없는 기존 줄은 이때 ID가 붙어 연결된다)
+  confirmOps(items) {
+    const used = new Set(), ops = [];
+    items.forEach(({ r, conf }) => {
+      if (conf === null || conf === undefined) return;
+      const lr = Sync.ledgerFor(r, used); if (!lr || used.has(lr) || !lr.isOut || lr.unit === EXPIRED_UNIT) return;
+      used.add(lr);
+      if (lr.outMain === conf && lr.status === '출고확정' && lr.id === r.id) return;
+      const op = { ...Ledger.ref(lr), op: 'update', id: lr.id || r.id, fields: { outMain: conf } };
+      if (lr.status !== '출고완료') op.status = '출고확정';
+      ops.push(op);
+    });
+    return ops;
+  },
+  // 오늘 −7일 이후 납품 건을 재고수불대장과 비교한다: 없는 줄은 추가, ID 없는 줄은 연결, 확정량이 다르면 맞춘다
+  plan() {
+    const from = D.add(D.today(), -7), used = new Set(), ops = [], miss = new Set(); let add = 0, link = 0, fix = 0, same = 0;
+    Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate >= from && (r.planEa || r.confEa)).sort((a, b) => a.delDate.localeCompare(b.delDate)).forEach(r => {
+      const conf = r.confEa !== null && r.confEa !== undefined, qty = conf ? r.confEa : r.planEa, lr = Sync.ledgerFor(r, used);
+      if (lr) {
+        used.add(lr);
+        const needLink = lr.id !== r.id, qtyDiff = conf && lr.outMain !== r.confEa;
+        if (!needLink && !qtyDiff) { same++; return; }
+        const op = { ...Ledger.ref(lr), op: 'update', id: r.id, fields: qtyDiff ? { outMain: r.confEa } : {} };
+        if (conf && lr.status !== '출고완료') op.status = '출고확정';
+        ops.push(op); if (qtyDiff) fix++; else link++; return;
+      }
+      const lp = LedgerData.target(r.name); if (!lp) { miss.add(r.name); return; }
+      ops.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: r.id, status: conf ? '출고확정' : '출고예정', sorted: true, fields: { outDate: r.delDate, outMain: qty, outSample: Predict.sample(lp, r.name), unit: r.unit } });
+      add++;
+    });
+    return { ops, add, link, fix, same, miss: [...miss] };
+  },
+  async run() {
+    if (!LedgerData.raw) return toast('재고수불대장을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요');
+    const pl = Sync.plan();
+    if (!pl.ops.length) return toast(`맞출 내용이 없습니다 (최근 7일 이후 납품 ${pl.same}건이 재고수불대장과 일치합니다)${pl.miss.length ? `\n재고수불대장에 맞는 탭이 없는 품목: ${pl.miss.join(', ')}` : ''}`, 6000);
+    if (!confirm(`최근 7일 이후 납품 건을 재고수불대장과 맞춥니다.\n\n· 재고수불대장에 없어서 새로 추가: ${pl.add}건\n· 기존 줄에 연결(중복 방지): ${pl.link}건\n· 확정량이 달라서 수정: ${pl.fix}건\n· 이미 일치: ${pl.same}건${pl.miss.length ? `\n· 맞는 탭이 없어 제외: ${pl.miss.join(', ')}` : ''}\n\n계속할까요?`)) return;
+    Busy.start('재고수불대장에 반영 중입니다 (건수가 많으면 몇 분 걸릴 수 있습니다)');
+    let ok = 0, fail = [];
+    try {
+      for (let i = 0; i < pl.ops.length; i += 25) {
+        const res = await Api.post('ledger', { action: 'ledgerSave', ops: pl.ops.slice(i, i + 25) });
+        res.results.forEach(r => { if (r.ok) ok++; else fail.push((r.name || r.id) + ': ' + r.reason); });
+        App.applyPatch(res.patch);
+      }
+    } catch (e) { fail.push(e.message); }
+    finally { Busy.end(); }
+    await App.reloadLedger(); App.refreshViews();
+    toast(`재고수불대장 ${ok}건 반영${fail.length ? `\n실패 ${fail.length}건: ${fail.slice(0, 3).join(' / ')}` : ''}`, 8000);
+    if (ok) Alerts.add('재고수불대장 맞춤', `자동화시스템과 비교해 추가 ${pl.add}건 · 연결 ${pl.link}건 · 확정량 수정 ${pl.fix}건을 반영했습니다`);
+  }
+};
+
 const Logi = {
   log: [],
   async init() {
@@ -2707,9 +2830,10 @@ const Logi = {
     ['outFDelFrom', 'outFDelTo', 'outFShipFrom', 'outFShipTo'].forEach(id => { DF.mount($(id), id.toLowerCase(), ''); $(id).addEventListener('datechange', () => Logi.renderOut()); });
     ['outFUnit', 'outFName'].forEach(id => $(id).addEventListener('input', () => Logi.renderOut()));
     const opb = $('outPlanBody');
-    opb.addEventListener('input', e => Logi.markDirty(e.target));
-    opb.addEventListener('change', e => { if (e.target.classList.contains('osel') || e.target.classList.contains('oq')) Logi.markDirty(e.target); });
+    opb.addEventListener('input', e => { if (!e.target.classList.contains('oconf')) Logi.markDirty(e.target); });
+    opb.addEventListener('change', e => { if (e.target.classList.contains('oconf')) return Logi.saveOutEdit(+e.target.closest('tr').dataset.g, { main: num(e.target.value) }); if (e.target.classList.contains('osel') || e.target.classList.contains('oq')) Logi.markDirty(e.target); });
     opb.addEventListener('datechange', e => {
+      if (e.target.classList.contains('odel')) return Logi.saveOutEdit(+e.target.closest('tr').dataset.g, { date: DF.get(e.target) });
       if (!e.target.classList.contains('pship')) return;
       const tr = e.target.closest('tr'), gi = +tr.dataset.g, rows = [...opb.querySelectorAll(`tr.out-line[data-g="${gi}"]`)];
       if (tr === rows[0] && DF.get(e.target)) rows.slice(1).forEach(r => { const f = r.querySelector('.pship'); if (!DF.get(f)) DF.set(f, DF.get(e.target), true); });   // 첫 줄에 입력하면 비어 있는 나머지 줄도 같은 날짜로 채운다
@@ -2744,6 +2868,7 @@ const Logi = {
       if (act === 'delline') tr.remove();
     });
     Logi.log = (await Store.get('logiLog')) || [];
+    Alerts.init(); await Alerts.load();
     await Snap.load(); Snap.init();
   },
   // 하위 탭(입고·출고·일지 출력·백업)은 보이는 것만 그리고, 나머지는 열 때 그린다 (저장·새로고침마다 모든 표를 다시 만들지 않는다)
@@ -2834,11 +2959,49 @@ const Logi = {
       const finished = !dirty && lines.every(l => l.ship && l.ship <= today), anyDone = !dirty && lines.some(l => l.ship && l.ship <= today), btns = `<button type="button" class="btn sm ok" data-act="save">출고처리</button>${anyDone ? '<button type="button" class="btn sm light mt8" data-act="cancel">처리 취소</button>' : ''}`;
       return lines.map((l, li) => {
         const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
-        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">현재 보유고 ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${fmtN(o.outMain)}</td><td rowspan="${n}" class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>` : '';
+        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${anyDone ? D.short(o.outDate) : DF.html('odel', o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">현재 보유고 ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="number" class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>` : '';
         const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
         return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="number" class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
       }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
     }).join('');
+  },
+  // 출고 탭에서 납품일·확정량(본품) 수정 → 자동화시스템 시트(확정량 입력)와 재고수불대장에 함께 반영하고 알림을 남긴다
+  async saveOutEdit(gi, ch) {
+    const g = Logi.outGroups[gi]; if (!g) return;
+    const o = g.o, rec = Sync.recFor(o), ptxt = `${g.p.name} ${o.unit || ''}`;
+    const newDate = ch.date && ch.date !== o.outDate ? ch.date : null, newMain = ch.main !== undefined && ch.main > 0 && ch.main !== o.outMain ? ch.main : null;
+    if (ch.main !== undefined && !(ch.main > 0)) { toast('확정량은 1 이상의 숫자로 입력하세요'); return Logi.renderOut(true); }
+    if (!newDate && newMain === null) return;
+    if (o.lines && o.lines.some(l => l.ship && l.ship <= D.today())) { toast('이미 출고처리된 건입니다. [처리 취소] 후 수정하세요', 5000); return Logi.renderOut(true); }
+    const notes = [];
+    if (newDate) notes.push(`납품일 ${D.short(o.outDate)} → ${D.short(newDate)}`);
+    if (newMain !== null) notes.push(`확정량 ${fmtN(o.outMain)} → ${fmtN(newMain)}개`);
+    Busy.start('수정 저장 중입니다 (구글시트 2곳 동시 반영)');
+    try {
+      const id = (rec && rec.id) || o.id || '';
+      const real = rec && !/^(hist|plan):/.test(rec.id);
+      const lfields = {}; if (newDate) lfields.outDate = newDate; if (newMain !== null) lfields.outMain = newMain;
+      const lop = { ...Ledger.ref(o), op: 'update', fields: lfields }; if (id) lop.id = id; if (newMain !== null && o.status === '출고예정') lop.status = '출고확정';
+      if (real && newDate) {   // 1) 납품일: 자동화시스템 시트 + 재고수불대장
+        const res = await Api.post('ledger', { action: 'planEdit', ref: { id: rec.id, src: rec.src, row: rec.row, name: rec.name }, fields: { delDate: newDate }, ledgerOps: newMain === null ? [lop] : [{ ...lop, fields: { outDate: newDate } }] });
+        rec.delDate = newDate; Hist.derive(rec); Hist.reindex(); App.afterWrite(res);
+      }
+      if (real && newMain !== null) {   // 2) 확정량: 자동화시스템 시트 + 재고수불대장
+        const pack = Confirm.pack(rec), kg = pack ? Math.round(newMain * pack * 100) / 100 : rec.confKg;
+        const l2 = { ...lop, fields: { outMain: newMain } }; if (o.status === '출고예정') l2.status = '출고확정';
+        const res = await Api.post('ledger', { action: 'confirmSave', updates: [{ id: rec.id, delDate: newDate || rec.delDate, mealDate: rec.mealDate, unit: rec.unit, name: rec.name, confQty: newMain, confQtyKg: kg ?? '' }], ledgerOps: newDate ? [] : [l2] });
+        if (newDate) { const r2 = await Api.post('ledger', { action: 'ledgerSave', ops: [l2] }); App.afterWrite(r2); } else App.afterWrite(res);
+        rec.confEa = newMain; if (kg !== undefined) rec.confKg = kg; Hist.derive(rec); Hist.reindex();
+      }
+      if (!real) {   // 자동화시스템 시트에 연결되지 않은 기존 줄: 재고수불대장만 수정
+        const res = await Api.post('ledger', { action: 'ledgerSave', ops: [lop] }); App.applyPatch(res.patch) || await App.reloadLedger();
+      }
+      Alerts.add('출고 수정', `${ptxt}: ${notes.join(' · ')}${real ? ' (확정량 입력·재고수불대장 반영)' : ' (재고수불대장만 반영 — 자동화시스템에 연결된 건이 아닙니다)'}`);
+      Confirm.renderRows && Confirm.renderRows(); App.refreshViews();
+      toast('수정했습니다: ' + notes.join(' · '), 5000);
+    } catch (e) { toast('수정 실패: ' + e.message, 6000); }
+    finally { Busy.end(); }
+    Logi.renderOut(true); Logi.renderToday();
   },
   // [출고처리]: 소비기한 배분·출고일(비워 두면 오늘)을 시트 AA열에 저장한다. 출고일이 오늘 이전인 수량은 재고에서 빠진 것으로 본다.
   // 입고가 함께 적힌 줄이 아니고 모든 수량의 출고일이 지났으면 상태도 '출고완료'로 바꾼다.
@@ -2915,20 +3078,21 @@ const Logi = {
     const today = D.today(), nm = Names.norm($('inFilterName').value), from = DF.get(document.querySelector('.in-from')), to = DF.get(document.querySelector('.in-to')), showPast = $('inShowPast').checked;
     const items = []; let past = 0;
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
-      if (o.inSt !== '입고결정' || !o.inQty) return;
+      const und = o.inSt === '입고예정' && o.inDate === today;   // 입고결정 전이어도 입고일 당일이면 입고 탭에 나타난다
+      if ((o.inSt !== '입고결정' && !und) || !o.inQty) return;
       const d = o.inDate || today;
       if (d < today) { past++; if (!showPast) return; }
       if (nm && !Names.norm(p.name).includes(nm)) return;
       if (!inRange(d, from, to)) return;
-      items.push({ p, o, d });
+      items.push({ p, o, d, und });
     }));
     items.sort((a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name));
     Logi.plans = Logi.plans || {}; Logi.plans.in = items;
     $('inPastNote').innerHTML = past && !showPast ? `<span class="tag danger">입고일이 지났는데 입고 완료 처리가 안 된 건 ${past}건</span> <span class="hint">실제로 받았다면 위의 '입고일이 지난 미완료 건도 표시'를 체크해 입고 완료를 눌러야 재고에 들어갑니다</span>` : '';
-    if (!items.length) { body.innerHTML = '<tr><td colspan="10" class="empty">입고결정된 예정 건이 없습니다 (재고수불대장에서 입고결정을 체크하면 나타납니다)</td></tr>'; return; }
-    body.innerHTML = items.map(({ p, o, d }, i) => {
+    if (!items.length) { body.innerHTML = '<tr><td colspan="10" class="empty">입고할 예정 건이 없습니다 (재고수불대장에서 입고결정을 체크하면 나타납니다)</td></tr>'; return; }
+    body.innerHTML = items.map(({ p, o, d, und }, i) => {
       const info = p.product, dr = Logi.inDraft[Logi.inKey(o)] || {}, exp = dr.exp !== undefined ? dr.exp : (o.expiry || '');
-      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}<div class="hint">${esc(p.sheet)}</div></td>
+      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}<div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${DF.html('pdate', d)}</td><td class="num">${fmtN(o.inQty)}</td>
         <td><input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px"></td><td>${DF.html('pexp', exp, 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</td>
         <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x)).join('');
@@ -2944,9 +3108,9 @@ const Logi = {
     Logi.collectIn();
     const body = $('inPlanBody'), trs = [...body.querySelectorAll('tr.plan-main')].filter(tr => tr.querySelector('.pk').checked);
     if (!trs.length) return toast('입고 완료할 건을 체크하세요');
-    const ops = [], entries = [], today = D.today(); let noExp = 0;
+    const ops = [], entries = [], today = D.today(), autoDec = []; let noExp = 0;
     for (const tr of trs) {
-      const i = +tr.dataset.i, { p, o } = Logi.plans.in[i];
+      const i = +tr.dataset.i, { p, o, und } = Logi.plans.in[i]; if (und) autoDec.push(p.name);
       const date0 = DF.get(tr.querySelector('.pdate')) || o.inDate || today, date = date0 > today ? today : date0;   // '입고 완료'는 실제로 받은 것이므로 입고일이 오늘 이후면 오늘로 기록한다
       const lines = [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')) }];
       body.querySelectorAll(`tr.plan-extra[data-i="${i}"]`).forEach(x => lines.push({ qty: num(x.querySelector('.pq').value), exp: DF.get(x.querySelector('.pexp')) }));
@@ -2963,16 +3127,17 @@ const Logi = {
     }
     if (noExp && !confirm(`소비기한이 없는 입고가 ${noExp}건 있습니다. 소비기한이 없으면 납품기한을 계산할 수 없습니다.\n그대로 입고 완료할까요?`)) return;
     const keys = trs.map(tr => Logi.inKey(Logi.plans.in[+tr.dataset.i].o));   // 저장 뒤 목록이 다시 그려지므로 미리 키를 잡아 둔다
-    if (await Logi.send('in', ops, entries)) { keys.forEach(k => delete Logi.inDraft[k]); Logi.renderInPlans(); }
+    if (await Logi.send('in', ops, entries)) { keys.forEach(k => delete Logi.inDraft[k]); if (autoDec.length) Alerts.add('입고결정 자동', `입고결정 전이던 ${autoDec.join(', ')} 건이 입고 처리되어 입고결정·입고완료로 함께 반영되었습니다 (재고수불대장에서도 입고완료로 표시)`); Logi.renderInPlans(); }
   },
   // 미처리 예정 박스: 입고 탭=입고만, 출고 탭=출고만, 일지 출력·백업=둘 다
   drawMissed() {
     const m = Logi.missHtml; if (!m) return;
     const showIn = Logi.sub !== 'out', showOut = Logi.sub !== 'in', both = showIn && showOut, n = (showIn ? m.nIn : 0) + (showOut ? m.nOut : 0);
     const what = both ? '예정' : showIn ? '입고 예정' : '출고 예정', cnt = both ? `입고 ${m.nIn}건 · 출고 ${m.nOut}건` : `${showIn ? m.nIn : m.nOut}건`;
+    const oldNote = m.old ? `<div class="hint" style="padding:6px 10px">14일보다 오래된 미처리 ${m.old}건은 예전 기록(대부분 2025년 이전 엑셀에서 옮겨온 줄)이라 목록에서 제외했습니다</div>` : '';
     $('logiMissed').innerHTML = n
-      ? `<div class="missed"><div class="row between mb8"><b>⚠ 오늘까지 처리되지 않은 ${what} (${cnt})</b><span class="hint">누르면 해당 건으로 이동·수정합니다</span></div><div class="list-box">${showIn ? m.in : ''}${showOut ? m.out : ''}</div></div>`
-      : `<div class="missed ok"><b>✓ 오늘까지 처리되지 않은 ${what}이 없습니다</b></div>`;
+      ? `<div class="missed"><div class="row between mb8"><b>⚠ 오늘까지 처리되지 않은 ${what} (${cnt})</b><span class="hint">누르면 해당 건으로 이동·수정합니다 (최근 14일)</span></div><div class="list-box">${showIn ? m.in : ''}${showOut ? m.out : ''}</div>${oldNote}</div>`
+      : `<div class="missed ok"><b>✓ 최근 14일 내 처리되지 않은 ${what}이 없습니다</b>${oldNote}</div>`;
   },
   // 오늘 입고: 오늘 저장한 입고 중 재고수불대장에 실제로 있는 줄만, 재고수불대장의 현재 값(수정·삭제 반영)으로 보여 준다
   // 오늘 출고: 오늘 출고처리한(출고일이 오늘인) 수량을 재고수불대장에서 바로 읽어 온다
@@ -2987,15 +3152,17 @@ const Logi = {
       return `<div class="list-row editable k-in" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">입고 · ${esc(x.name)}</div><div class="l-sub">${D.short(date)} ${exp ? '소비기한 ' + D.short(exp) : ''}</div></div><div class="num"><b>${fmtN(qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag in">입고</span>'}</div></div></div>`;
     }).join('') : '<div class="empty">오늘 입고한 내역이 없습니다</div>';
     // 안전장치: 오늘까지 처리됐어야 하는데 아직 처리되지 않은 입고·출고 예정
-    const mi = [], mo = [];
+    const mi = [], mo = []; let old = 0;
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
-      if (o.inSt === '입고결정' && o.inQty && (o.inDate || t) <= t) mi.push({ p, o, d: o.inDate || t });
-      if (o.outTotal && o.unit !== EXPIRED_UNIT && o.outDate && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) mo.push({ p, o, d: o.outDate });
+      const lim = D.add(t, -14);   // 14일보다 오래된 건은 옛 기록(색상 표시 방식)이라 목록에서 뺀다
+      if (o.inSt === '입고결정' && o.inQty && (o.inDate || t) <= t) { if ((o.inDate || t) >= lim) mi.push({ p, o, d: o.inDate || t }); else old++; }
+      if (o.outTotal && o.outDate && o.outDate < lim && o.unit !== EXPIRED_UNIT && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) old++;
+      if (o.outDate >= lim && o.outTotal && o.unit !== EXPIRED_UNIT && o.outDate && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) mo.push({ p, o, d: o.outDate });
     }));
     mi.sort((a, b) => a.d.localeCompare(b.d)); mo.sort((a, b) => a.d.localeCompare(b.d));
     Logi.missedOut = mo;
     const missRows = (arr, kind, go, txt) => arr.slice(0, 20).map(({ p, o, d }, i) => `<div class="list-row editable k-warn" ${go === 'out' && d < t ? `data-mo="${i}"` : `data-go="${go}"`}><div><div class="l-name">${kind} 예정 · ${esc(p.name)}</div><div class="l-sub">${D.short(d)}${d < t ? ' (지남)' : ''} ${esc(go === 'out' ? o.unit || '' : '')}</div></div><div class="num"><b>${fmtN(go === 'out' ? o.outTotal : o.inQty)}</b><div class="l-sub"><span class="tag plan">${txt}</span></div></div></div>`).join('') + (arr.length > 20 ? `<div class="hint" style="padding:6px 10px">외 ${arr.length - 20}건</div>` : '');
-    Logi.missHtml = { in: missRows(mi, '입고', 'in', '입고 미처리'), out: missRows(mo, '출고', 'out', '출고 미처리'), nIn: mi.length, nOut: mo.length };
+    Logi.missHtml = { in: missRows(mi, '입고', 'in', '입고 미처리'), out: missRows(mo, '출고', 'out', '출고 미처리'), nIn: mi.length, nOut: mo.length, old };
     Logi.drawMissed();
     const outs = [];
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
