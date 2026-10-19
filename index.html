@@ -842,7 +842,7 @@ const Names = {
     Names.products = products || []; Names.byName = new Map(); Names.aliasIdx = new Map();
     Names.products.forEach(p => {
       Names.byName.set(Names.norm(p.name), p); p._f = Names.feat(p.name);
-      (p.aliases || []).forEach(a => { const k = Names.norm(a); if (!Names.aliasIdx.has(k)) Names.aliasIdx.set(k, []); Names.aliasIdx.get(k).push(p); });
+      (p.aliases || []).forEach(a => { const k = Names.norm(a); if (!Names.aliasIdx.has(k)) Names.aliasIdx.set(k, []); if (!Names.aliasIdx.get(k).includes(p)) Names.aliasIdx.get(k).push(p); });
     });
     Names.units = units || []; Names.unitMap = new Map(Names.units.map(u => [u.name, u]));
     Names.cache = new Map();
