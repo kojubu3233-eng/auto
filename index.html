@@ -2758,7 +2758,13 @@ const Sync = {
     const used = new Set(), ops = [];
     items.forEach(({ r, conf }) => {
       if (conf === null || conf === undefined) return;
-      const lr = Sync.ledgerFor(r, used); if (!lr || used.has(lr) || !lr.isOut || lr.unit === EXPIRED_UNIT) return;
+      const lr = Sync.ledgerFor(r, used);
+      if (!lr) {   // 재고수불대장에 아직 없는 줄(신제품 포함)은 확정량으로 새로 등록한다
+        const lp = r.delDate && !/^(hist|plan):/.test(r.id) ? LedgerData.target(r.name) : null; if (!lp) return;
+        ops.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: r.id, status: '출고확정', sorted: true, fields: { outDate: r.delDate, outMain: conf, outSample: Predict.sample(lp, r.name), unit: r.unit } });
+        return;
+      }
+      if (used.has(lr) || !lr.isOut || lr.unit === EXPIRED_UNIT) return;
       used.add(lr);
       if (lr.outMain === conf && lr.status === '출고확정' && lr.id === r.id) return;
       const op = { ...Ledger.ref(lr), op: 'update', id: lr.id || r.id, fields: { outMain: conf } };
