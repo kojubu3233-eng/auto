@@ -2880,13 +2880,20 @@ const Sync = {
       add++;
     });
     moves.sort((a, b) => a.lr.sheet.localeCompare(b.lr.sheet) || b.lr.row - a.lr.row).forEach(m => ops.push(...m.mv));   // 줄 옮기기(삭제+다시 넣기)는 아래 줄부터 처리해 행 번호가 밀리지 않게 한다
-    return { ops, add, link, fix, same, miss: [...miss], hold };
+    // 반대 방향: 재고수불대장에만 있는 납품 줄(직접 입력)은 확정량 입력에 기록을 만든다
+    const rev = [];
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {
+      if (!o.isOut || !o.outDate || o.outDate < from || !o.outMain || !String(o.unit || '').trim() || o.unit === EXPIRED_UNIT || used.has(o) || (o.id && Hist.byId.has(o.id))) return;
+      if (Sync.recFor(o)) return;
+      if (p.product) rev.push({ o, p });
+    }));
+    return { ops, add, link, fix, same, miss: [...miss], hold, rev };
   },
   async run() {
     if (!LedgerData.raw) return toast('재고수불대장을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요');
     const pl = Sync.plan();
-    if (!pl.ops.length) return toast(`맞출 내용이 없습니다 (최근 7일 이후 납품 ${pl.same}건이 재고수불대장과 일치합니다)${pl.hold.length ? `\n확인 필요(보류) ${pl.hold.length}건: ${pl.hold.slice(0, 4).join(' / ')}` : ''}`, 8000);
-    if (!confirm(`최근 7일 이후 납품 건을 재고수불대장과 맞춥니다.\n\n· 재고수불대장에 없어서 새로 추가: ${pl.add}건\n· 기존 줄에 연결(중복 방지): ${pl.link}건\n· 확정량이 달라서 수정: ${pl.fix}건\n· 이미 일치: ${pl.same}건${pl.hold.length ? `\n· 같은 날짜에 부대가 다른(또는 빈) 줄이 있어 중복 방지를 위해 건너뜀: ${pl.hold.length}건 (직접 확인 필요)` : ''}${pl.miss.length ? `\n· 재고수불대장 관리 대상이 아니라 제외: ${pl.miss.join(', ')}` : ''}\n\n계속할까요?`)) return;
+    if (!pl.ops.length && !pl.rev.length) return toast(`맞출 내용이 없습니다 (최근 7일 이후 납품 ${pl.same}건이 재고수불대장과 일치합니다)${pl.hold.length ? `\n확인 필요(보류) ${pl.hold.length}건: ${pl.hold.slice(0, 4).join(' / ')}` : ''}`, 8000);
+    if (!confirm(`최근 7일 이후 납품 건을 재고수불대장과 맞춥니다.\n\n· 재고수불대장에 없어서 새로 추가: ${pl.add}건\n· 기존 줄에 연결(중복 방지): ${pl.link}건\n· 확정량이 달라서 수정: ${pl.fix}건\n· 확정량 입력에 새로 기록(재고수불대장에만 있던 건): ${pl.rev.length}건\n· 이미 일치: ${pl.same}건${pl.hold.length ? `\n· 같은 날짜에 부대가 다른(또는 빈) 줄이 있어 중복 방지를 위해 건너뜀: ${pl.hold.length}건 (직접 확인 필요)` : ''}${pl.miss.length ? `\n· 재고수불대장 관리 대상이 아니라 제외: ${pl.miss.join(', ')}` : ''}\n\n계속할까요?`)) return;
     Busy.start('재고수불대장에 반영 중입니다 (건수가 많으면 몇 분 걸릴 수 있습니다)');
     let ok = 0, fail = [];
     try {
@@ -2895,9 +2902,22 @@ const Sync = {
         res.results.forEach(r => { if (r.ok) ok++; else fail.push((r.name || r.id) + ': ' + r.reason); });
         App.applyPatch(res.patch);
       }
+      // 재고수불대장에만 있던 납품 줄 → 확정량 입력 기록 생성 (ID가 없는 줄은 새 ID를 붙여 연결)
+      for (let i = 0; i < pl.rev.length; i += 20) {
+        const part = pl.rev.slice(i, i + 20), rows = [], lops = [], recs = [];
+        part.forEach(({ o, p }, k) => {
+          const id = o.id || `WEB${Date.now()}${i + k}`, nm = p.product.name, pk = p.product.pack, conf = o.status !== '출고예정', ea = o.outMain, kg = pk ? Math.round(ea * pk * 100) / 100 : ea, ut = App.prefs.unitType[nm] || 'kg';
+          rows.push({ values: [id, o.outDate, p.product.category || '', nm, conf ? '' : ea, conf ? '' : kg, '', '', '', o.unit, '', '', '', ut, ''], ...(conf ? { confEa: ea, confKg: kg } : {}) });
+          if (!o.id) lops.push({ ...Ledger.ref(o), op: 'update', id, fields: {} });
+          recs.push({ id, src: 'plan', delDate: o.outDate, mealDate: '', cat: p.product.category || '', name: nm, unit: o.unit, planEa: conf ? null : ea, planKg: conf ? null : kg, confEa: conf ? ea : null, confKg: conf ? kg : null, price: p.product.price || null, unitType: ut, simple: null });
+        });
+        const res = await Api.post('ledger', { action: 'planSave', rows, ledgerOps: lops });
+        recs.forEach(r => { Hist.derive(r); Hist.records.push(r); }); Hist.reindex(); ok += recs.length;
+        if (res && res.patch) App.applyPatch(res.patch);
+      }
     } catch (e) { fail.push(e.message); }
     finally { Busy.end(); }
-    await App.reloadLedger(); App.refreshViews();
+    await App.reloadLedger(); try { Confirm.render(); } catch (e) {} App.refreshViews();
     toast(`재고수불대장 ${ok}건 반영${fail.length ? `\n실패 ${fail.length}건: ${fail.slice(0, 3).join(' / ')}` : ''}`, 8000);
     if (ok) Alerts.add('재고수불대장 맞춤', `자동화시스템과 비교해 추가 ${pl.add}건 · 연결 ${pl.link}건 · 확정량 수정 ${pl.fix}건을 반영했습니다`);
   }
