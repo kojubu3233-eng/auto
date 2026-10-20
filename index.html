@@ -1165,8 +1165,10 @@ function makeLedgerData() {
   forProduct(name) { const pr = Names.product(name) || (Names.resolve(name) || {}).product, pn = pr ? pr.name : name; return L.products.filter(p => p.product && p.product.name === pn); },   // 표준 탭과 두부류·떡류 같은 단순 기록 탭 모두 포함
   // 재고수불대장에 넣을 품목(탭·이름): 이미 있으면 그 품목, 신제품이면 같은 구분 제품이 가장 많은 탭에 새로 만든다. 맞는 곳이 없으면 null
   target(name) {
-    const c = L.forProduct(name).sort((a, b) => b.rows.length - a.rows.length)[0]; if (c) return c;
+    const fix = FORCE_SHEET[name];   // 품목 구분과 상관없이 정해진 탭에 넣는 제품 (예: 깐쇼새우 → 범용제품)
+    const c = L.forProduct(name).filter(p => !fix || p.sheet === fix).sort((a, b) => b.rows.length - a.rows.length)[0]; if (c) return c;
     const pr = Names.product(name) || (Names.resolve(name) || {}).product; if (!pr) return null;
+    if (fix && L.products.some(l => l.sheet === fix)) return { sheet: fix, name: pr.name, product: pr, rows: [] };
     if (pr.category === '어묵') return null;   // 코주부 어묵류는 재고수불대장 관리 대상이 아니므로 새로 만들지 않는다 (이미 등록된 어묵바 등은 위에서 기존 품목으로 찾는다)
     // 품목정보의 구분 → 같은 구분의 재고수불대장 탭 (어묵·맛살처럼 전용 탭이 없는 구분은 범용제품)
     const MAP = { 국: '국탕류', 두부: '두부류', 떡: '떡류', 알가공품: '유지식물류(계란말이)', 수산물: '수산물가공품', 양념육: '식육가공품', 맛살: '범용제품' };
@@ -1178,6 +1180,7 @@ function makeLedgerData() {
 };
  return L;
 }
+const FORCE_SHEET = { '깐쇼새우': '범용제품' };
 const LedgerData = makeLedgerData();
 const dueDays = () => (App.settings && App.settings.dueSoonDays) || 30;
 const CARRY_PENDING = new Set(['입고예정', '입고결정', '출고예정', '출고확정']);
