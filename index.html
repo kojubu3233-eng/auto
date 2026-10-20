@@ -2881,6 +2881,7 @@ const Sync = {
         ops.push(op); if (qtyDiff) fix++; else link++; return;
       }
       const lp = LedgerData.target(r.name); if (!lp) { miss.add(r.name); return; }
+      if (lp.type && lp.type !== 'standard') { hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (${lp.sheet} 탭은 직접 입력)`); return; }   // 단순 기록 탭(범용제품 등)은 자동으로 넣어도 줄이 생기지 않아 반복 시도만 하게 되므로 건너뛴다
       if (Sync.ambiguous(r, used)) { hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)}`); return; }
       ops.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: r.id, status: conf ? '출고확정' : '출고예정', sorted: true, fields: { outDate: r.delDate, outMain: qty, outSample: Predict.sample(lp, r.name), unit: r.unit } });
       add++;
