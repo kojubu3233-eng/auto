@@ -323,6 +323,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 <div id="loadError" class="banner hidden" style="background:var(--danger-soft);color:var(--danger);border-color:#E9D9D6"><span id="loadErrorText"></span><button class="btn sm danger" onclick="App.reload(true)">다시 시도</button></div>
 <div id="alertBar" class="alert-bar hidden"></div>
 <div id="alertBar2" class="alert-bar hidden"></div>
+<div id="syncBar" class="alert-bar hidden" style="background:#FEF3F2;border-color:#F04438"></div>
 <div id="linkBanner" class="banner hidden"><span id="linkBannerText"></span><button class="btn sm" onclick="Link.open()">품명 연결</button></div>
 
 <!-- 홈 -->
@@ -1269,6 +1270,7 @@ const App = {
     App.rendered = {};
     Link.updateBanner();
     Alerts.render();
+    Sync.bar();
     App.renderTab(App.tab);
   },
   show(tab) {
@@ -2864,7 +2866,7 @@ const Sync = {
   },
   // 오늘 −7일 이후 납품 건을 재고수불대장과 비교한다: 없는 줄은 추가, ID 없는 줄은 연결, 확정량이 다르면 맞춘다
   plan() {
-    const from = D.add(D.today(), -7), used = new Set(), ops = [], moves = [], miss = new Set(), hold = []; let add = 0, link = 0, fix = 0, same = 0;
+    const from = D.add(D.today(), -7), used = new Set(), ops = [], moves = [], miss = new Set(), hold = [], L = { add: [], link: [], fix: [] }; let add = 0, link = 0, fix = 0, same = 0;
     const recs = Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate >= from && (r.planEa || r.confEa)).sort((a, b) => a.delDate.localeCompare(b.delDate)), match = new Map();
     recs.forEach(r => { const lr = Sync.ledgerFor(r, used); if (lr) { used.add(lr); match.set(r, lr); } });   // 1단계: 모든 건의 짝을 먼저 정해 둔다 (같은 날짜 다른 부대 건이 서로의 짝을 가로채지 않도록)
     recs.forEach(r => {
@@ -2873,20 +2875,20 @@ const Sync = {
         if (lr.outDate !== r.delDate) {   // 납품일이 달라진 건: 수량·부대가 같을 때만 같은 건으로 보고 새 납품일로 옮긴다 (다르면 잘못 연결된 것이므로 보류)
           const qtyOk = [r.planEa, r.confEa].filter(x => x).some(q => q === lr.outMain || q === lr.outTotal), unitOk = Sync.unitEq(lr.unit, r.unit) || !String(lr.unit || '').trim();
           const mv = qtyOk && unitOk ? Sync.moveOps(lr, r, lr.outMain, lr.status === '출고완료' ? '출고완료' : (conf ? '출고확정' : lr.status || '출고예정')) : null;
-          if (mv) { moves.push({ lr, mv }); link++; } else hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (연결 확인 필요)`);
+          if (mv) { moves.push({ lr, mv }); link++; L.link.push(`${r.name} ${D.short(lr.outDate)}→${D.short(r.delDate)} ${r.unit} (납품일 변경 반영)`); } else hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (연결 확인 필요)`);
           return;
         }
         const needLink = lr.id !== r.id, qtyDiff = conf && lr.outMain !== r.confEa && !(lr.lines && lr.lines.length);   // 출고처리한 줄은 실제 출고 수량을 따른다
         if (!needLink && !qtyDiff) { same++; return; }
         const op = { ...Ledger.ref(lr), op: 'update', id: r.id, fields: qtyDiff ? { outMain: r.confEa } : {} };
         if (conf && lr.status !== '출고완료') op.status = '출고확정';
-        ops.push(op); if (qtyDiff) fix++; else link++; return;
+        ops.push(op); if (qtyDiff) { fix++; L.fix.push(`${r.name} ${D.short(r.delDate)} ${r.unit}: 장부 ${fmtN(lr.outMain)} → 확정 ${fmtN(r.confEa)}`); } else { link++; L.link.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (연결 안 됨)`); } return;
       }
       const lp = LedgerData.target(r.name); if (!lp) { miss.add(r.name); return; }
-      if (lp.type && lp.type !== 'standard') { hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (${lp.sheet} 탭은 직접 입력)`); return; }   // 단순 기록 탭(범용제품 등)은 자동으로 넣어도 줄이 생기지 않아 반복 시도만 하게 되므로 건너뛴다
+      if (lp.sheet === '범용제품' && !Sync.itemOk()) { hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (${lp.sheet} 탭은 직접 입력)`); return; }   // 단순 기록 탭(범용제품 등)은 자동으로 넣어도 줄이 생기지 않아 반복 시도만 하게 되므로 건너뛴다
       if (Sync.ambiguous(r, used)) { hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)}`); return; }
       ops.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: r.id, status: conf ? '출고확정' : '출고예정', sorted: true, fields: { outDate: r.delDate, outMain: qty, outSample: Predict.sample(lp, r.name), unit: r.unit } });
-      add++;
+      add++; L.add.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)}`);
     });
     moves.sort((a, b) => a.lr.sheet.localeCompare(b.lr.sheet) || b.lr.row - a.lr.row).forEach(m => ops.push(...m.mv));   // 줄 옮기기(삭제+다시 넣기)는 아래 줄부터 처리해 행 번호가 밀리지 않게 한다
     // 반대 방향: 재고수불대장에만 있는 납품 줄(직접 입력)은 확정량 입력에 기록을 만든다
@@ -2896,7 +2898,40 @@ const Sync = {
       if (Sync.recFor(o)) return;
       if (p.product) rev.push({ o, p });
     }));
-    return { ops, add, link, fix, same, miss: [...miss], hold, rev };
+    return { ops, add, link, fix, same, miss: [...miss], hold, rev, L };
+  },
+  // 재고수불대장 웹앱이 범용제품(품목 블록) 탭 입력을 지원하는 새 코드인지 (배포 안 됐으면 자동 추가하지 않는다)
+  itemOk: () => String((App.ledger && App.ledger.scriptVer) || '') >= '2026-10-20-itemblock',
+  // 두 시트를 비교해 남은 누락·불일치를 모은다 (재고수불대장에 없음 / 확정량 입력에 없음 / 수량 불일치 / 연결 필요 / 사람이 확인할 건 / 같은 ID 중복)
+  audit() {
+    if (!LedgerData.raw || !Hist.records.length) return null;
+    const pl = Sync.plan(), dup = [], seen = new Map();
+    LedgerData.products.forEach(p => p.rows.forEach(o => { if (!o.isOut || !o.id) return; if (seen.has(o.id)) dup.push(`${p.name} ${D.short(o.outDate)} ${o.unit || ''} (${p.sheet} ${seen.get(o.id)}행·${o.row}행 같은 ID)`); else seen.set(o.id, o.row); }));
+    const g = [
+      ['재고수불대장에 없음', pl.L.add], ['확정량 입력에 없음 (재고수불대장에만 있음)', pl.rev.map(x => `${x.p.name} ${D.short(x.o.outDate)} ${x.o.unit} ${fmtN(x.o.outMain)}`)],
+      ['확정량과 수량이 다름', pl.L.fix], ['연결이 안 돼 있음', pl.L.link], ['직접 확인 필요', pl.hold], ['같은 건이 두 줄(중복)', dup]
+    ].filter(x => x[1].length);
+    return { groups: g, total: g.reduce((a, x) => a + x[1].length, 0), sig: g.map(x => x[0] + x[1].join('|')).join('#') };
+  },
+  barTimer: 0,
+  bar() {   // 누락·불일치가 있으면 모든 탭 위쪽에 빨간 경고를 띄운다
+    clearTimeout(Sync.barTimer);
+    Sync.barTimer = setTimeout(() => {
+      const el = $('syncBar'); if (!el) return;
+      let a = null; try { a = Sync.audit(); } catch (e) { a = null; }
+      Sync.last = a;
+      if (!a || !a.total) { el.classList.add('hidden'); return; }
+      el.classList.remove('hidden');
+      el.innerHTML = `<div class="row between"><b style="color:#B42318">⚠ 확정량 입력 ↔ 재고수불대장 누락·불일치 ${a.total}건</b><span class="row"><button class="btn light sm" onclick="Sync.detail()">자세히</button><button class="btn ok sm" onclick="Sync.run()">지금 맞추기</button></span></div>`;
+      if (a.sig !== Sync.shownSig) { Sync.shownSig = a.sig; Sync.detail(); }   // 새로 생긴 누락은 팝업으로 바로 알린다
+    }, 800);
+  },
+  detail() {
+    const a = Sync.last; if (!a) return;
+    $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:640px;max-height:80vh;overflow:auto">
+      <div class="row between mb12"><h2>⚠ 연동 누락·불일치 ${a.total}건</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
+      ${a.groups.map(([t, l]) => `<div class="mb12"><b>${esc(t)} (${l.length}건)</b><div class="hint" style="margin-top:4px">${l.slice(0, 40).map(esc).join('<br>')}${l.length > 40 ? `<br>… 외 ${l.length - 40}건` : ''}</div></div>`).join('')}
+      <div class="row mt12" style="justify-content:flex-end"><button class="btn light" onclick="Confirm.closeModal()">닫기</button><button class="btn ok" onclick="Confirm.closeModal();Sync.run()">지금 맞추기</button></div></div></div>`;
   },
   async run(auto) {
     if (Sync.busy) return;
