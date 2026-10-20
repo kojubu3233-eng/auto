@@ -2881,7 +2881,7 @@ const Sync = {
         }
         const needLink = lr.id !== r.id, qtyDiff = conf && lr.outMain !== r.confEa && !(lr.lines && lr.lines.length);   // 출고처리한 줄은 실제 출고 수량을 따른다
         if (!needLink && !qtyDiff) { same++; return; }
-        const op = { ...Ledger.ref(lr), op: 'update', id: r.id, fields: qtyDiff ? { outMain: r.confEa } : {} };
+        const op = { ...Ledger.ref(lr), op: 'update', id: r.id, expect: lr.id || '', fields: qtyDiff ? { outMain: r.confEa } : {} };   // expect: 그 줄에 지금 붙어 있는 ID (서버가 줄이 바뀌지 않았는지 확인)
         if (conf && lr.status !== '출고완료') op.status = '출고확정';
         ops.push(op); if (qtyDiff) { fix++; L.fix.push(`${r.name} ${D.short(r.delDate)} ${r.unit}: 장부 ${fmtN(lr.outMain)} → 확정 ${fmtN(r.confEa)}`); } else { link++; L.link.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (연결 안 됨)`); } return;
       }
