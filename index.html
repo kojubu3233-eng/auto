@@ -1534,6 +1534,9 @@ const Predict = {
     os.innerHTML = `<div class="s-ea">${fmtN(simple)}<span class="u">ea</span></div><div class="s-kg">${simpleKg === null ? '-' : fmtN(simpleKg) + '<span class="u">kg</span>'}</div>`;
     os.title = `${utype === 'kg' ? `총소요량 ${fmtN(req, 2)}kg ÷ 포장규격 ${spec}kg` : `총소요량 ${fmtN(req)}ea`} (반올림)` + (hcNote ? ' · ' + hcNote : '');
   },
+  // 기준량 × 급식인원으로 계산해 입력한 건은 그 값을 비고에 남겨 확정량 입력에서도 확인할 수 있게 한다
+  stripCalc: t => String(t || '').replace(/\[산출[^\]]*\]\s*/g, ''),   // 납품 서류·엑셀에는 산출 근거를 내보내지 않는다
+  calcNote: r => r.base && r.hc ? `[산출 기준량 ${fmtN(r.base)} × ${fmtN(r.hc)}명]` : '',
   rowData(tr) {
     const q = c => tr.querySelector('.' + c);
     const name = q('g-name').value.trim(); if (!name || tr.dataset.ready !== '1') return null;
@@ -1654,8 +1657,8 @@ const Predict = {
     if (!confirm(msg + '\n\n계속할까요?')) return;
     Busy.start('예정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', '', x.r.utype, x.r.simple] })), ledgerOps });
-      recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
+      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', Predict.calcNote(x.r), x.r.utype, x.r.simple] })), ledgerOps });
+      recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, note: Predict.calcNote(x.r), price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
       App.rendered.confirm = false;
       App.afterWrite(res);
@@ -2013,7 +2016,7 @@ const Confirm = {
       put('J', r.unit); put('K', pr, { fmt: NUM });
       const L = put('L', null, { fmt: NUM }); if (pr) L.value = { formula: `E${n}*K${n}`, result: l || 0 };
       const M = put('M', null, { fmt: NUM }); if (pr && r.confEa !== null && r.confEa !== undefined) M.value = { formula: `G${n}*K${n}`, result: m || 0 };
-      put('N', ((Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id)) ? Confirm.dirty.get(r.id).note : r.note) || '').alignment = { horizontal: 'left', vertical: 'middle' };
+      put('N', Predict.stripCalc((Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id)) ? Confirm.dirty.get(r.id).note : r.note)).alignment = { horizontal: 'left', vertical: 'middle' };
       put('O', ''); put('P', '');
     });
     ws.autoFilter = `A5:P${last}`;
@@ -2042,7 +2045,7 @@ const Zone = {
   info(r) { const u = Names.unitMap.get(r.unit) || {}; return { reg: u.region || '', wh: u.warehouse || '' }; },
   rec(r) {   // 확정량 화면과 같은 저장 데이터에서 한 줄을 만든다 (미저장 입력값은 반영하지 않는다)
     const i = Zone.info(r), p = Names.product(r.name);
-    return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
+    return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: Predict.stripCalc(r.note) };
   },
   base() { const m = $('zoneMonth').value, f = DF.get(document.querySelector('.z-from')), t = DF.get(document.querySelector('.z-to')); return Hist.records.filter(r => r.delDate && ((f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m)))).map(Zone.rec); },
   filtered(all) {
