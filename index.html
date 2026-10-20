@@ -525,7 +525,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       </div>
       <div id="inPastNote" class="mb8"></div>
       <div class="table-wrap" style="max-height:none"><table class="grid m-card"><thead><tr>
-        <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>예정 수량</th><th>입고 수량</th><th></th>
+        <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>예정 수량</th><th>입고 수량</th><th>소비기한</th><th>납품기한</th><th></th>
       </tr></thead><tbody id="inPlanBody"></tbody></table></div>
       <div class="row mt8" style="justify-content:flex-end"><button class="btn ok" onclick="Logi.completeIn()">체크한 건 입고 완료</button></div>
     </div>
@@ -2955,6 +2955,8 @@ const Logi = {
       const tr = e.target.closest('tr'); if (!tr) return;
       if (e.target.classList.contains('pdate')) return Logi.changeInDate(+tr.dataset.i, DF.get(e.target));
       mainOf(tr).querySelector('.pk').checked = true;
+      if (!e.target.classList.contains('pexp')) return;
+      tr.querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), Logi.plans.in[+tr.dataset.i].p.product));
     });
     ipb.addEventListener('click', e => {
       const act = e.target.dataset && e.target.dataset.act; if (!act) return;
@@ -3167,7 +3169,7 @@ const Logi = {
   inLineHtml(i, p, x = {}, d = '') {
     return `<tr class="plan-extra" data-i="${i}"><td></td><td colspan="3" class="hint" style="text-align:right">└ 같은 납품의 다른 입고일 (${esc(p.name)})</td>
       <td>${DF.html('pdate2', x.date || d || '')}</td><td></td>
-      <td><input type="number" class="pq num" value="${x.qty || ''}" style="width:80px"></td><td><button type="button" class="btn sm light" data-act="delline">삭제</button></td></tr>`;
+      <td><input type="number" class="pq num" value="${x.qty || ''}" style="width:80px"></td><td>${DF.html('pexp', x.exp || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp, p.product))}</td><td><button type="button" class="btn sm light" data-act="delline">삭제</button></td></tr>`;
   },
   addInLine(tr) {
     const i = +tr.dataset.i, it = Logi.plans.in[i]; if (!it) return;
@@ -3198,12 +3200,12 @@ const Logi = {
     items.sort((a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name));
     Logi.plans = Logi.plans || {}; Logi.plans.in = items;
     $('inPastNote').innerHTML = past && !showPast ? `<span class="tag danger">입고일이 지났는데 입고 완료 처리가 안 된 건 ${past}건</span> <span class="hint">실제로 받았다면 위의 '입고일이 지난 미완료 건도 표시'를 체크해 입고 완료를 눌러야 재고에 들어갑니다</span>` : '';
-    if (!items.length) { body.innerHTML = '<tr><td colspan="8" class="empty">입고할 예정 건이 없습니다 (재고수불대장에서 입고결정을 체크하면 나타납니다)</td></tr>'; return; }
+    if (!items.length) { body.innerHTML = '<tr><td colspan="10" class="empty">입고할 예정 건이 없습니다 (재고수불대장에서 입고결정을 체크하면 나타납니다)</td></tr>'; return; }
     body.innerHTML = items.map(({ p, o, d, und }, i) => {
-      const info = p.product, dr = Logi.inDraft[Logi.inKey(o)] || {};
+      const info = p.product, dr = Logi.inDraft[Logi.inKey(o)] || {}, exp = dr.exp !== undefined ? dr.exp : (o.expiry || '');
       return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}<div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${DF.html('pdate', d)}</td><td class="num">${fmtN(o.inQty)}</td>
-        <td><input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px"></td>
+        <td><input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px"></td><td>${DF.html('pexp', exp, 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</td>
         <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x, d)).join('');
     }).join('');
   },
@@ -3213,17 +3215,17 @@ const Logi = {
       <label>품명</label><span class="ac-wrap"><input type="text" id="aiName" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
       <label>입고일</label><span id="aiDate"></span>
       <label>입고 수량</label><input type="number" id="aiQty" style="width:140px">
-      <div></div><div class="hint">소비기한은 재고수불대장의 [소비기한] 칸에서 입력합니다</div>
+      <label>소비기한</label><span id="aiExp"></span>
 `, Logi.saveAddIn);
-    DF.mount($('aiDate'), 'ai-date', D.today());
+    DF.mount($('aiDate'), 'ai-date', D.today()); DF.mount($('aiExp'), 'ai-exp', '', 'future');
     AC.bind($('aiName'), AC.products);
   },
   async saveAddIn() {
-    const name = $('aiName').value.trim(), date = DF.get(document.querySelector('.ai-date')) || D.today(), qty = num($('aiQty').value), exp = '';
+    const name = $('aiName').value.trim(), date = DF.get(document.querySelector('.ai-date')) || D.today(), qty = num($('aiQty').value), exp = DF.get(document.querySelector('.ai-exp'));
     if (!name || !(qty > 0)) return toast('품명과 입고 수량을 입력하세요');
     const lp = LedgerData.forProduct(name).filter(p => p.type === 'standard').sort((a, b) => b.rows.length - a.rows.length)[0];
     if (!lp) return toast(`재고수불대장에서 '${name}' 품목을 찾지 못했습니다. 품명을 확인하세요`);
-    const d = date > D.today() ? D.today() : date, fields = { inDate: d, inQty: qty };
+    const d = date > D.today() ? D.today() : date, fields = { inDate: d, inQty: qty, expiry: exp };
     const op = { op: 'insert', sheet: lp.sheet, name: lp.name, company: lp.company, id: 'L' + Date.now().toString(36).toUpperCase(), status: '입고완료', sorted: true, fields };
     if (await Logi.send('in', [op], [{ ts: new Date().toISOString(), kind: 'in', sheet: lp.sheet, name: lp.name, company: lp.company, date: d, qty, unit: '', expiry: exp, status: '입고완료', fields, id: op.id }])) { Confirm.closeModal(); Logi.renderInPlans(); Logi.renderToday(); }
   },
@@ -3237,22 +3239,24 @@ const Logi = {
     Logi.collectIn();
     const body = $('inPlanBody'), trs = [...body.querySelectorAll('tr.plan-main')].filter(tr => tr.querySelector('.pk').checked);
     if (!trs.length) return toast('입고 완료할 건을 체크하세요');
-    const ops = [], entries = [], today = D.today(), autoDec = [];
+    const ops = [], entries = [], today = D.today(), autoDec = []; let noExp = 0;
     for (const tr of trs) {
       const i = +tr.dataset.i, { p, o, und } = Logi.plans.in[i]; if (und) autoDec.push(p.name);
       const date0 = DF.get(tr.querySelector('.pdate')) || o.inDate || today, date = date0 > today ? today : date0;   // '입고 완료'는 실제로 받은 것이므로 입고일이 오늘 이후면 오늘로 기록한다
-      const cap = d => (d && d <= today ? d : today), lines = [{ qty: num(tr.querySelector('.pq').value), exp: '', date }];
-      body.querySelectorAll(`tr.plan-extra[data-i="${i}"]`).forEach(x => lines.push({ qty: num(x.querySelector('.pq').value), exp: '', date: cap(DF.get(x.querySelector('.pdate2'))) || date }));
+      const cap = d => (d && d <= today ? d : today), lines = [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')), date }];
+      body.querySelectorAll(`tr.plan-extra[data-i="${i}"]`).forEach(x => lines.push({ qty: num(x.querySelector('.pq').value), exp: DF.get(x.querySelector('.pexp')), date: cap(DF.get(x.querySelector('.pdate2'))) || date }));
       if (lines.some(l => !l.qty)) return toast(`${p.name}: 입고 수량을 입력하세요 (필요 없는 한 줄은 삭제하세요)`);
       const total = lines.reduce((a, l) => a + l.qty, 0);
       if (total !== o.inQty && !confirm(`${p.name}: 예정 수량 ${fmtN(o.inQty)}개와 입고 수량 합계 ${fmtN(total)}개가 다릅니다.\n입고 수량 ${fmtN(total)}개로 처리할까요?`)) return;
+      noExp += lines.filter(l => !l.exp).length;
       lines.forEach((l, k) => {
-        const fields = { inDate: l.date, inQty: l.qty }, status = '입고완료';   // 소비기한은 건드리지 않는다 (재고수불대장 [소비기한] 칸에서 입력)
+        const fields = { inDate: l.date, inQty: l.qty, expiry: l.exp }, status = '입고완료';
         if (k === 0 && o.comb) fields.inState = '입고완료';   // 납품 줄은 출고 상태를 그대로 두고 입고 쪽만 완료로 바꾼다
         ops.push(k === 0 ? (o.comb ? { ...Ledger.ref(o), op: 'update', fields } : { ...Ledger.ref(o), op: 'update', status, fields }) : { op: 'insert', sheet: p.sheet, name: p.name, company: o.company || p.company, id: 'L' + Date.now().toString(36).toUpperCase() + ops.length, status, sorted: true, fields });
         entries.push({ ts: new Date().toISOString(), kind: 'in', sheet: p.sheet, name: p.name, company: p.company, date: l.date, qty: l.qty, unit: '', expiry: l.exp, status, fields, id: ops[ops.length - 1].id || o.id || '' });
       });
     }
+    if (noExp && !confirm(`소비기한이 없는 입고가 ${noExp}건 있습니다. 소비기한이 없으면 납품기한을 계산할 수 없습니다.\n(재고수불대장의 [소비기한] 칸에서 나중에 입력할 수도 있습니다)\n그대로 입고 완료할까요?`)) return;
     const keys = trs.map(tr => Logi.inKey(Logi.plans.in[+tr.dataset.i].o));   // 저장 뒤 목록이 다시 그려지므로 미리 키를 잡아 둔다
     if (await Logi.send('in', ops, entries)) { keys.forEach(k => delete Logi.inDraft[k]); if (autoDec.length) Alerts.add('입고결정 자동', `입고결정 전이던 ${autoDec.join(', ')} 건이 입고 처리되어 입고결정·입고완료로 함께 반영되었습니다 (재고수불대장에서도 입고완료로 표시)`); Logi.renderInPlans(); }
   },
