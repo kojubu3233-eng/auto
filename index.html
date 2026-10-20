@@ -1860,14 +1860,14 @@ const Confirm = {
     if (!del || !name || !(qty > 0)) return toast('납품일·품명·예정량을 모두 입력하세요');
     const pack = (Names.product(name) || {}).pack || Confirm.pack(r);
     const kg = pack ? Math.round(qty * pack * 100) / 100 : r.planKg;
-    const lr = Confirm.ledgerRow(id), ledgerOps = [];
+    const lr = Confirm.ledgerRow(id) || Sync.ledgerFor(r, new Set()), ledgerOps = [];   // ID로 연결된 줄이 없으면(옛 줄) 같은 품목·납품일·부대·수량 줄을 찾아 함께 고친다
     if (lr) {
       const nameChanged = name !== r.name, dateChanged = del !== r.delDate;
       if (nameChanged || dateChanged) {   // 날짜·품명이 바뀌면 품목 안 날짜 순서에 맞게 다시 넣는다
         const lp = nameChanged ? LedgerData.forProduct(name).sort((a, b) => b.rows.length - a.rows.length)[0] : LedgerData.byKey.get(lr.sheet + '|' + lr.name);
         if (!lp) return toast(`재고수불대장에서 '${name}' 품목을 찾지 못했습니다. 품명을 확인하세요`);
         const keepQty = ['출고확정', '출고완료'].includes(lr.status) && lr.outMain ? lr.outMain : qty;
-        ledgerOps.push({ op: 'delete', id, sheet: lr.sheet, name: lr.name, row: lr.row });
+        ledgerOps.push({ op: 'delete', id: lr.id || id, sheet: lr.sheet, name: lr.name, row: lr.row, chk: { u: lr.unit || '' } });
         ledgerOps.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id, status: lr.status || '출고예정', sorted: true, fields: { outDate: del, outMain: keepQty, outSample: lr.outSample || 0, unit: lr.unit || r.unit, expiry: lr.expiry || '' } });
       } else if (!['출고확정', '출고완료'].includes(lr.status)) {
         ledgerOps.push({ op: 'update', id, sheet: lr.sheet, name: lr.name, row: lr.row, fields: { outMain: qty } });
@@ -2449,7 +2449,7 @@ const Ledger = {
     if (!inDate && !inQty) f.inState = '';
     return f;
   },
-  ref(o) { return { id: o.id || '', sheet: o.sheet, row: o.row, name: o.name }; },
+  ref(o) { return { id: o.id || '', sheet: o.sheet, row: o.row, name: o.name, chk: { u: o.unit || '' } }; },   // chk: 서버가 줄 번호가 밀리지 않았는지(부대가 같은지) 확인하는 용도
   // 납품기한 초과 수량을 누르면: 그 줄 바로 아래에 '납품기한 초과' 출고 줄을 넣어 재고를 줄이고, 위 줄은 회색으로 표시한다
   async expireLot(o) {
     const p = Ledger.d().byKey.get(Ledger.key); const l = p && p.lots.find(x => x.row === o); if (!l) return;
@@ -2791,6 +2791,8 @@ const Sync = {
   // 옛 날짜 줄을 지우고 새 납품일 위치에 같은 내용으로 다시 넣는다 (품목 안 날짜 순서 유지)
   moveOps(lr, r, main, status) {
     const lp = LedgerData.byKey.get(lr.sheet + '|' + lr.name); if (!lp) return null;
+    if (lr.lines && lr.lines.length) return null;   // 출고처리 내역이 있는 줄은 옮기지 않는다
+    if (lr.inQty || lr.inDate) return [{ ...Ledger.ref(lr), op: 'update', id: lr.id || r.id, status, fields: { outDate: r.delDate, outMain: main } }];   // 입고가 같은 줄에 있으면 지우지 않고 그 자리에서 날짜만 바꾼다
     return [{ ...Ledger.ref(lr), op: 'delete', id: lr.id || '' }, { op: 'insert', sheet: lp.sheet, name: lp.name, company: lr.company, id: r.id, status, sorted: true, fields: { outDate: r.delDate, outMain: main, outSample: lr.outSample || 0, unit: lr.unit || r.unit, expiry: lr.expiry || '' } }];
   },
   // 같은 품목·납품일인데 부대가 비어 있거나 달라서 같은 건인지 알 수 없는 줄이 있으면 새로 추가하지 않고 보류한다
@@ -2839,7 +2841,12 @@ const Sync = {
     recs.forEach(r => {
       const conf = r.confEa !== null && r.confEa !== undefined, qty = conf ? r.confEa : r.planEa, lr = match.get(r);
       if (lr) {
-        if (lr.outDate !== r.delDate) { const mv = Sync.moveOps(lr, r, qty, conf ? '출고확정' : '출고예정'); if (mv) { moves.push({ lr, mv }); link++; return; } }
+        if (lr.outDate !== r.delDate) {   // 납품일이 달라진 건: 수량·부대가 같을 때만 같은 건으로 보고 새 납품일로 옮긴다 (다르면 잘못 연결된 것이므로 보류)
+          const qtyOk = [r.planEa, r.confEa].filter(x => x).some(q => q === lr.outMain || q === lr.outTotal), unitOk = Sync.unitEq(lr.unit, r.unit) || !String(lr.unit || '').trim();
+          const mv = qtyOk && unitOk ? Sync.moveOps(lr, r, lr.outMain, lr.status === '출고완료' ? '출고완료' : (conf ? '출고확정' : lr.status || '출고예정')) : null;
+          if (mv) { moves.push({ lr, mv }); link++; } else hold.push(`${r.name} ${D.short(r.delDate)} ${r.unit} ${fmtN(qty)} (연결 확인 필요)`);
+          return;
+        }
         const needLink = lr.id !== r.id, qtyDiff = conf && lr.outMain !== r.confEa && !(lr.lines && lr.lines.length);   // 출고처리한 줄은 실제 출고 수량을 따른다
         if (!needLink && !qtyDiff) { same++; return; }
         const op = { ...Ledger.ref(lr), op: 'update', id: r.id, fields: qtyDiff ? { outMain: r.confEa } : {} };
