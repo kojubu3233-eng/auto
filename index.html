@@ -1013,7 +1013,7 @@ const Hist = {
       planEa: f(x => x.includes('예정') && x.includes('개')), planKg: f(x => x.includes('예정') && x.toLowerCase().includes('kg')),
       confEa: f(x => x.includes('확정') && x.includes('개')), confKg: f(x => x.includes('확정') && x.toLowerCase().includes('kg')),
       meal: f(x => x.includes('급식')), unit: f(x => x.includes('부대')), price: f(x => x === '단가'),
-      unitType: f(x => x === '단위'), simple: f(x => x.includes('산술')), note: f(x => x === '비고')
+      unitType: f(x => x === '단위'), simple: f(x => x.includes('산술')), note: f(x => x === '비고'), basis: f(x => x === '산출근거')
     };
     let year = null, month = null;
     const at = (row, k) => c[k] < 0 ? '' : row[c[k]];
@@ -1045,7 +1045,7 @@ const Hist = {
         id: String(at(row, 'id') || '').trim() || `${src}:${r + 1}`, src, row: r + 1,
         delDate: del, mealDate: meal, rawMeal, cat: String(at(row, 'cat') || '').trim(), name, unit: normUnit(at(row, 'unit')),
         planEa: num(at(row, 'planEa')), planKg: num(at(row, 'planKg')), confEa: num(at(row, 'confEa')), confKg: num(at(row, 'confKg')),
-        note: String(at(row, 'note') ?? '').trim(), price: num(at(row, 'price')), unitType: String(at(row, 'unitType') || '').trim(), simple: num(at(row, 'simple'))
+        note: String(at(row, 'note') ?? '').trim(), basis: String(at(row, 'basis') ?? '').trim(), price: num(at(row, 'price')), unitType: String(at(row, 'unitType') || '').trim(), simple: num(at(row, 'simple'))
       };
       Hist.derive(rec); out.push(rec);
     }
@@ -1534,9 +1534,8 @@ const Predict = {
     os.innerHTML = `<div class="s-ea">${fmtN(simple)}<span class="u">ea</span></div><div class="s-kg">${simpleKg === null ? '-' : fmtN(simpleKg) + '<span class="u">kg</span>'}</div>`;
     os.title = `${utype === 'kg' ? `총소요량 ${fmtN(req, 2)}kg ÷ 포장규격 ${spec}kg` : `총소요량 ${fmtN(req)}ea`} (반올림)` + (hcNote ? ' · ' + hcNote : '');
   },
-  // 기준량 × 급식인원으로 계산해 입력한 건은 그 값을 비고에 남겨 확정량 입력에서도 확인할 수 있게 한다
-  stripCalc: t => String(t || '').replace(/\[산출[^\]]*\]\s*/g, ''),   // 납품 서류·엑셀에는 산출 근거를 내보내지 않는다
-  calcNote: r => r.base && r.hc ? `[산출 기준량 ${fmtN(r.base)} × ${fmtN(r.hc)}명]` : '',
+  // 기준량 × 급식인원으로 계산해 입력한 건은 그 값을 '산출근거' 칸(비고와 별도)에 남겨 확정량 입력의 예정량에 마우스를 올리면 보이게 한다
+  calcNote: r => r.base && r.hc ? `${fmtN(r.base)}${r.utype === 'kg' ? 'g' : '개'} × ${fmtN(r.hc)}명` : '',
   rowData(tr) {
     const q = c => tr.querySelector('.' + c);
     const name = q('g-name').value.trim(); if (!name || tr.dataset.ready !== '1') return null;
@@ -1657,8 +1656,8 @@ const Predict = {
     if (!confirm(msg + '\n\n계속할까요?')) return;
     Busy.start('예정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', Predict.calcNote(x.r), x.r.utype, x.r.simple] })), ledgerOps });
-      recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, note: Predict.calcNote(x.r), price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
+      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', '', x.r.utype, x.r.simple, Predict.calcNote(x.r)] })), ledgerOps });
+      recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, basis: Predict.calcNote(x.r), price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
       App.rendered.confirm = false;
       App.afterWrite(res);
@@ -1773,7 +1772,7 @@ const Confirm = {
       const confCls = r.confEa !== null || r.confKg !== null ? 'c-conf' : '';
       const ed = Confirm.editId === r.id;
       return `<tr data-id="${esc(r.id)}"${ed ? ' class="editing"' : ''}><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${ed ? '<span class="ie-del"></span>' : r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${ed ? `<span class="ac-wrap"><input type="text" class="ie-name" value="${esc(r.name)}" autocomplete="off" style="width:100%;min-width:150px"><span class="ac-list"></span></span>` : esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
-        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan">${ed ? `<input type="number" step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan">${fmtN(r.planKg, 2)}</td>
+        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan"${r.basis ? ` title="${esc(r.basis)}"` : ''}>${ed ? `<input type="number" step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
         <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
         <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '-')}</td>
@@ -2016,7 +2015,7 @@ const Confirm = {
       put('J', r.unit); put('K', pr, { fmt: NUM });
       const L = put('L', null, { fmt: NUM }); if (pr) L.value = { formula: `E${n}*K${n}`, result: l || 0 };
       const M = put('M', null, { fmt: NUM }); if (pr && r.confEa !== null && r.confEa !== undefined) M.value = { formula: `G${n}*K${n}`, result: m || 0 };
-      put('N', Predict.stripCalc((Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id)) ? Confirm.dirty.get(r.id).note : r.note)).alignment = { horizontal: 'left', vertical: 'middle' };
+      put('N', ((Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id)) ? Confirm.dirty.get(r.id).note : r.note) || '').alignment = { horizontal: 'left', vertical: 'middle' };
       put('O', ''); put('P', '');
     });
     ws.autoFilter = `A5:P${last}`;
@@ -2045,7 +2044,7 @@ const Zone = {
   info(r) { const u = Names.unitMap.get(r.unit) || {}; return { reg: u.region || '', wh: u.warehouse || '' }; },
   rec(r) {   // 확정량 화면과 같은 저장 데이터에서 한 줄을 만든다 (미저장 입력값은 반영하지 않는다)
     const i = Zone.info(r), p = Names.product(r.name);
-    return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: Predict.stripCalc(r.note) };
+    return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
   },
   base() { const m = $('zoneMonth').value, f = DF.get(document.querySelector('.z-from')), t = DF.get(document.querySelector('.z-to')); return Hist.records.filter(r => r.delDate && ((f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m)))).map(Zone.rec); },
   filtered(all) {
