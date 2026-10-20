@@ -322,6 +322,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 </nav>
 <div id="loadError" class="banner hidden" style="background:var(--danger-soft);color:var(--danger);border-color:#E9D9D6"><span id="loadErrorText"></span><button class="btn sm danger" onclick="App.reload(true)">다시 시도</button></div>
 <div id="alertBar" class="alert-bar hidden"></div>
+<div id="alertBar2" class="alert-bar hidden"></div>
 <div id="linkBanner" class="banner hidden"><span id="linkBannerText"></span><button class="btn sm" onclick="Link.open()">품명 연결</button></div>
 
 <!-- 홈 -->
@@ -1272,6 +1273,7 @@ const App = {
     App.tab = tab;
     document.querySelectorAll('#tabBar .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     ['home', 'predict', 'confirm', 'ledger', 'logistics'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
+    Alerts.render();
     App.renderTab(tab);
   },
   renderTab(tab) {
@@ -2175,7 +2177,7 @@ const Ledger = {
   // 화면에 보여 줄 데이터: 현재 연도는 LedgerData, 과거 연도를 고르면 그 연도 파일 데이터
   d() { return Ledger.year && Ledger.archive && Ledger.archive.year === Ledger.year ? Ledger.archive.data : LedgerData; },
   init() {
-    const from = DF.mount($('ledgerFrom'), 'l-from', D.addMonths(D.today(), -3));
+    const from = DF.mount($('ledgerFrom'), 'l-from', '');
     const to = DF.mount($('ledgerTo'), 'l-to', '');
     to.placeholder = '이후 전체';
     [from, to].forEach(i => i.addEventListener('datechange', () => { Ledger.renderList(); if (Ledger.key) Ledger.renderDetail(); }));
@@ -2239,7 +2241,7 @@ const Ledger = {
     if (toCurrent) Ledger.archive = null;
     Ledger.key = null; Ledger.sheet = ''; Ledger.due = null; Ledger.editing = null;
     $('ledgerSearch').value = ''; $('ledgerDetail').classList.add('hidden'); $('ledgerDue').classList.add('hidden');
-    Ledger.setPeriod(toCurrent ? D.addMonths(D.today(), -3) : '', '');
+    Ledger.setPeriod('', '');
     Ledger.render();
   },
 
@@ -2716,17 +2718,34 @@ const Alerts = {
     }));
     return out.sort((a, b) => a.d - b.d || a.p.name.localeCompare(b.p.name));
   },
+  // 입고결정 날짜(오늘 이전 14일 이내)가 지났는데 입고 처리가 안 된 건 / 납품일이 지났는데 출고 처리가 안 된 건
+  missed() {
+    const t = D.today(), lim = D.add(t, -14); let nIn = 0, nOut = 0;
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {
+      if (o.inSt === '입고결정' && o.inQty && (o.inDate || t) <= t && (o.inDate || t) >= lim) nIn++;
+      if (o.outDate >= lim && o.outTotal && o.unit !== EXPIRED_UNIT && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) nOut++;
+    }));
+    return { nIn, nOut };
+  },
+  // 재고수불대장 알림(입고결정 필요)은 홈·재고수불대장에서만, 입고·출고 알림(미처리·변경 내용)은 홈·물류관리에서만 보여 준다
   render() {
-    const box = $('alertBar'); if (!box) return;
-    const soon = LedgerData.raw ? Alerts.inSoon() : [], n = soon.length + Alerts.list.length;
-    box.classList.toggle('hidden', !n);
-    if (!n) { box.innerHTML = ''; return; }
-    box.innerHTML = `<div class="row between mb8"><b>🔔 알림 ${n}건</b>${Alerts.list.length ? '<button type="button" class="btn light sm" data-alert-clear>변경 알림 모두 확인</button>' : ''}</div>`
-      + soon.map(x => `<div class="alert-row warn"><b>입고결정 필요 D-${x.d}</b><span class="grow">${esc(x.p.name)} ${fmtN(x.o.inQty)}개 · 입고예정 ${D.short(x.o.inDate)} <span class="hint">재고수불대장에서 입고결정을 체크하세요 (입고일 당일에는 입고 탭에서 바로 입고처리할 수도 있습니다)</span></span></div>`).join('')
-      + Alerts.list.map(a => `<div class="alert-row"><span class="tag plan">${esc(a.kind)}</span><span class="grow">${esc(a.text)} <span class="hint">${esc(a.ts.slice(5, 16).replace('T', ' '))}</span></span><button type="button" class="btn light sm" data-alert="${a.id}">확인</button></div>`).join('');
+    const b1 = $('alertBar'), b2 = $('alertBar2'); if (!b1 || !b2) return;
+    const tab = App.tab, ready = !!LedgerData.raw;
+    const soon = ready && (tab === 'home' || tab === 'ledger') ? Alerts.inSoon() : [];
+    b1.classList.toggle('hidden', !soon.length);
+    b1.innerHTML = soon.length ? `<div class="row between mb8"><b>🔔 재고수불대장 알림 ${soon.length}건</b></div>`
+      + soon.map(x => `<div class="alert-row warn"><b>입고결정 필요 D-${x.d}</b><span class="grow">${esc(x.p.name)} ${fmtN(x.o.inQty)}개 · 입고예정 ${D.short(x.o.inDate)} <span class="hint">재고수불대장에서 입고결정을 체크하세요 (입고일 당일에는 입고 탭에서 바로 입고처리할 수도 있습니다)</span></span></div>`).join('') : '';
+    const show2 = tab === 'home' || tab === 'logistics', m = ready && show2 ? Alerts.missed() : { nIn: 0, nOut: 0 }, list = show2 ? Alerts.list : [];
+    const n = m.nIn + m.nOut + list.length;
+    b2.classList.toggle('hidden', !n);
+    b2.innerHTML = n ? `<div class="row between mb8"><b>🔔 입고·출고 알림 ${n}건</b>${list.length ? '<button type="button" class="btn light sm" data-alert-clear>변경 알림 모두 확인</button>' : ''}</div>`
+      + (m.nIn ? `<div class="alert-row warn"><b>입고 미처리</b><span class="grow">입고일이 지났는데 입고 처리가 안 된 건 ${m.nIn}건</span>${tab === 'logistics' ? '' : '<button type="button" class="btn light sm" data-alert-go>물류관리로</button>'}</div>` : '')
+      + (m.nOut ? `<div class="alert-row warn"><b>출고 미처리</b><span class="grow">납품일이 지났는데 출고 처리가 안 된 건 ${m.nOut}건</span>${tab === 'logistics' ? '' : '<button type="button" class="btn light sm" data-alert-go>물류관리로</button>'}</div>` : '')
+      + list.map(a => `<div class="alert-row"><span class="tag plan">${esc(a.kind)}</span><span class="grow">${esc(a.text)} <span class="hint">${esc(a.ts.slice(5, 16).replace('T', ' '))}</span></span><button type="button" class="btn light sm" data-alert="${a.id}">확인</button></div>`).join('') : '';
   },
   init() {
-    $('alertBar').addEventListener('click', e => {
+    $('alertBar2').addEventListener('click', e => {
+      if (e.target.closest('[data-alert-go]')) return App.show('logistics');
       const b = e.target.closest('[data-alert]'); if (b) return Alerts.dismiss(b.dataset.alert);
       if (e.target.closest('[data-alert-clear]')) Alerts.clear();
     });
