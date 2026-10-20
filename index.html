@@ -1768,17 +1768,8 @@ const Confirm = {
     const { key, dir } = Confirm.sort;
     return list.sort((a, b) => { const x = a[key] ?? '', y = b[key] ?? ''; return (typeof x === 'number' || typeof y === 'number' ? (Number(x) - Number(y)) : String(x).localeCompare(String(y))) * dir || String(a.unit).localeCompare(String(b.unit)); });
   },
-  // 예정량 마우스오버: 저장된 산출근거가 있으면 그대로, 없으면 급식인원으로 역산한 값(약)을 보여준다
-  basisOf(r) {
-    if (r.basis) return r.basis;
-    const unit = normUnit(r.unit), meal = r.mealDate || Names.counterpart(unit, r.delDate, 'delivery') || r.delDate;
-    const hc = Names.headcount(unit, meal);
-    if (!hc) return '';
-    const kgBased = r.unitType === 'kg' || (r.planKg && r.planEa && r.planKg / r.planEa >= 0.5) || (r.planKg && !r.planEa);   // kg·큰 포장은 g/인, 낱개 단위는 개/인
-    const base = kgBased ? (r.planKg || 0) * 1000 / hc : (r.planEa || 0) / hc;
-    if (!base) return '';
-    return `약 ${fmtN(base, base < 10 ? 2 : 1)}${kgBased ? 'g' : '개'} × ${fmtN(hc)}명 (역산)`;
-  },
+  // 예정량 마우스오버: 입력할 때 저장해 둔 기준량×급식인원만 보여준다 (기록이 없는 옛 건은 추정하지 않는다)
+  basisOf: r => r.basis || '',
   pack(r) { const p = Names.product(r.name); if (p && p.pack) return p.pack; if (r.planEa && r.planKg) return r.planKg / r.planEa; return null; },
   unitLabel(r) { if (r.unitType) return r.unitType; const p = Names.product(r.name); return p ? `팩(${p.pack}kg)` : '-'; },
   price(r) { return r.price ?? Names.product(r.name)?.price ?? null; },
@@ -1790,7 +1781,7 @@ const Confirm = {
       const confCls = r.confEa !== null || r.confKg !== null ? 'c-conf' : '';
       const ed = Confirm.editId === r.id;
       return `<tr data-id="${esc(r.id)}"${ed ? ' class="editing"' : ''}><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${ed ? '<span class="ie-del"></span>' : r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${ed ? `<span class="ac-wrap"><input type="text" class="ie-name" value="${esc(r.name)}" autocomplete="off" style="width:100%;min-width:150px"><span class="ac-list"></span></span>` : esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
-        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (기록 기능 도입 전에 입력한 건)')}">${ed ? `<input type="number" step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (기록 기능 도입 전에 입력한 건)')}">${fmtN(r.planKg, 2)}</td>
+        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${ed ? `<input type="number" step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
         <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
         <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '-')}</td>
