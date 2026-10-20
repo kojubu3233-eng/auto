@@ -414,6 +414,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <h2>확정량 입력</h2>
       <div class="row"><button class="btn light" onclick="Sync.run()" title="자동화시스템 시트와 재고수불대장을 비교해 빠진 출고 줄을 채우고, 확정량 차이를 맞춥니다">재고수불대장 맞추기</button><button class="btn light" onclick="Confirm.openAdd()">+ 행 추가 (급발주 등)</button><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn danger" onclick="Confirm.removeSelected()">선택 삭제</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
     </div>
+    <div id="closeBar" class="banner hidden"></div>
     <div class="buckets mb12" id="confirmStats"></div>
     <div class="controls">
       <input type="month" id="confirmMonth">
@@ -1543,6 +1544,17 @@ const Predict = {
   },
   // 기준량 × 급식인원으로 계산해 입력한 건은 그 값을 '산출근거' 칸(비고와 별도)에 남겨 확정량 입력의 예정량에 마우스를 올리면 보이게 한다
   calcNote: r => r.base && r.hc ? `${fmtN(r.base)}${r.utype === 'kg' ? 'g' : '개'} × ${fmtN(r.hc)}명` : '',
+  // 기준량 × 급식인원으로 계산한 건은 시트의 예정량 칸에 계산식 그대로 저장한다 (셀을 누르면 기준량·인원이 보인다).
+  // 계산식의 결과가 저장할 값과 다르면 값만 저장한다. 반환: [예정(개) 칸, 예정(kg) 칸]
+  planCells(r, kg, pack) {
+    if (!(r.base > 0 && r.hc > 0)) return [r.qty, kg];
+    const isKg = r.utype === 'kg', div = isKg ? r.spec : 1, mul = isKg ? r.spec : (pack || 1);
+    const eaV = Math.round(r.base * r.hc / (isKg ? 1000 : 1) / div);
+    const kgV = Math.round(eaV * mul * 100) / 100;
+    if (eaV !== r.qty || kgV !== kg) return [r.qty, kg];
+    const eaF = `ROUND(${r.base}*${r.hc}${isKg ? '/1000' : ''}${div !== 1 ? '/' + div : ''})`;
+    return [`=${eaF}`, mul === 1 ? `=${eaF}` : `=ROUND(${eaF}*${mul},2)`];
+  },
   rowData(tr) {
     const q = c => tr.querySelector('.' + c);
     const name = q('g-name').value.trim(); if (!name || tr.dataset.ready !== '1') return null;
@@ -1642,7 +1654,7 @@ const Predict = {
       const kg = r.utype === 'kg' ? Math.round(r.qty * r.spec * 100) / 100 : (p && p.pack ? Math.round(r.qty * p.pack * 100) / 100 : r.qty);
       // 행마다 저장용 ID를 한 번만 만들어 둔다 → 실패 후 다시 저장해도 중복되지 않는다
       const id = r.tr.dataset.sid || (r.tr.dataset.sid = `WEB${stamp}${D.pad(i + 1)}`);
-      return { r, id, del, meal, kg };
+      return { r, id, del, meal, kg, pack: p && p.pack };
     });
     // 같은 값의 건이 이미 저장돼 있으면 확인창에서 알려 준다 (막지는 않는다: 한 건을 똑같은 수량으로 여러 줄 쪼개는 경우가 있음)
     const dupKey = x => [x.del || x.r.date, Sync.prodName(x.r.name), Sync.uKey(x.r.unit), x.r.qty].join('|'), exist = new Map(), dups = [], recs = recsAll;
@@ -1663,7 +1675,7 @@ const Predict = {
     if (!confirm(msg + '\n\n계속할까요?')) return;
     Busy.start('예정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, x.r.qty, x.kg, '', '', x.meal, x.r.unit, '', '', '', '', x.r.utype, x.r.simple, Predict.calcNote(x.r)] })), ledgerOps });
+      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, ...Predict.planCells(x.r, x.kg, x.pack), '', '', x.meal, x.r.unit, '', '', '', '', x.r.utype, x.r.simple, Predict.calcNote(x.r)] })), ledgerOps });
       recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, basis: Predict.calcNote(x.r), price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
       App.rendered.confirm = false;
@@ -1761,6 +1773,35 @@ const Confirm = {
     MS.setup(document.querySelector('[data-ms=cat]'), '구분', opts('cat'), Confirm.sel.cat, Confirm.renderRows);
     MS.setup(document.querySelector('[data-ms=unit]'), '부대', opts('unit'), Confirm.sel.unit, Confirm.renderRows);
     Confirm.renderRows();
+    Confirm.closeBar();
+  },
+  // 월 마감: 가장 이른 달의 DB_Master 건이 모두 확정되고 말일이 지났으며 다음 달 건이 이미 있으면 '데이터' 시트로 옮기자고 안내한다
+  closable() {
+    const byM = new Map();
+    Hist.records.forEach(r => { if (r.src === 'plan' && r.delDate) { const m = r.delDate.slice(0, 7); if (!byM.has(m)) byM.set(m, []); byM.get(m).push(r); } });
+    const months = [...byM.keys()].sort(), m = months[0];
+    if (!m || months.length < 2 || !byM.get(m).every(MonthAuto.done)) return null;
+    return D.today() > D.add(D.addMonths(m + '-01', 1), -1) ? { m, n: byM.get(m).length } : null;
+  },
+  closeBar() {
+    const el = $('closeBar'), c = Confirm.closable();
+    el.classList.toggle('hidden', !c);
+    if (c) el.innerHTML = `<span>${+c.m.slice(5)}월 확정량 입력이 모두 끝났습니다 (${c.n}건). 자동화시스템 시트의 DB_Master에서 '데이터' 시트로 옮겨 정리할 수 있습니다.</span><button class="btn sm" onclick="Confirm.closeMonth('${c.m}')">${+c.m.slice(5)}월 마감</button>`;
+  },
+  async closeMonth(m) {
+    const mo = +m.slice(5), body = { action: 'archiveMonth', month: mo, year: +m.slice(0, 4) };
+    Busy.start(`${mo}월 마감 확인 중입니다`);
+    try {
+      const chk = await Api.post('ledger', { ...body, dryRun: true });
+      if (chk.blocked || chk.unconfirmed) return toast(`${mo}월 마감 불가: ${chk.blocked || `확정량이 빈 행 ${chk.unconfirmed}건 (${(chk.unconfirmedSample || []).join(', ')})`}`, 8000);
+      if (!confirm(`${mo}월 ${chk.total}건을 DB_Master에서 '데이터' 시트로 옮깁니다.\n(옮긴 뒤 복사본을 확인하고 DB_Master 행을 지웁니다. 화면에서는 그대로 조회됩니다)\n\n계속할까요?`)) return;
+      $('busyText').textContent = `${mo}월 데이터를 옮기는 중입니다`;
+      const res = await Api.post('ledger', body);
+      if (res.blocked) return toast(`${mo}월 마감 불가: ${res.blocked}`, 8000);
+      toast(`${mo}월 ${res.moved + (res.alreadyThere || 0)}건을 '데이터' 시트로 옮겼습니다`, 6000);
+      await App.reloadBoot();
+    } catch (e) { toast('월 마감 실패: ' + e.message + '\n(복사본 확인에 실패하면 원본은 지우지 않습니다. 시트를 확인해 주세요)', 9000); }
+    finally { Busy.end(); }
   },
   filtered() {
     const kw = Names.norm($('confirmName').value), s = Confirm.sel;
