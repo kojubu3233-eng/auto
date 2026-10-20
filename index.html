@@ -1198,6 +1198,12 @@ const App = {
     if (prefs) App.prefs = prefs;
     if (skip) App.linkSkip = new Set(skip);
     Predict.init(); Confirm.init(); Ledger.init(); Logi.init();
+    // 시트에서 직접 고친 내용이 웹에도 나오도록: 탭으로 돌아왔을 때 마지막 조회 후 1분이 지났으면 조용히 다시 불러온다 (수정 중이면 건너뜀)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible' || App.loading || Date.now() - (App.loadedAt || 0) < 60000) return;
+      if ($('modalRoot').innerHTML || Confirm.dirty.size || Confirm.editId || Ledger.editing || Busy.depth) return;
+      App.reload(false);
+    });
     AC.filter('confirmName', AC.products); AC.filter('zoneName', AC.products); AC.filter('ledgerSearch', AC.ledgerNames); AC.filter('inFilterName', AC.ledgerNames);
     AC.filter('outFName', AC.ledgerNames); AC.filter('outFUnit', AC.outUnits); AC.filter('estateName', AC.ledgerNames); AC.filter('snapName', AC.ledgerNames);
     if (boot) App.applyBoot(boot, true);
@@ -1219,6 +1225,7 @@ const App = {
     if (!fromCache) Store.setSoon('ledger', ledger);
   },
   async reload(force) {
+    App.loading = true;
     const y = new Date().getFullYear();
     $('syncState').textContent = '구글시트에서 불러오는 중';
     const errs = [];
@@ -1232,6 +1239,7 @@ const App = {
       if (!l.value || !Array.isArray(l.value.sheets)) throw new Error('재고수불대장 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
       App.applyLedger(l.value);
     } catch (e) { errs.push('재고수불대장 시트: ' + e.message); }
+    App.loadedAt = Date.now(); App.loading = false;
     const t = new Date();
     $('syncState').textContent = errs.length ? '일부 불러오기 실패' : `${D.pad(t.getHours())}:${D.pad(t.getMinutes())} 기준`;
     $('loadError').classList.toggle('hidden', !errs.length);
@@ -2863,7 +2871,7 @@ const Sync = {
   // 오늘 −7일 이후 납품 건을 재고수불대장과 비교한다: 없는 줄은 추가, ID 없는 줄은 연결, 확정량이 다르면 맞춘다
   plan() {
     const from = D.add(D.today(), -7), used = new Set(), ops = [], moves = [], miss = new Set(), hold = [], L = { add: [], link: [], fix: [] }; let add = 0, link = 0, fix = 0, same = 0;
-    const recs = Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate >= from && (r.planEa || r.confEa)).sort((a, b) => a.delDate.localeCompare(b.delDate)), match = new Map();
+    const recs = Hist.records.filter(r => r.src === 'plan' && Sync.fresh(r) && r.delDate && r.delDate >= from && (r.planEa || r.confEa)).sort((a, b) => a.delDate.localeCompare(b.delDate)), match = new Map();
     recs.forEach(r => { const lr = Sync.ledgerFor(r, used); if (lr) { used.add(lr); match.set(r, lr); } });   // 1단계: 모든 건의 짝을 먼저 정해 둔다 (같은 날짜 다른 부대 건이 서로의 짝을 가로채지 않도록)
     recs.forEach(r => {
       const conf = r.confEa !== null && r.confEa !== undefined, qty = conf ? r.confEa : r.planEa, lr = match.get(r);
@@ -2890,12 +2898,16 @@ const Sync = {
     // 반대 방향: 재고수불대장에만 있는 납품 줄(직접 입력)은 확정량 입력에 기록을 만든다
     const rev = [];
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
-      if (!o.isOut || !o.outDate || o.outDate < from || !o.outMain || !String(o.unit || '').trim() || o.unit === EXPIRED_UNIT || used.has(o) || (o.id && Hist.byId.has(o.id))) return;
+      if (!o.isOut || !o.outDate || o.outDate < from || !o.outMain || !String(o.unit || '').trim() || o.unit === EXPIRED_UNIT || Sync.NOT_DELIVERY.test(o.unit) || used.has(o) || (o.id && Hist.byId.has(o.id))) return;
       if (Sync.recFor(o)) return;
       if (p.product) rev.push({ o, p });
     }));
     return { ops, add, link, fix, same, miss: [...miss], hold, rev, L };
   },
+  // 기준 시점(2026-10-20 16:15): 이 시각 이전에 만든 건은 시트 값을 정답으로 보고 연동 비교에서 뺀다 (건 ID 'WEB'+생성시각으로 구분)
+  BASE_MS: 1792480500000,
+  fresh: r => { const m = /^WEB(\d{13})/.exec(r.id || ''); return !!m && +m[1] >= Sync.BASE_MS; },
+  NOT_DELIVERY: /재고\s*(처리|조정)|파손|이유\s*불명|영업|홍보|품평|폐기|반품/,   // 납품이 아닌 재고 정리 줄은 확정량 입력에 만들지 않는다
   // 재고수불대장 웹앱이 범용제품(품목 블록) 탭 입력을 지원하는 새 코드인지 (배포 안 됐으면 자동 추가하지 않는다)
   itemOk: () => String((App.ledger && App.ledger.scriptVer) || '') >= '2026-10-20-itemblock',
   // 두 시트를 비교해 남은 누락·불일치를 모은다 (재고수불대장에 없음 / 확정량 입력에 없음 / 수량 불일치 / 연결 필요 / 사람이 확인할 건 / 같은 ID 중복)
