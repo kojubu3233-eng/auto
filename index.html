@@ -1238,6 +1238,7 @@ const App = {
     $('syncState').textContent = errs.length ? '일부 불러오기 실패' : `${D.pad(t.getHours())}:${D.pad(t.getMinutes())} 기준`;
     $('loadError').classList.toggle('hidden', !errs.length);
     $('loadErrorText').innerHTML = errs.map(esc).join('<br>');
+    if (!errs.length) Sync.shownSig = null;   // 새로 불러온 데이터 기준으로 누락 팝업을 다시 띄운다
     App.refreshViews();
     if (!errs.length && !Sync.autoDone) { Sync.autoDone = true; Sync.run(true).catch(() => {}); }   // 불러온 직후 두 시트를 자동으로 맞춘다 (화면을 연 뒤 1회)
   },
@@ -2923,8 +2924,8 @@ const Sync = {
       if (!a || !a.total) { el.classList.add('hidden'); return; }
       el.classList.remove('hidden');
       el.innerHTML = `<div class="row between"><b style="color:#B42318">⚠ 확정량 입력 ↔ 재고수불대장 누락·불일치 ${a.total}건</b><span class="row"><button class="btn light sm" onclick="Sync.detail()">자세히</button><button class="btn ok sm" onclick="Sync.run()">지금 맞추기</button></span></div>`;
-      if (a.sig !== Sync.shownSig) { Sync.shownSig = a.sig; Sync.detail(); }   // 새로 생긴 누락은 팝업으로 바로 알린다
-    }, 800);
+      if (a.sig !== Sync.shownSig && !$('modalRoot').innerHTML) { Sync.shownSig = a.sig; Sync.detail(); }   // 새로 생긴 누락은 팝업으로 바로 알린다 (다른 창이 열려 있으면 닫힌 뒤 알린다)
+    }, 1500);
   },
   detail() {
     const a = Sync.last; if (!a) return;
