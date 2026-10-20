@@ -1631,19 +1631,13 @@ const Predict = {
       const id = r.tr.dataset.sid || (r.tr.dataset.sid = `WEB${stamp}${D.pad(i + 1)}`);
       return { r, id, del, meal, kg };
     });
-    // 중복 방지: 납품일·품목·부대·수량이 같은 건이 이미 저장돼 있거나 이번 입력 안에 두 번 있으면 한 번만 저장한다
-    const dupKey = x => [x.del || x.r.date, Sync.prodName(x.r.name), Sync.uKey(x.r.unit), x.r.qty].join('|'), seen = new Set(), dups = [];
-    Hist.records.forEach(h => { if (h.src === 'plan' && h.delDate) seen.add([h.delDate, Sync.prodName(h.name), Sync.uKey(h.unit), h.planEa].join('|') + '|' + h.id); });
-    const existing = new Set([...seen].map(k => k.slice(0, k.lastIndexOf('|')))), recs = [];
-    recsAll.forEach(x => {
-      const k = dupKey(x), sameId = Hist.byId.has(x.id);
-      if (!sameId && (existing.has(k) || seen.has('NEW|' + k))) { dups.push(`${D.short(x.del || x.r.date)} ${x.r.unit} ${x.r.name} ${fmtN(x.r.qty)}`); return; }
-      seen.add('NEW|' + k); recs.push(x);
-    });
-    if (dups.length && !recs.length) return toast(`이미 저장된 건과 같아서 저장하지 않았습니다 (${dups.length}건)\n${dups.slice(0, 5).join('\n')}`, 7000);
+    // 같은 값의 건이 이미 저장돼 있으면 확인창에서 알려 준다 (막지는 않는다: 한 건을 똑같은 수량으로 여러 줄 쪼개는 경우가 있음)
+    const dupKey = x => [x.del || x.r.date, Sync.prodName(x.r.name), Sync.uKey(x.r.unit), x.r.qty].join('|'), exist = new Map(), dups = [], recs = recsAll;
+    Hist.records.forEach(h => { if (h.src === 'plan' && h.delDate) { const k = [h.delDate, Sync.prodName(h.name), Sync.uKey(h.unit), h.planEa].join('|'); exist.set(k, (exist.get(k) || 0) + 1); } });
+    recsAll.forEach(x => { const n = exist.get(dupKey(x)); if (n && !Hist.byId.has(x.id)) dups.push(`${D.short(x.del || x.r.date)} ${x.r.unit} ${x.r.name} ${fmtN(x.r.qty)} (이미 ${n}건 저장됨)`); });
     const missing = recs.filter(x => !x.del);
     let msg = `예정량 ${recs.length}건을 저장합니다.`;
-    if (dups.length) msg += `\n\n⚠ 같은 납품일·품목·부대·수량이 이미 있어 제외하는 건: ${dups.length}건\n${dups.slice(0, 5).join('\n')}${dups.length > 5 ? `\n… 외 ${dups.length - 5}건` : ''}`;
+    if (dups.length) msg += `\n\n⚠ 같은 납품일·품목·부대·수량이 이미 저장돼 있는 건 ${dups.length}건 (중복 입력이 아닌지 확인하세요. 나누어 입력하는 건이면 그대로 저장하세요)\n${dups.slice(0, 5).join('\n')}${dups.length > 5 ? `\n… 외 ${dups.length - 5}건` : ''}`;
     if (missing.length) msg += `\n\n부대별정보에 납품요일이 없어 납품일을 비워 저장하는 건: ${missing.length}건`;
     const alsoLedger = $('alsoLedger').checked;
     const ledgerOps = [], noLedger = [];
