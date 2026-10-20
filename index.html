@@ -1238,6 +1238,7 @@ const App = {
     $('loadError').classList.toggle('hidden', !errs.length);
     $('loadErrorText').innerHTML = errs.map(esc).join('<br>');
     App.refreshViews();
+    if (!errs.length && !Sync.autoDone) { Sync.autoDone = true; Sync.run(true).catch(() => {}); }   // 불러온 직후 두 시트를 자동으로 맞춘다 (화면을 연 뒤 1회)
   },
   async fetchBoot(y, force) {
     const boot = await Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' });
@@ -2889,12 +2890,13 @@ const Sync = {
     }));
     return { ops, add, link, fix, same, miss: [...miss], hold, rev };
   },
-  async run() {
-    if (!LedgerData.raw) return toast('재고수불대장을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요');
+  async run(auto) {
+    if (Sync.busy) return;
+    if (!LedgerData.raw) return auto ? null : toast('재고수불대장을 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요');
     const pl = Sync.plan();
-    if (!pl.ops.length && !pl.rev.length) return toast(`맞출 내용이 없습니다 (최근 7일 이후 납품 ${pl.same}건이 재고수불대장과 일치합니다)${pl.hold.length ? `\n확인 필요(보류) ${pl.hold.length}건: ${pl.hold.slice(0, 4).join(' / ')}` : ''}`, 8000);
-    if (!confirm(`최근 7일 이후 납품 건을 재고수불대장과 맞춥니다.\n\n· 재고수불대장에 없어서 새로 추가: ${pl.add}건\n· 기존 줄에 연결(중복 방지): ${pl.link}건\n· 확정량이 달라서 수정: ${pl.fix}건\n· 확정량 입력에 새로 기록(재고수불대장에만 있던 건): ${pl.rev.length}건\n· 이미 일치: ${pl.same}건${pl.hold.length ? `\n· 같은 날짜에 부대가 다른(또는 빈) 줄이 있어 중복 방지를 위해 건너뜀: ${pl.hold.length}건 (직접 확인 필요)` : ''}${pl.miss.length ? `\n· 재고수불대장 관리 대상이 아니라 제외: ${pl.miss.join(', ')}` : ''}\n\n계속할까요?`)) return;
-    Busy.start('재고수불대장에 반영 중입니다 (건수가 많으면 몇 분 걸릴 수 있습니다)');
+    if (!pl.ops.length && !pl.rev.length) return auto ? null : toast(`맞출 내용이 없습니다 (최근 7일 이후 납품 ${pl.same}건이 재고수불대장과 일치합니다)${pl.hold.length ? `\n확인 필요(보류) ${pl.hold.length}건: ${pl.hold.slice(0, 4).join(' / ')}` : ''}`, 8000);
+    if (!auto && !confirm(`최근 7일 이후 납품 건을 재고수불대장과 맞춥니다.\n\n· 재고수불대장에 없어서 새로 추가: ${pl.add}건\n· 기존 줄에 연결(중복 방지): ${pl.link}건\n· 확정량이 달라서 수정: ${pl.fix}건\n· 확정량 입력에 새로 기록(재고수불대장에만 있던 건): ${pl.rev.length}건\n· 이미 일치: ${pl.same}건${pl.hold.length ? `\n· 같은 날짜에 부대가 다른(또는 빈) 줄이 있어 중복 방지를 위해 건너뜀: ${pl.hold.length}건 (직접 확인 필요)` : ''}${pl.miss.length ? `\n· 재고수불대장 관리 대상이 아니라 제외: ${pl.miss.join(', ')}` : ''}\n\n계속할까요?`)) return;
+    Sync.busy = true; if (!auto) Busy.start('재고수불대장에 반영 중입니다 (건수가 많으면 몇 분 걸릴 수 있습니다)');
     let ok = 0, fail = [];
     try {
       for (let i = 0; i < pl.ops.length; i += 25) {
@@ -2916,10 +2918,11 @@ const Sync = {
         if (res && res.patch) App.applyPatch(res.patch);
       }
     } catch (e) { fail.push(e.message); }
-    finally { Busy.end(); }
+    finally { if (!auto) Busy.end(); Sync.busy = false; }
     await App.reloadLedger(); try { Confirm.render(); } catch (e) {} App.refreshViews();
-    toast(`재고수불대장 ${ok}건 반영${fail.length ? `\n실패 ${fail.length}건: ${fail.slice(0, 3).join(' / ')}` : ''}`, 8000);
-    if (ok) Alerts.add('재고수불대장 맞춤', `자동화시스템과 비교해 추가 ${pl.add}건 · 연결 ${pl.link}건 · 확정량 수정 ${pl.fix}건을 반영했습니다`);
+    if (auto && !ok && !fail.length) return;
+    toast(`${auto ? '자동 연동: ' : ''}재고수불대장 ${ok}건 반영${fail.length ? `\n실패 ${fail.length}건: ${fail.slice(0, 3).join(' / ')}` : ''}`, 8000);
+    if (ok) Alerts.add('재고수불대장 맞춤', `자동화시스템과 비교해 추가 ${pl.add}건 · 연결 ${pl.link}건 · 확정량 수정 ${pl.fix}건 · 확정량 입력 기록 ${pl.rev.length}건을 반영했습니다${auto ? ' (자동)' : ''}`);
   }
 };
 
