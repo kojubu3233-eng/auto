@@ -2202,7 +2202,7 @@ const Ledger = {
     $('ldAddDate').querySelector('input').placeholder = '입고일';
     $('ldAddExp').querySelector('input').placeholder = '소비기한';
     $('ldBody').addEventListener('click', Ledger.onRowClick);
-    $('ldBody').addEventListener('click', e => {   // 소비기한은 물류관리 입력값을 그대로 보여주고, [수정]을 눌렀을 때만 고칠 수 있다
+    $('ldBody').addEventListener('click', e => {   // 소비기한이 있으면 글자로만 보여주고 [수정]을 눌렀을 때만 고칠 수 있다 (비어 있으면 바로 입력칸)
       const b = e.target.closest('.lexp-edit'); if (!b) return;
       const tr = b.closest('tr[data-i]'), it = tr && Ledger.shown[+tr.dataset.i]; if (!it) return;
       const w = b.closest('.lexp-wrap'); w.innerHTML = DF.html('lexp', it.o.expiry || '', 'future');
@@ -2389,7 +2389,7 @@ const Ledger = {
       const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + (p.expired.has(o) ? ' row-grey' : '');
       const inNote = o.note ? `<div class="hint">${esc(o.note)}</div>` : '';
       const html = `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${inNote}</td><td class="num ${o.inQty && PLAN_IN.has(o.inSt) ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}</td>
-        <td class="lexp-wrap">${o.inQty ? `<span class="lexp-view">${o.expiry ? D.short(o.expiry) : '<span class="hint">-</span>'} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : ''}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
+        <td class="lexp-wrap">${!o.inQty ? '' : o.expiry ? `<span class="lexp-view">${D.short(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
         <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td>
         <td class="num ${soon ? 'warn-cell' : ''}">${soon ? fmtN(soon) : ''}</td><td class="num">${over ? `<button type="button" class="over-btn" data-over="1" title="누르면 납품기한 초과 수량을 출고 처리하는 줄이 바로 아래에 추가됩니다">${fmtN(over)}</button>` : ''}</td><td>${statusCell(o)}</td></tr>`;
       // 수정 중인 줄은 원래 줄을 그대로 두고 바로 아래에 입력 줄을 붙인다
