@@ -923,7 +923,8 @@ const Names = {
 };
 
 const UNIT_ALIAS = { '7사단 8여단': '7사단/8여단', '7사단 5여단': '7사단/5여단', '7사단 3여단': '7사단/3여단', '8사단73여단': '8사단/73여단', '계룡대 근무지원단': '계룡대근무지원단', '2해병': '2해병대' };
-const normUnit = s => { const t = String(s || '').trim().replace(/\s+/g, ' '); return UNIT_ALIAS[t] || t; };
+// 51군지단 하위 부대는 '51군지단/31사단' 하나로 통일한다 ('51군지/31사단'·'51군지단 31사단'·'51군지 31사단' 모두 같은 부대)
+const normUnit = s => { const t = String(s || '').trim().replace(/\s+/g, ' '); const m = t.match(/^51군지단?\s*\/?\s*(\d+사단)$/); return m ? '51군지단/' + m[1] : (UNIT_ALIAS[t] || t); };
 
 /* ---------- 자동완성 ---------- */
 document.addEventListener('scroll', e => { if (!(e.target.closest && e.target.closest('.ac-list'))) document.querySelectorAll('.ac-list').forEach(l => { l.style.display = 'none'; }); }, true);
@@ -958,7 +959,7 @@ const AC = {
   // 입력할 때마다 목록을 새로 만들지 않도록 기록이 바뀐 때만 다시 계산한다
   memo(key, build) { const k = Hist.ver + ':' + Names.units.length + ':' + Names.products.length; const m = AC._m[key]; if (m && m.k === k) return m.v; return (AC._m[key] = { k, v: build() }).v; },
   _m: {},
-  units: () => AC.memo('u', () => [...new Set([...Names.units.map(u => u.name), ...Hist.units()])].sort().map(n => ({ label: n }))),
+  units: () => AC.memo('u', () => [...new Set([...Names.units.map(u => u.name), ...Hist.units()].map(normUnit))].sort().map(n => ({ label: n }))),
   products: () => AC.memo('p', () => [...new Set([...Names.products.map(p => p.name), ...Hist.names()])].sort().map(n => ({ label: n }))),
   ledgerNames: () => [...new Set(LedgerData.standard().map(p => p.name))].sort().map(n => ({ label: n })),
   outUnits: () => [...new Set(LedgerData.standard().flatMap(p => p.rows.map(o => o.unit)).filter(Boolean))].sort().map(n => ({ label: n })),
@@ -1938,14 +1939,20 @@ const Confirm = {
     finally { Busy.end(); }
   },
 
+  // 확정량 입력에서 삭제할 때 재고수불대장에서도 지울지 묻는다 (확인 = 함께 삭제, 취소 = 재고수불대장에는 그대로 남김)
+  askLedgerDelete(n) {
+    return confirm(`재고수불대장에서도 ${n > 1 ? `해당 ${n}건을 ` : '이 건을 '}삭제할까요?\n\n[확인] 재고수불대장에서도 삭제\n[취소] 확정량 입력에서만 삭제하고, 재고수불대장에는 데이터를 남김`);
+  },
+
   async remove(id) {
     if (Confirm.wait()) return;
     const r = Hist.byId.get(id); if (!r) return;
     const lr = Confirm.ledgerRow(id);
-    if (!confirm(`${r.delDate ? D.short(r.delDate) : ''} ${r.unit} · ${r.name} 행을 삭제합니다.\n확정량 입력(자동화시스템 시트)${lr ? '과 재고수불대장' : ''}에서 모두 지워지며 되돌릴 수 없습니다. 계속할까요?`)) return;
-    Busy.start('삭제 중입니다 (구글시트 2곳 동시 반영)');
+    if (!confirm(`${r.delDate ? D.short(r.delDate) : ''} ${r.unit} · ${r.name} 행을 확정량 입력(자동화시스템 시트)에서 삭제합니다.\n되돌릴 수 없습니다. 계속할까요?`)) return;
+    const delLedger = !!lr && Confirm.askLedgerDelete(1);   // 재고수불대장에도 같은 건이 있으면 함께 지울지 묻는다
+    Busy.start('삭제 중입니다' + (delLedger ? ' (구글시트 2곳 동시 반영)' : ''));
     try {
-      const res = await Api.post('ledger', { action: 'planDelete', refs: [{ id: r.id, src: r.src, row: r.row, name: r.name }], ledgerOps: lr ? [{ op: 'delete', id, sheet: lr.sheet, name: lr.name, row: lr.row }] : [] });
+      const res = await Api.post('ledger', { action: 'planDelete', refs: [{ id: r.id, src: r.src, row: r.row, name: r.name }], ledgerOps: delLedger ? [{ op: 'delete', id, sheet: lr.sheet, name: lr.name, row: lr.row }] : [] });
       Confirm.dirty.delete(id); Confirm.picked.delete(id);
       Hist.records = Hist.records.filter(x => x.id !== id); Hist.byId.delete(id); Hist.reindex(); Confirm.render();
       Confirm.sync(res, true);
@@ -1959,11 +1966,12 @@ const Confirm = {
     if (Confirm.wait()) return;
     const recs = [...Confirm.picked].map(id => Hist.byId.get(id)).filter(Boolean);
     if (!recs.length) return toast('삭제할 행을 먼저 체크하세요');
-    const ledgerOps = recs.map(r => { const lr = Confirm.ledgerRow(r.id); return lr ? { op: 'delete', id: r.id, sheet: lr.sheet, name: lr.name, row: lr.row } : null; })
+    const ledgerAll = recs.map(r => { const lr = Confirm.ledgerRow(r.id); return lr ? { op: 'delete', id: r.id, sheet: lr.sheet, name: lr.name, row: lr.row } : null; })
       .filter(Boolean).sort((a, b) => a.sheet === b.sheet ? b.row - a.row : a.sheet.localeCompare(b.sheet));   // 아래 행부터 지워야 행 번호가 밀리지 않는다
     const preview = recs.slice(0, 5).map(r => `${r.delDate ? D.short(r.delDate) : ''} ${r.unit} ${r.name}`).join('\n') + (recs.length > 5 ? `\n… 외 ${recs.length - 5}건` : '');
-    if (!confirm(`선택한 ${recs.length}건을 삭제합니다.\n\n${preview}\n\n확정량 입력(자동화시스템 시트)과 재고수불대장에서 모두 지워지며 되돌릴 수 없습니다. 계속할까요?`)) return;
-    Busy.start(`${recs.length}건 삭제 중입니다 (구글시트 2곳 동시 반영)`);
+    if (!confirm(`선택한 ${recs.length}건을 확정량 입력(자동화시스템 시트)에서 삭제합니다.\n\n${preview}\n\n되돌릴 수 없습니다. 계속할까요?`)) return;
+    const ledgerOps = ledgerAll.length && Confirm.askLedgerDelete(ledgerAll.length) ? ledgerAll : [];
+    Busy.start(`${recs.length}건 삭제 중입니다` + (ledgerOps.length ? ' (구글시트 2곳 동시 반영)' : ''));
     try {
       const res = await Api.post('ledger', { action: 'planDelete', refs: recs.map(r => ({ id: r.id, src: r.src, row: r.row, name: r.name })), ledgerOps });
       const gone = new Set(recs.map(r => r.id));
