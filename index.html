@@ -625,7 +625,7 @@ const Busy = {
   end() { Busy.depth = Math.max(0, Busy.depth - 1); if (!Busy.depth) $('busy').classList.add('hidden'); },
   wrap(obj, name, label) {
     const f = obj[name];
-    obj[name] = async function (...a) { Busy.start(label); try { return await f.apply(obj, a); } finally { Busy.end(); } };
+    obj[name] = async function (...a) { Busy.start(label); try { return await f.apply(obj, a); } catch (e) { console.error(e); toast('처리 중 오류가 났습니다: ' + (e && e.message || e), 6000); } finally { Busy.end(); } };
   }
 };
 
@@ -3154,7 +3154,7 @@ const Logi = {
       if (e.target.classList.contains('pdate')) { const ln = e.target.closest('.lotln'); return Logi.changeInDate(+tr.dataset.i, DF.get(e.target), ln ? +ln.dataset.k : -1); }
       mainOf(tr).querySelector('.pk').checked = true;
       if (!e.target.classList.contains('pexp')) return;
-      (e.target.closest('.lotln') || tr).querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), Logi.plans.in[+tr.dataset.i].p.product));
+      (e.target.closest('.lotln') ? tr.querySelectorAll('.l-dl')[+e.target.closest('.lotln').dataset.k] : tr).querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), Logi.plans.in[+tr.dataset.i].p.product));
     });
     ipb.addEventListener('click', e => {
       const act = e.target.dataset && e.target.dataset.act; if (!act) return;
@@ -3362,7 +3362,7 @@ const Logi = {
       const it = Logi.plans.in[+tr.dataset.i]; if (!it) return;
       Logi.inDraft[Logi.inKey(it.o)] = {
         checked: tr.querySelector('.pk').checked, qty: tr.querySelector('.pq').value, exp: DF.get(tr.querySelector('.pexp')),
-        lots: [...tr.querySelectorAll('.lotln')].map(z => ({ qty: z.querySelector('.pq').value, exp: DF.get(z.querySelector('.pexp')) })),
+        lots: [...tr.querySelectorAll('.l-qty')].map((z, k) => ({ qty: z.querySelector('.pq').value, exp: DF.get(tr.querySelectorAll('.l-exp')[k].querySelector('.pexp')) })),
         extras: [...body.querySelectorAll(`tr.plan-extra[data-i="${tr.dataset.i}"]`)].map(x => ({ qty: x.querySelector('.pq').value, exp: DF.get(x.querySelector('.pexp')), date: DF.get(x.querySelector('.pdate2')) }))
       };
     });
@@ -3405,12 +3405,12 @@ const Logi = {
     body.innerHTML = items.map(({ p, o, d, und }, i) => {
       const info = p.product, dr = Logi.inDraft[Logi.inKey(o)] || {}, exp = dr.exp !== undefined ? dr.exp : (o.expiry || '');
       const lots = o.lotsArr && PLAN_IN.has(o.inSt) ? o.lotsArr : null;
-      const stack = f => lots.map((l, k) => `<div class="lotln" data-k="${k}">${f(l, k, (dr.lots || [])[k] || {})}</div>`).join('');
-      const cDate = lots ? stack((l, k) => DF.html('pdate', l.d)) : DF.html('pdate', d);
-      const cPlan = lots ? stack(l => fmtN(l.q)) : fmtN(o.inQty);
-      const cQty = lots ? stack((l, k, x) => `<input type="number" class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
-      const cExp = lots ? stack((l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
-      const cDl = lots ? stack((l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
+      const stack = (c, f) => lots.map((l, k) => `<div class="lotln l-${c}" data-k="${k}">${f(l, k, (dr.lots || [])[k] || {})}</div>`).join('');
+      const cDate = lots ? stack('date', (l, k) => DF.html('pdate', l.d)) : DF.html('pdate', d);
+      const cPlan = lots ? stack('plan', l => fmtN(l.q)) : fmtN(o.inQty);
+      const cQty = lots ? stack('qty', (l, k, x) => `<input type="number" class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
+      const cExp = lots ? stack('exp', (l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
+      const cDl = lots ? stack('dl', (l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
       return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${cDate}</td><td class="num">${cPlan}</td>
         <td>${cQty}</td><td>${cExp}</td><td>${cDl}</td>
@@ -3455,7 +3455,7 @@ const Logi = {
     for (const tr of trs) {
       const i = +tr.dataset.i, { p, o, und } = Logi.plans.in[i]; if (und) autoDec.push(p.name);
       const date0 = DF.get(tr.querySelector('.pdate')) || o.inDate || today, date = date0 > today ? today : date0;   // '입고 완료'는 실제로 받은 것이므로 입고일이 오늘 이후면 오늘로 기록한다
-      const cap = d => (d && d <= today ? d : today), lotEls = [...tr.querySelectorAll('.lotln')], lines = lotEls.length ? lotEls.map(z => ({ qty: num(z.querySelector('.pq').value), exp: DF.get(z.querySelector('.pexp')), date: cap(DF.get(z.querySelector('.pdate'))) || date })) : [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')), date }];
+      const cap = d => (d && d <= today ? d : today), lotEls = [...tr.querySelectorAll('.l-qty')], lines = lotEls.length ? lotEls.map((z, k) => ({ qty: num(z.querySelector('.pq').value), exp: DF.get(tr.querySelectorAll('.l-exp')[k].querySelector('.pexp')), date: cap(DF.get(tr.querySelectorAll('.l-date')[k].querySelector('.pdate'))) || date })) : [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')), date }];
       body.querySelectorAll(`tr.plan-extra[data-i="${i}"]`).forEach(x => lines.push({ qty: num(x.querySelector('.pq').value), exp: DF.get(x.querySelector('.pexp')), date: cap(DF.get(x.querySelector('.pdate2'))) || date }));
       if (lines.some(l => !l.qty)) return toast(`${p.name}: 입고 수량을 입력하세요 (필요 없는 한 줄은 삭제하세요)`);
       const total = lines.reduce((a, l) => a + l.qty, 0);
