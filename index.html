@@ -557,10 +557,11 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
     </div>
 
     <div data-subpane="print" class="hidden">
-      <div class="row mb12"><label class="lbl muted">월</label><input type="month" id="printMonth">
+      <div class="row mb12"><h2>입출고 일지</h2><label class="lbl muted">월</label><input type="month" id="printMonth">
         <label class="lbl muted">일·기간</label><span id="printFrom"></span><span>~</span><span id="printTo"></span>
-        <button class="btn" onclick="Logi.printJournal()">입출고 일지 엑셀</button>
-        <span class="hint">월만 고르면 그 달 전체, 시작일만 적으면 하루, 시작·종료를 적으면 그 기간입니다. 처리 안 된 건은 '미처리'로 함께 표시됩니다</span></div>
+        <span class="hint">월만 고르면 그 달 전체, 시작일만 적으면 하루, 시작·종료를 적으면 그 기간입니다</span>
+        <span style="flex:1"></span><label class="lbl muted">엑셀 일자</label><span id="printDate"></span><button class="btn light" onclick="Logi.printJournal()">입출고 일지 엑셀</button></div>
+      <div id="journalView" class="mb12"></div>
 
       <div class="mt12">
         <div class="row between mb12">
@@ -3132,9 +3133,12 @@ const Logi = {
       document.querySelectorAll('[data-subpane]').forEach(p => p.classList.toggle('hidden', p.dataset.subpane !== b.dataset.sub));
       Logi.show(b.dataset.sub);
     });
+    DF.mount($('printDate'), 'print-date', D.today());
     $('printMonth').value = D.today().slice(0, 7);
     DF.mount($('printFrom'), 'print-from', ''); DF.mount($('printTo'), 'print-to', '');
-    $('printMonth').addEventListener('change', () => ['print-from', 'print-to'].forEach(c => DF.set(document.querySelector('.' + c), '', true)));
+    $('printMonth').addEventListener('change', () => { ['print-from', 'print-to'].forEach(c => DF.set(document.querySelector('.' + c), '', true)); Logi.renderJournal(); });
+    ['printFrom', 'printTo'].forEach(id => $(id).addEventListener('datechange', () => Logi.renderJournal()));
+    $('journalView').addEventListener('click', e => { const r = e.target.closest('[data-j]'); if (!r) return; const it = Logi.jr[+r.dataset.j]; if (it) RowEdit.open(`${it.kind === 'in' ? '입고' : '출고'} 수정 · ${it.p.name}`, [it.o], it.p); });
     document.querySelectorAll('[data-all]').forEach(c => c.addEventListener('change', () => $(c.dataset.all + 'Body').querySelectorAll('.pk').forEach(x => { x.checked = c.checked; })));
     // 출고 탭: 필터 · 수정 · 출고일 입력
     ['outFDelFrom', 'outFDelTo', 'outFShipFrom', 'outFShipTo'].forEach(id => { DF.mount($(id), id.toLowerCase(), ''); $(id).addEventListener('datechange', () => Logi.renderOut()); });
@@ -3187,10 +3191,10 @@ const Logi = {
   render() { Snap.auto(); Logi.renderToday(); Logi.stale = new Set(['in', 'out', 'print']); Logi.show(Logi.sub); },
   show(sub) {
     Logi.sub = sub;
-    $('logiTodayWrapIn').classList.toggle('hidden', sub === 'out'); $('logiTodayWrapOut').classList.toggle('hidden', sub === 'in'); Logi.drawMissed();   // 입고 탭=오늘 입고, 출고 탭=오늘 출고, 일지 출력·백업=둘 다
+    $('logiTodayWrapIn').classList.toggle('hidden', sub === 'out' || sub === 'print'); $('logiTodayWrapOut').classList.toggle('hidden', sub === 'in' || sub === 'print'); Logi.drawMissed();   // 입고 탭=오늘 입고, 출고 탭=오늘 출고, 일지 출력·백업=둘 다
     if (sub === 'backup') { Logi.renderLog(); Snap.render(); return; }
     if (!Logi.stale.delete(sub)) return;
-    if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') Estate.render();
+    if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') { Logi.renderJournal(); Estate.render(); }
   },
   deadlineHtml: dl => dl ? `${D.short(dl)}${D.diff(dl, D.today()) < 0 ? ' <span class="tag danger">경과</span>' : ''}` : '-',
   async send(kind, ops, entries) {
@@ -3509,11 +3513,30 @@ const Logi = {
   // 미처리 예정 박스: 입고 탭=입고만, 출고 탭=출고만, 일지 출력·백업=둘 다
   drawMissed() {
     const m = Logi.missHtml; if (!m) return;
+    if (Logi.sub === 'print') { $('logiMissed').innerHTML = ''; return; }   // 일지 출력은 아래 일지 화면에서 처리·미처리를 함께 보여 준다
     const showIn = Logi.sub !== 'out', showOut = Logi.sub !== 'in', both = showIn && showOut, n = (showIn ? m.nIn : 0) + (showOut ? m.nOut : 0);
     const what = both ? '예정' : showIn ? '입고 예정' : '출고 예정', cnt = both ? `입고 ${m.nIn}건 · 출고 ${m.nOut}건` : `${showIn ? m.nIn : m.nOut}건`;
     $('logiMissed').innerHTML = n
       ? `<div class="missed"><div class="row between mb8"><b>⚠ 오늘까지 처리되지 않은 ${what} (${cnt})</b><span class="hint">누르면 해당 건으로 이동·수정합니다</span></div><div class="list-box">${showIn ? m.in : ''}${showOut ? m.out : ''}</div></div>`
       : `<div class="missed ok"><b>✓ 처리되지 않은 ${what}이 없습니다</b></div>`;
+  },
+  // 일지 출력 화면: 고른 기간(기본 이번 달)의 입고·출고를 처리된 건과 처리 안 된 건(예정·미처리) 모두 날짜순으로 보여 준다
+  jr: [],
+  renderJournal() {
+    const m0 = $('printMonth').value, f = DF.get(document.querySelector('.print-from')), t = DF.get(document.querySelector('.print-to'));
+    let from, to;
+    if (f || t) { from = f || t; to = t || f; if (from > to) [from, to] = [to, from]; }
+    else { const m = m0 || D.today().slice(0, 7), [y, mo] = m.split('-').map(Number); from = `${m}-01`; to = `${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, '0')}`; }
+    const today = D.today(), ins = [], outs = [];
+    LedgerData.standard().forEach(p => {
+      inRowsOf(p).forEach(o => { if (o.inQty && o.inDate && o.inDate >= from && o.inDate <= to && o.status !== '이월') ins.push({ kind: 'in', p, o, date: o.inDate, qty: o.inQty, exp: o.expiry || '', unit: '', done: ACTUAL_IN.has(o.inSt) }); });
+      p.rows.forEach(r => { if (r.outTotal) shipParts(r).forEach(x => { if (x.date && x.date >= from && x.date <= to) outs.push({ kind: 'out', p, o: r, date: x.date, qty: x.qty, exp: x.exp || r.expiry || '', unit: r.unit || '', done: !PEND_OUT.has(r.status) || !!(r.lines && x.date <= today) }); }); });
+    });
+    const by = (a, b) => a.date.localeCompare(b.date) || a.p.name.localeCompare(b.p.name, 'ko');
+    ins.sort(by); outs.sort(by); Logi.jr = [...ins, ...outs];
+    const row = (x, i) => `<div class="list-row editable ${x.done ? 'k-' + x.kind : 'k-warn'}" data-j="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">${x.kind === 'in' ? '입고' : '출고'} · ${esc(x.p.name)}</div><div class="l-sub">${D.short(x.date)} ${esc(x.unit)} ${x.exp ? '소비기한 ' + D.short(x.exp) : ''}</div></div><div class="num"><b>${fmtN(x.qty)}</b><div class="l-sub"><span class="tag ${x.done ? x.kind : 'plan'}">${x.done ? (x.kind === 'in' ? '입고' : '출고') : (x.kind === 'in' ? '입고 미처리' : '출고 미처리')}</span></div></div></div>`;
+    const box = (title, list, base) => `<div class="mb12"><div class="row between mb8"><h2>${title}</h2><span class="hint">${list.length}건${list.some(x => !x.done) ? ` · 미처리 ${list.filter(x => !x.done).length}건` : ''}</span></div><div class="list-box">${list.map((x, k) => row(x, base + k)).join('') || '<div class="empty">내역이 없습니다</div>'}</div></div>`;
+    $('journalView').innerHTML = box('입고', ins, 0) + box('출고', outs, ins.length);
   },
   // 오늘 입고: 오늘 저장한 입고 중 재고수불대장에 실제로 있는 줄만, 재고수불대장의 현재 값(수정·삭제 반영)으로 보여 준다
   // 오늘 출고: 오늘 출고처리한(출고일이 오늘인) 수량을 재고수불대장에서 바로 읽어 온다
@@ -3597,31 +3620,26 @@ const Logi = {
   },
   // 입고·출고를 한 장(시트 1개)에 모은 입출고일지
   async printJournal() {
-    const m0 = $('printMonth').value, f = DF.get(document.querySelector('.print-from')), t = DF.get(document.querySelector('.print-to'));
-    let from, to;
-    if (f || t) { from = f || t; to = t || f; if (from > to) [from, to] = [to, from]; }
-    else if (m0) { const [y, mo] = m0.split('-').map(Number); from = `${m0}-01`; to = `${m0}-${String(new Date(y, mo, 0).getDate()).padStart(2, '0')}`; }
-    else return toast('월이나 기간을 선택하세요');
-    // 처리된 건과 아직 처리 안 된 건(예정·미처리) 모두 날짜 기준으로 넣는다. 미처리는 표에 '미처리'로 표시
-    const today = D.today(), ins = new Map(), outs = new Map();
-    const add = (map, date, p, row) => { const k = date + '|' + p.sheet + '|' + p.name; if (!map.has(k)) map.set(k, { date, p, rows: [] }); map.get(k).rows.push(row); };
+    const date = DF.get(document.querySelector('.print-date')); if (!date) return toast('일자를 입력하세요');
+    const ins = [], outs = [];
     LedgerData.standard().forEach(p => {
-      inRowsOf(p).forEach(o => { if (o.inQty && o.inDate && o.inDate >= from && o.inDate <= to && o.status !== '이월') add(ins, o.inDate, p, { expiry: o.expiry || '', inQty: o.inQty, done: ACTUAL_IN.has(o.inSt) }); });
-      p.rows.forEach(r => { if (r.outTotal) shipParts(r).forEach(x => { if (x.date && x.date >= from && x.date <= to) add(outs, x.date, p, { expiry: x.exp || r.expiry || '', outTotal: x.qty, unit: r.unit || '', done: !PEND_OUT.has(r.status) || !!(r.lines && x.date <= today) }); }); });
+      const i = p.rows.filter(o => o.inDate === date && o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.inSt));
+      const o = [];
+      p.rows.forEach(r => { if (r.outTotal && ACTUAL_OUT.has(r.status)) shipParts(r).forEach(x => { if (x.date === date && (!PEND_OUT.has(r.status) || x.date <= D.today())) o.push({ expiry: x.exp || r.expiry || '', outTotal: x.qty, unit: r.unit }); }); });
+      if (i.length) ins.push({ p, rows: i });
+      if (o.length) outs.push({ p, rows: o });
     });
-    const byDate = (a, b) => a.date.localeCompare(b.date), inG = [...ins.values()].sort(byDate), outG = [...outs.values()].sort(byDate);
-    if (!inG.length && !outG.length) return toast(`${from === to ? D.short(from) : `${D.short(from)} ~ ${D.short(to)}`} 입고·출고 내역이 없습니다`);
+    if (!ins.length && !outs.length) return toast(`${D.short(date)} 입고·출고 완료 내역이 없습니다`);
     await loadExcel();
-    const md = iso => `${iso.slice(5, 7)}월 ${iso.slice(8, 10)}일`, whole = from.slice(8) === '01' && from.slice(0, 7) === to.slice(0, 7) && to === `${to.slice(0, 7)}-${String(new Date(+to.slice(0, 4), +to.slice(5, 7), 0).getDate()).padStart(2, '0')}`;
-    const label = from === to ? md(from) : whole ? `${from.slice(5, 7)}월` : `${md(from)} ~ ${md(to)}`;
-    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet(`${from === to ? md(from) : whole ? from.slice(5, 7) + '월' : from.slice(5) + '~' + to.slice(5)} 입출고일지`);
+    const [, m, d] = date.split('-');
+    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet(`${m}월 ${d}일 입출고일지`);
     ws.columns = [{ width: 13 }, { width: 26 }, { width: 13 }, { width: 9 }, { width: 9 }, { width: 22 }];
-    ws.mergeCells('A1:F2'); ws.getCell('A1').value = `${label} 입출고 일지`; ws.getCell('A1').font = { bold: true, size: 16 }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.mergeCells('A1:F2'); ws.getCell('A1').value = `${m}월 ${d}일 입출고 일지`; ws.getCell('A1').font = { bold: true, size: 16 }; ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
     const put = (r, arr) => arr.forEach((v, i) => { ws.getCell(r, i + 1).value = v === '' ? null : v; });
     const border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     let r = 4;
     const section = (kind, groups) => {
-      const isIn = kind === 'in', undone = [];
+      const isIn = kind === 'in', top = r;
       ws.mergeCells(`A${r}:F${r}`); ws.getCell(`A${r}`).value = isIn ? '■ 입고' : '■ 출고'; ws.getCell(`A${r}`).font = { bold: true, size: 12 }; ws.getCell(`A${r}`).alignment = { horizontal: 'left', vertical: 'middle' }; r++;
       const head = r;
       put(r, [isIn ? '입  고 일 ' : '출  고  일 ', '제 품 명 ', '소비 기한', isIn ? '입 고 량' : '출 고 량', '', isIn ? ' 비  고' : '부대명 / 총계']);
@@ -3630,12 +3648,11 @@ const Logi = {
       r += 2;
       const bodyStart = r;
       if (!groups.length) { ws.mergeCells(`A${r}:F${r}`); ws.getCell(`A${r}`).value = '내역 없음'; r++; }
-      groups.forEach(({ date, p, rows }) => {
+      groups.forEach(({ p, rows }) => {
         const start = r;
-        const lines = isIn ? rows.map(o => [o.expiry, o.inQty, o.done ? '' : '미처리', o.done]) : rows.map(o => [o.expiry, o.outTotal, o.unit + (o.done ? '' : ' (미처리)'), o.done]);
-        lines.forEach(([exp, qty, note, done], i) => {
-          put(r, [i === 0 ? D.toDate(date) : '', i === 0 ? p.name : '', exp ? D.toDate(exp) : '', '', qty, note]);
-          if (!done) undone.push(r);
+        const lines = isIn ? rows.map(o => [o.expiry, o.inQty, '']) : rows.map(o => [o.expiry, o.outTotal, o.unit]);
+        lines.forEach(([exp, qty, unit], i) => {
+          put(r, [i === 0 ? D.toDate(date) : '', i === 0 ? p.name : '', exp ? D.toDate(exp) : '', '', qty, isIn ? '' : unit]);
           r++;
         });
         if (!isIn && lines.length > 1) {
@@ -3650,11 +3667,10 @@ const Logi = {
         if (i < bodyStart) cell.font = { bold: true };
         else if (groups.length) { if (c === 1) cell.numFmt = 'mm"월" dd"일"'; if (c === 3) cell.numFmt = 'yyyy-mm-dd'; if (c === 5) cell.numFmt = '#,##0'; }
       }
-      undone.forEach(i => { ws.getCell(i, 5).font = { color: { argb: 'FFC00000' }, bold: true }; if (isIn) ws.getCell(i, 6).font = { color: { argb: 'FFC00000' }, bold: true }; });   // 미처리 수량은 빨간 글씨
       r++;
     };
-    section('in', inG); section('out', outG);
-    await downloadWorkbook(wb, `입출고일지_${from === to ? from : from + '_' + to}.xlsx`);
+    section('in', ins); section('out', outs);
+    await downloadWorkbook(wb, `입출고일지_${date}.xlsx`);
   }
 };
 
