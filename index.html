@@ -482,7 +482,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
   </div>
   <div class="panel hidden" id="ledgerDue">
     <div class="row between mb12"><h2 id="ldDueTitle"></h2>
-      <div class="row"><span id="ldDueCfg" class="row"><label class="lbl muted">임박 기준</label><input type="text" inputmode="decimal" data-num id="ldDueDays" min="1" max="365" style="width:70px"><span class="muted">일</span><button class="btn sm" onclick="Ledger.saveDueDays()">저장</button></span><button class="btn light sm" onclick="Ledger.closeDue()">닫기</button></div></div>
+      <div class="row"><span id="ldDueCfg" class="row"><label class="lbl muted">임박 기준</label><input type="text" data-num id="ldDueDays" min="1" max="365" style="width:70px"><span class="muted">일</span><button class="btn sm" onclick="Ledger.saveDueDays()">저장</button></span><button class="btn light sm" onclick="Ledger.closeDue()">닫기</button></div></div>
     <div class="table-wrap" style="max-height:480px"><table><thead><tr><th>대분류</th><th>품명</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>상태</th><th>잔량</th></tr></thead><tbody id="ldDueBody"></tbody></table></div>
 
   </div>
@@ -497,7 +497,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
     <div class="controls" id="ldAddBox">
       <label class="lbl">입고(발주) 추가</label>
       <span id="ldAddDate"></span>
-      <input type="text" inputmode="decimal" data-num id="ldAddQty" placeholder="수량" style="width:90px">
+      <input type="text" data-num id="ldAddQty" placeholder="수량" style="width:90px">
       <span id="ldAddExp"></span>
       <button class="btn sm" onclick="Ledger.addInbound()" title="납품 없이 입고만 있는 건을 입고예정(적색) 줄로 넣습니다">입고 추가</button>
     </div>
@@ -723,7 +723,7 @@ const Holidays = {
 /* ---------- 날짜 입력칸: 숫자만 연속 입력, 자동으로 다음 칸 이동 ---------- */
 const DF = {
   html(cls, iso = '', mode = 'near', extra = '') {
-    return `<span class="dfield"><input type="text" inputmode="numeric" autocomplete="off" class="dinput ${cls}" data-mode="${mode}" data-iso="${iso}" value="${iso ? D.short(iso) : ''}" placeholder="MMDD" ${extra}><button type="button" class="dpick" tabindex="-1" aria-label="달력에서 선택" title="달력에서 선택"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg></button><input type="date" class="dnative" tabindex="-1" value="${iso}"></span>`;
+    return `<span class="dfield"><input type="text" autocomplete="off" class="dinput ${cls}" data-mode="${mode}" data-iso="${iso}" value="${iso ? D.short(iso) : ''}" placeholder="MMDD" ${extra}><button type="button" class="dpick" tabindex="-1" aria-label="달력에서 선택" title="달력에서 선택"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/></svg></button><input type="date" class="dnative" tabindex="-1" value="${iso}"></span>`;
   },
   mount(el, cls, iso = '', mode = 'near') { el.innerHTML = DF.html(cls, iso, mode); return el.querySelector('.dinput'); },
   get: input => input ? (input.dataset.iso || '') : '',
@@ -1222,6 +1222,8 @@ const App = {
   async init() {
     DF.init();
     // 수량 칸은 type=number 대신 글자 칸으로 둔다 (number 칸을 거치면 윈도우가 한글 입력을 영문으로 되돌림). 숫자·소수점·마이너스만 받는다
+    // 숫자 키패드 지정(inputmode)은 터치 기기에서만 붙인다: 컴퓨터 크롬은 이 지정이 있는 칸에 들어가면 한글 입력을 영문으로 바꿔 버린다
+    if (matchMedia('(pointer: coarse)').matches) document.addEventListener('focusin', e => { const t = e.target; if (t.tagName === 'INPUT' && !t.hasAttribute('inputmode')) { if (t.dataset.num !== undefined) t.setAttribute('inputmode', 'decimal'); else if (t.classList.contains('dinput')) t.setAttribute('inputmode', 'numeric'); } });
     document.addEventListener('input', e => { const t = e.target; if (t.dataset && t.dataset.num !== undefined) { const c = t.value.replace(/[^\d.\-]/g, ''); if (c !== t.value) t.value = c; } });
     $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) App.show(b.dataset.tab); });
     await Store.open();
@@ -1521,11 +1523,11 @@ const Predict = {
       <td class="ac-wrap"><input type="text" class="g-unit" value="${esc(lastUnit)}" autocomplete="off" placeholder="부대"><span class="ac-list"></span></td>
       <td class="ac-wrap"><input type="text" class="g-name" autocomplete="off" placeholder="품명"><span class="ac-list"></span></td>
       <td><input type="text" class="g-cat" placeholder="자동"></td>
-      <td class="person-only ${person ? '' : 'hidden'}"><input type="text" inputmode="decimal" data-num class="g-base" placeholder="g"></td>
-      <td class="person-only ${person ? '' : 'hidden'}"><input type="text" inputmode="decimal" data-num class="g-hc num" placeholder="인원"></td>
-      <td class="total-only ${person ? 'hidden' : ''}"><input type="text" inputmode="decimal" data-num class="g-total num"></td>
+      <td class="person-only ${person ? '' : 'hidden'}"><input type="text" data-num class="g-base" placeholder="g"></td>
+      <td class="person-only ${person ? '' : 'hidden'}"><input type="text" data-num class="g-hc num" placeholder="인원"></td>
+      <td class="total-only ${person ? 'hidden' : ''}"><input type="text" data-num class="g-total num"></td>
       <td><select class="g-utype"><option value="kg">kg</option><option value="ea">ea</option></select></td>
-      <td><input type="text" inputmode="decimal" data-num class="g-spec num" value="1" step="any"></td>
+      <td><input type="text" data-num class="g-spec num" value="1" step="any"></td>
       <td class="res-simple num o-simple">-</td>`;
     body.appendChild(tr);
     AC.bind(tr.querySelector('.g-unit'), AC.units, () => Predict.onUnit(tr));
@@ -1890,13 +1892,13 @@ const Confirm = {
   price(r) { return r.price ?? Names.product(r.name)?.price ?? null; },
   renderRows() {
     const list = Confirm.filtered(); Confirm.rows = list.slice(0, 400);
-    const cell = (r, k, cls) => { const d = Confirm.dirty.get(r.id); const v = d && k in d ? d[k] : r[k]; return `<input type="text" inputmode="decimal" data-num step="any" class="num c-${k} ${cls}${d && k in d ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${v ?? ''}" style="width:76px">`; };
+    const cell = (r, k, cls) => { const d = Confirm.dirty.get(r.id); const v = d && k in d ? d[k] : r[k]; return `<input type="text" data-num step="any" class="num c-${k} ${cls}${d && k in d ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${v ?? ''}" style="width:76px">`; };
     $('confirmBody').innerHTML = Confirm.rows.map(r => {
       const pr = Confirm.price(r), cEa = Confirm.dirty.get(r.id)?.confEa ?? r.confEa;
       const confCls = r.confEa !== null || r.confKg !== null ? 'c-conf' : '';
       const ed = Confirm.editId === r.id;
       return `<tr data-id="${esc(r.id)}"${ed ? ' class="editing"' : ''}><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${ed ? '<span class="ie-del"></span>' : r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${ed ? `<span class="ac-wrap"><input type="text" class="ie-name" value="${esc(r.name)}" autocomplete="off" style="width:100%;min-width:150px"><span class="ac-list"></span></span>` : esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
-        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${ed ? `<input type="text" inputmode="decimal" data-num step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${fmtN(r.planKg, 2)}</td>
+        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${ed ? `<input type="text" data-num step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
         <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
         <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${r.mealDate ? D.short(r.mealDate) : esc(r.rawMeal || '-')}</td>
@@ -2063,7 +2065,7 @@ const Confirm = {
       <label>부대</label><span class="ac-wrap"><input type="text" id="cfUnit" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
       <label>품명</label><span class="ac-wrap"><input type="text" id="cfName" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
       <label>구분</label><input type="text" id="cfCat" placeholder="자동">
-      <label>확정량(개)</label><input type="text" inputmode="decimal" data-num id="cfQty" style="width:140px">
+      <label>확정량(개)</label><input type="text" data-num id="cfQty" style="width:140px">
 `, Confirm.saveAdd);
     DF.mount($('cfDel'), 'cf-del', '');
     if (pre) { $('cfName').value = pre; const pp = Names.product(pre); if (pp) $('cfCat').value = pp.category || ''; }
@@ -2551,15 +2553,15 @@ const Ledger = {
     const st = !PEND_OUT.has(o.status) && PLAN_IN.has(o.inSt), cmb = !st && inEd && outEd && o.inSt !== '입고완료' && !!(o.inDate && o.inQty);   // st: 입고 줄 / cmb: 납품 줄(입고일을 적으면 입고결정 가능)
     const decide = (st || cmb) ? `<label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
-      <td>${inEd ? DF.html('e-inDate', o.inDate || '') + `<span class="in2-d">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotD(k, l.d)).join('') : ''}</span>` + `<div class="mt8">${Ledger.LOT_ADD}</div>` : ''}</td><td>${inEd ? `<input type="text" inputmode="decimal" data-num class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` + `<span class="in2-q">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotQ(k, l.q, l.e)).join('') : ''}</span>` : ''}</td><td>${inEd ? DF.html('e-expiry', o.expiry || '', 'future') : ''}</td>
-      <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="text" inputmode="decimal" data-num class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
+      <td>${inEd ? DF.html('e-inDate', o.inDate || '') + `<span class="in2-d">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotD(k, l.d)).join('') : ''}</span>` + `<div class="mt8">${Ledger.LOT_ADD}</div>` : ''}</td><td>${inEd ? `<input type="text" data-num class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` + `<span class="in2-q">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotQ(k, l.q, l.e)).join('') : ''}</span>` : ''}</td><td>${inEd ? DF.html('e-expiry', o.expiry || '', 'future') : ''}</td>
+      <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="text" data-num class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
       <td>${esc(o.unit || '')}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
       <td>${decide}<div class="row mt8" style="flex-wrap:nowrap"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="cancel">취소</button><button type="button" class="btn sm danger" data-act="delete">삭제</button></div>${outEd ? '<div class="hint mt8">출고 날짜·수량은 예정량·확정량 입력에서 수정</div>' : ''}</td></tr>`;
   },
   // 입고일 추가: 수정 줄에서 둘째 이후 입고일·수량을 넣는다 (시트에는 수량 합계와 날짜들이 저장되고, 입고 처리는 날짜별로 따로 한다)
   LOT_ADD: '<button type="button" class="btn sm light" data-act="addin2">+ 입고일 추가</button>',
   lotD: (k, iso) => `<div class="mt8 in2-i" data-k="${k}">${DF.html('e-inDateX', iso)} <button type="button" class="btn sm light" data-act="delin2" data-k="${k}">삭제</button></div>`,
-  lotQ: (k, q, e) => `<div class="mt8 in2-i" data-k="${k}"><input type="text" inputmode="decimal" data-num class="e-inQtyX num" value="${q || ''}" data-e="${esc(e || '')}" placeholder="수량" style="width:80px"></div>`,
+  lotQ: (k, q, e) => `<div class="mt8 in2-i" data-k="${k}"><input type="text" data-num class="e-inQtyX num" value="${q || ''}" data-e="${esc(e || '')}" placeholder="수량" style="width:80px"></div>`,
   onRowClick(e) {
     if (e.target.closest('.lexp-wrap')) return;   // 소비기한 입력칸을 누를 때는 줄 수정 창을 열지 않는다
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
@@ -3258,9 +3260,9 @@ const Logi = {
       const finished = !dirty && lines.every(l => l.ship && l.ship <= today), anyDone = !dirty && lines.some(l => l.ship && l.ship <= today), btns = `<button type="button" class="btn sm ok" data-act="save">출고처리</button>${anyDone ? '<button type="button" class="btn sm light mt8" data-act="cancel">처리 취소</button>' : ''}`;
       return lines.map((l, li) => {
         const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
-        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${anyDone ? D.short(o.outDate) : DF.html('odel', o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">현재 보유고 ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" inputmode="decimal" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" inputmode="decimal" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
+        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${anyDone ? D.short(o.outDate) : DF.html('odel', o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">현재 보유고 ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
         const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
-        return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" inputmode="decimal" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
+        return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
       }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
     }).join('');
   },
@@ -3373,7 +3375,7 @@ const Logi = {
   inLineHtml(i, p, x = {}, d = '') {
     return `<tr class="plan-extra" data-i="${i}"><td></td><td colspan="3" class="hint" style="text-align:right">└ 같은 납품의 다른 입고일 (${esc(p.name)})</td>
       <td>${DF.html('pdate2', x.date || d || '')}</td><td></td>
-      <td><input type="text" inputmode="decimal" data-num class="pq num" value="${x.qty || ''}" style="width:80px"></td><td>${DF.html('pexp', x.exp || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp, p.product))}</td><td><button type="button" class="btn sm light" data-act="delline">삭제</button></td></tr>`;
+      <td><input type="text" data-num class="pq num" value="${x.qty || ''}" style="width:80px"></td><td>${DF.html('pexp', x.exp || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp, p.product))}</td><td><button type="button" class="btn sm light" data-act="delline">삭제</button></td></tr>`;
   },
   addInLine(tr) {
     const i = +tr.dataset.i, it = Logi.plans.in[i]; if (!it) return;
@@ -3411,7 +3413,7 @@ const Logi = {
       const stack = (c, f) => lots.map((l, k) => `<div class="lotln l-${c}" data-k="${k}">${f(l, k, (dr.lots || [])[k] || {})}</div>`).join('');
       const cDate = lots ? stack('date', (l, k) => DF.html('pdate', l.d)) : DF.html('pdate', d);
       const cPlan = lots ? stack('plan', l => fmtN(l.q)) : fmtN(o.inQty);
-      const cQty = lots ? stack('qty', (l, k, x) => `<input type="text" inputmode="decimal" data-num class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="text" inputmode="decimal" data-num class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
+      const cQty = lots ? stack('qty', (l, k, x) => `<input type="text" data-num class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="text" data-num class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
       const cExp = lots ? stack('exp', (l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
       const cDl = lots ? stack('dl', (l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
       return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
@@ -3425,7 +3427,7 @@ const Logi = {
     Confirm.modal('입고 추가 (예정에 없던 입고)', `
       <label>품명</label><span class="ac-wrap"><input type="text" id="aiName" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
       <label>입고일</label><span id="aiDate"></span>
-      <label>입고 수량</label><input type="text" inputmode="decimal" data-num id="aiQty" style="width:140px">
+      <label>입고 수량</label><input type="text" data-num id="aiQty" style="width:140px">
       <label>소비기한</label><span id="aiExp"></span>
 `, Logi.saveAddIn);
     DF.mount($('aiDate'), 'ai-date', D.today()); DF.mount($('aiExp'), 'ai-exp', '', 'future');
@@ -3906,8 +3908,8 @@ const RowEdit = {
     const expiry = o => `<label>소비기한${DF.html('r-expiry', o.expiry || '', 'future')}</label>`;
     const card = (o, i) => `<div class="re-card" data-i="${i}">
       <div class="row between mb8"><b>${o.isIn && !o.isOut ? '입고' : o.isOut && !o.isIn ? '출고' : '입고·출고'}</b>${both(o) ? `<span class="row" style="gap:6px"><span class="tag in">입고 ${esc(o.inSt || '')}</span><span class="tag out">${outState(o)}</span></span><select class="r-status" style="display:none">${opts(o)}</select>` : `<select class="r-status">${opts(o)}</select>`}</div>
-      ${o.isIn ? `<div class="re-sec re-in"><div class="re-t">입고</div><div class="re-grid"><label>입고일${DF.html('r-inDate', o.inDate || '')}</label><label>입고 수량<input type="text" inputmode="decimal" data-num class="r-inQty num" value="${o.inQty || ''}"></label>${expiry(o)}</div></div>` : ''}
-      ${o.isOut ? `<div class="re-sec re-out"><div class="re-t">출고</div><div class="re-grid"><label>${o.lines || PEND_OUT.has(o.status) ? '납품일' : '출고일'}${DF.html('r-outDate', o.outDate || '')}</label><label>본품<input type="text" inputmode="decimal" data-num class="r-outMain num" value="${o.outMain || ''}"></label><label>샘플<input type="text" inputmode="decimal" data-num class="r-outSample num" value="${o.outSample || ''}"></label><label>부대<input type="text" class="r-unit" value="${esc(o.unit || '')}"></label>${o.isIn ? '' : expiry(o)}</div>${shipInfo(o)}</div>` : ''}
+      ${o.isIn ? `<div class="re-sec re-in"><div class="re-t">입고</div><div class="re-grid"><label>입고일${DF.html('r-inDate', o.inDate || '')}</label><label>입고 수량<input type="text" data-num class="r-inQty num" value="${o.inQty || ''}"></label>${expiry(o)}</div></div>` : ''}
+      ${o.isOut ? `<div class="re-sec re-out"><div class="re-t">출고</div><div class="re-grid"><label>${o.lines || PEND_OUT.has(o.status) ? '납품일' : '출고일'}${DF.html('r-outDate', o.outDate || '')}</label><label>본품<input type="text" data-num class="r-outMain num" value="${o.outMain || ''}"></label><label>샘플<input type="text" data-num class="r-outSample num" value="${o.outSample || ''}"></label><label>부대<input type="text" class="r-unit" value="${esc(o.unit || '')}"></label>${o.isIn ? '' : expiry(o)}</div>${shipInfo(o)}</div>` : ''}
       <div class="row mt8" style="justify-content:flex-end"><button class="btn sm danger" data-act="del">삭제</button><button class="btn sm ok" data-act="save">저장</button></div></div>`;
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)RowEdit.close()"><div class="modal">
       <div class="row between mb12"><div><h2>${esc(title)}</h2><div class="hint">${esc(p ? p.sheet + (p.company ? ' · ' + p.company : '') : '')}</div></div><button class="btn light sm" onclick="RowEdit.close()">닫기</button></div>
