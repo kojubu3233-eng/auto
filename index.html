@@ -127,6 +127,7 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .rec-mode b{font-size:18px}
 .rec-mode.on{border-color:#2f6f4f;background:#f1f8f3;box-shadow:inset 0 0 0 1px #2f6f4f}
 .plan-extra td{background:#fbfaf7}
+.lotln{padding:3px 0}.lotln+.lotln{border-top:1px dashed #d8d2c4}
 .snap-cal{max-width:420px}
 .snap-cal .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .snap-cal .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
@@ -3150,10 +3151,10 @@ const Logi = {
     ipb.addEventListener('input', e => { const tr = e.target.closest('tr'); if (tr && !e.target.classList.contains('pk')) mainOf(tr).querySelector('.pk').checked = true; });
     ipb.addEventListener('datechange', e => {
       const tr = e.target.closest('tr'); if (!tr) return;
-      if (e.target.classList.contains('pdate')) return Logi.changeInDate(+tr.dataset.i, DF.get(e.target));
+      if (e.target.classList.contains('pdate')) { const ln = e.target.closest('.lotln'); return Logi.changeInDate(+tr.dataset.i, DF.get(e.target), ln ? +ln.dataset.k : -1); }
       mainOf(tr).querySelector('.pk').checked = true;
       if (!e.target.classList.contains('pexp')) return;
-      tr.querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), Logi.plans.in[+tr.dataset.i].p.product));
+      (e.target.closest('.lotln') || tr).querySelector('.pdl').innerHTML = Logi.deadlineHtml(Names.deadline(DF.get(e.target), Logi.plans.in[+tr.dataset.i].p.product));
     });
     ipb.addEventListener('click', e => {
       const act = e.target.dataset && e.target.dataset.act; if (!act) return;
@@ -3361,6 +3362,7 @@ const Logi = {
       const it = Logi.plans.in[+tr.dataset.i]; if (!it) return;
       Logi.inDraft[Logi.inKey(it.o)] = {
         checked: tr.querySelector('.pk').checked, qty: tr.querySelector('.pq').value, exp: DF.get(tr.querySelector('.pexp')),
+        lots: [...tr.querySelectorAll('.lotln')].map(z => ({ qty: z.querySelector('.pq').value, exp: DF.get(z.querySelector('.pexp')) })),
         extras: [...body.querySelectorAll(`tr.plan-extra[data-i="${tr.dataset.i}"]`)].map(x => ({ qty: x.querySelector('.pq').value, exp: DF.get(x.querySelector('.pexp')), date: DF.get(x.querySelector('.pdate2')) }))
       };
     });
@@ -3387,7 +3389,7 @@ const Logi = {
     Logi.collectIn();
     const today = D.today(), nm = Names.norm($('inFilterName').value), from = DF.get(document.querySelector('.in-from')), to = DF.get(document.querySelector('.in-to')), showPast = $('inShowPast').checked;
     const items = []; let past = 0;
-    LedgerData.standard().forEach(p => inRowsOf(p).forEach(o => {
+    LedgerData.standard().forEach(p => p.rows.forEach(o => {   // 입고일이 나뉜 건도 한 줄(칸 안에 날짜별로 여러 줄)로 보여 준다
       const und = o.inSt === '입고예정' && o.inDate === today;   // 입고결정 전이어도 입고일 당일이면 입고 탭에 나타난다
       if ((o.inSt !== '입고결정' && !und) || !o.inQty) return;
       const d = o.inDate || today;
@@ -3402,9 +3404,16 @@ const Logi = {
     if (!items.length) { body.innerHTML = '<tr><td colspan="10" class="empty">입고할 예정 건이 없습니다 (재고수불대장에서 입고결정을 체크하면 나타납니다)</td></tr>'; return; }
     body.innerHTML = items.map(({ p, o, d, und }, i) => {
       const info = p.product, dr = Logi.inDraft[Logi.inKey(o)] || {}, exp = dr.exp !== undefined ? dr.exp : (o.expiry || '');
-      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${o.synth ? ` <span class="tag plan">${o.lotIdx + 1}차 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
-        <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${DF.html('pdate', d)}</td><td class="num">${fmtN(o.inQty)}</td>
-        <td><input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px"></td><td>${DF.html('pexp', exp, 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</td>
+      const lots = o.lotsArr && PLAN_IN.has(o.inSt) ? o.lotsArr : null;
+      const stack = f => lots.map((l, k) => `<div class="lotln" data-k="${k}">${f(l, k, (dr.lots || [])[k] || {})}</div>`).join('');
+      const cDate = lots ? stack((l, k) => DF.html('pdate', l.d)) : DF.html('pdate', d);
+      const cPlan = lots ? stack(l => fmtN(l.q)) : fmtN(o.inQty);
+      const cQty = lots ? stack((l, k, x) => `<input type="number" class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="number" class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
+      const cExp = lots ? stack((l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
+      const cDl = lots ? stack((l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
+      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
+        <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${cDate}</td><td class="num">${cPlan}</td>
+        <td>${cQty}</td><td>${cExp}</td><td>${cDl}</td>
         <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x, d)).join('');
     }).join('');
   },
@@ -3429,10 +3438,12 @@ const Logi = {
     if (await Logi.send('in', [op], [{ ts: new Date().toISOString(), kind: 'in', sheet: lp.sheet, name: lp.name, company: lp.company, date: d, qty, unit: '', expiry: exp, status: '입고완료', fields, id: op.id }])) { Confirm.closeModal(); Logi.renderInPlans(); Logi.renderToday(); }
   },
   // 입고일만 바꾸는 경우: 입고결정 상태는 그대로 두고 날짜만 저장한다
-  async changeInDate(i, iso) {
-    const it = Logi.plans.in[i]; if (!it || !iso || iso === it.d) return;
+  async changeInDate(i, iso, k = -1) {
+    const it = Logi.plans.in[i]; if (!it || !iso) return;
+    const o = it.o, lots = o.lotsArr && PLAN_IN.has(o.inSt) ? o.lotsArr : null;
+    if (lots ? iso === lots[Math.max(k, 0)].d : iso === it.d) return;
     Logi.collectIn();
-    const par = it.o.synth, op = par ? { ...Ledger.ref(par), op: 'update', fields: { inLots: par.lotsArr.map((l, ix) => ix === it.o.lotIdx ? { ...l, d: iso } : l) } } : { ...Ledger.ref(it.o), op: 'update', fields: { inDate: iso } };   // 둘째 이후 입고분은 그 입고분의 날짜만 바꾼다
+    const op = lots ? { ...Ledger.ref(o), op: 'update', fields: { inLots: lots.map((l, ix) => ix === Math.max(k, 0) ? { ...l, d: iso } : l) } } : { ...Ledger.ref(o), op: 'update', fields: { inDate: iso } };   // 나뉜 입고는 그 날짜 한 칸만 바꾼다
     if (!(await Logi.post([op], `입고일을 ${D.short(iso)}로 변경했습니다${iso < D.today() ? ' (오늘 이전 날짜라 목록에서 숨겨질 수 있습니다)' : ''}`))) Logi.renderInPlans();
   },
   async completeIn() {
@@ -3444,16 +3455,17 @@ const Logi = {
     for (const tr of trs) {
       const i = +tr.dataset.i, { p, o, und } = Logi.plans.in[i]; if (und) autoDec.push(p.name);
       const date0 = DF.get(tr.querySelector('.pdate')) || o.inDate || today, date = date0 > today ? today : date0;   // '입고 완료'는 실제로 받은 것이므로 입고일이 오늘 이후면 오늘로 기록한다
-      const cap = d => (d && d <= today ? d : today), lines = [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')), date }];
+      const cap = d => (d && d <= today ? d : today), lotEls = [...tr.querySelectorAll('.lotln')], lines = lotEls.length ? lotEls.map(z => ({ qty: num(z.querySelector('.pq').value), exp: DF.get(z.querySelector('.pexp')), date: cap(DF.get(z.querySelector('.pdate'))) || date })) : [{ qty: num(tr.querySelector('.pq').value), exp: DF.get(tr.querySelector('.pexp')), date }];
       body.querySelectorAll(`tr.plan-extra[data-i="${i}"]`).forEach(x => lines.push({ qty: num(x.querySelector('.pq').value), exp: DF.get(x.querySelector('.pexp')), date: cap(DF.get(x.querySelector('.pdate2'))) || date }));
       if (lines.some(l => !l.qty)) return toast(`${p.name}: 입고 수량을 입력하세요 (필요 없는 한 줄은 삭제하세요)`);
       const total = lines.reduce((a, l) => a + l.qty, 0);
-      if (total !== o.inQty && !confirm(`${p.name}: 예정 수량 ${fmtN(o.inQty)}개와 입고 수량 합계 ${fmtN(total)}개가 다릅니다.\n입고 수량 ${fmtN(total)}개로 처리할까요?`)) return;
+      const planQ = lotEls.length ? o.lotsArr.reduce((a, l) => a + l.q, 0) : o.inQty;
+      if (total !== planQ && !confirm(`${p.name}: 예정 수량 ${fmtN(planQ)}개와 입고 수량 합계 ${fmtN(total)}개가 다릅니다.\n입고 수량 ${fmtN(total)}개로 처리할까요?`)) return;
       noExp += lines.filter(l => !l.exp).length;
       // 입고일이 나뉜 줄: 받은 입고분은 입고완료 줄로 새로 넣고, 아직 안 받은 입고분만 원래 줄에 남긴다 (전부 받으면 첫 입고분이 원래 줄을 입고완료로 바꾼다)
       const par = o.synth || (o.lotsArr ? o : null); let viaInsert = false;
       if (par) {
-        const incl = new Set([...batch].filter(x => (x.synth || x) === par).map(x => x.synth ? x.lotIdx : 0)), remaining = par.lotsArr.filter((l, ix) => !incl.has(ix));
+        const incl = new Set([...batch].filter(x => (x.synth || x) === par).map(x => x.synth ? x.lotIdx : 0)), remaining = lotEls.length ? [] : par.lotsArr.filter((l, ix) => !incl.has(ix));
         if (remaining.length) {
           viaInsert = true;
           if (!doneParents.has(par)) { doneParents.add(par); ops.push({ ...Ledger.ref(par), op: 'update', fields: { inLots: remaining } }); entries.push({ ts: new Date().toISOString(), kind: 'adj', sheet: p.sheet, name: p.name, date: '', qty: 0, fields: {}, id: par.id }); }
