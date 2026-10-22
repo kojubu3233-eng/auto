@@ -15,7 +15,7 @@
   --plan:#DC2626; --conf:#1D4ED8;
 }
 * { box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",system-ui,sans-serif; }
-body { background:var(--paper); color:var(--ink); padding:15px; font-size:13px; }
+body { background:var(--paper); color:var(--ink); padding:15px; font-size:13px; line-height:1.45; }
 h1 { font-size:18px; font-weight:700; }
 h2 { font-size:15px; font-weight:700; }
 h3 { font-size:13px; font-weight:700; }
@@ -373,7 +373,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
         <label><input type="radio" name="dateBasis" value="delivery" checked> 납품일 기준</label>
         <label><input type="radio" name="dateBasis" value="meal"> 급식일 기준</label>
       </div>
-      <span class="hint person-only hidden">급식인원은 행마다 급식일(평일·휴일)에 맞춰 부대별정보에서 자동 입력되며, 직접 고칠 수 있습니다</span>
+      <span class="hint person-only hidden">급식인원은 급식일(평일·휴일)에 맞춰 자동 입력되며 직접 고칠 수 있습니다</span>
     </div>
     <div class="controls">
       <label class="lbl" for="pickedUnit">체크한 행에 부대 적용</label>
@@ -387,7 +387,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <span class="ac-wrap"><input type="text" id="plgName" autocomplete="off" placeholder="품명" style="width:160px"><span class="ac-list"></span></span>
       <span id="plgDate"></span>
       <button class="btn sm light" onclick="PlanLog.clear()">닫기</button>
-      <span class="hint">부대·품명·납품일 중 하나만 적어도 찾습니다. 입력 기록은 저장 후 2개월이 지나면 자동 삭제됩니다</span>
+      <span class="hint">부대·품명·납품일 중 하나만 적어도 됩니다 (기록은 2개월 뒤 자동 삭제)</span>
     </div>
     <div class="table-wrap hidden" id="plgResult" style="max-height:260px"></div>
     <div class="table-wrap" style="max-height:none">
