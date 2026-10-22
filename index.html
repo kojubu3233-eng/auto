@@ -39,6 +39,7 @@ h3 { font-size:13px; font-weight:700; }
 input[type=text], input[type=number], input[type=date], input[type=month], select {
   border:1px solid var(--border); padding:6px; border-radius:6px; background:var(--surface); color:var(--ink); font-size:13px; outline:none; }
 input:focus, select:focus { border-color:var(--accent); background:var(--accent-soft); }
+input[type=text]:not(.dinput) { ime-mode:active; }   /* 품명·부대 같은 글자 입력 칸은 한글 입력으로 시작 (지원하는 브라우저에서만 적용) */
 input[readonly] { color:var(--muted); background:var(--surface-alt) !important; }
 input.g-hc.manual { color:var(--warn); font-weight:700; }
 tr.editing td { background:#FFFBEB; }
