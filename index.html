@@ -380,6 +380,15 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <button class="btn sm" onclick="Predict.applyUnitToPicked()">적용</button>
       <span class="hint">날짜는 숫자만 입력: 1007 → 10월 7일, 7 → 이번 달 7일</span>
     </div>
+    <div class="controls" id="plgBox">
+      <label class="lbl">저장한 예정량 찾기</label>
+      <span class="ac-wrap"><input type="text" id="plgUnit" autocomplete="off" placeholder="부대" style="width:140px"><span class="ac-list"></span></span>
+      <span class="ac-wrap"><input type="text" id="plgName" autocomplete="off" placeholder="품명" style="width:160px"><span class="ac-list"></span></span>
+      <span id="plgDate"></span>
+      <button class="btn sm light" onclick="PlanLog.clear()">닫기</button>
+      <span class="hint">부대·품명·납품일 중 하나만 적어도 찾습니다. 입력 기록은 저장 후 2개월이 지나면 자동 삭제됩니다</span>
+    </div>
+    <div class="table-wrap hidden" id="plgResult" style="max-height:260px"></div>
     <div class="table-wrap" style="max-height:none">
       <table class="grid m-card" id="predictTable">
         <thead><tr>
@@ -488,8 +497,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <span id="ldAddDate"></span>
       <input type="number" id="ldAddQty" placeholder="수량" style="width:90px">
       <span id="ldAddExp"></span>
-      <button class="btn sm" onclick="Ledger.addInbound()">추가</button>
-      <button class="btn sm light" onclick="Confirm.openAdd(Ledger.curName())" title="예정에 없던 납품(출고) 줄을 확정량 입력과 재고수불대장에 함께 넣습니다">+ 납품(출고) 줄 추가</button>
+      <button class="btn sm" onclick="Ledger.addInbound()" title="납품 없이 입고만 있는 건을 입고예정(적색) 줄로 넣습니다">입고 추가</button>
     </div>
     <div class="table-wrap" style="max-height:560px">
       <table class="m-card m-led" data-labels="업체,제품,입고일,입고수량,소비기한,납품일,소계,본품,샘플,부대,재고,납품기한 임박,납품기한 초과,상태"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
@@ -1431,6 +1439,41 @@ const Home = {
 
 /* ---------- 예정량 입력 ---------- */
 const COLS_EDIT = ['g-date', 'g-unit', 'g-name', 'g-cat', 'g-base', 'g-hc', 'g-total', 'g-utype', 'g-spec'];
+// 저장한 예정량 찾기: 예정량을 저장할 때 함께 남긴 입력 기록(예정량기록 시트)에서 부대·품명·납품일로 찾아 입력 칸에 불러온다
+const PlanLog = {
+  rows: null, hits: [],
+  async load() {
+    if (PlanLog.rows) return;
+    try {
+      const res = await Api.post('ledger', { action: 'planLogRead' });
+      PlanLog.rows = (res.rows || []).map(a => ({ at: String(a[0]), del: String(a[1]), meal: String(a[2]), unit: String(a[3]), cat: String(a[4]), name: String(a[5]), base: +a[6] || 0, hc: +a[7] || 0, total: +a[8] || 0, utype: a[9] === 'ea' ? 'ea' : 'kg', spec: +a[10] || 1, mode: a[11] === 'total' ? 'total' : 'person' })).reverse();
+    } catch (e) { PlanLog.rows = null; }
+  },
+  async show() {
+    await PlanLog.load();
+    const box = $('plgResult'), u = $('plgUnit').value.trim(), n = Names.norm($('plgName').value), d = DF.get(document.querySelector('.plg-date'));
+    if (!u && !n && !d) { box.classList.add('hidden'); return; }
+    if (!PlanLog.rows) { box.classList.remove('hidden'); box.innerHTML = '<div class="empty">저장한 예정량 기록을 불러오지 못했습니다</div>'; return; }
+    PlanLog.hits = PlanLog.rows.filter(r => (!u || Sync.uKey(r.unit).includes(Sync.uKey(u))) && (!n || Names.norm(r.name).includes(n)) && (!d || r.del === d || r.meal === d)).slice(0, 60);
+    box.classList.remove('hidden');
+    box.innerHTML = PlanLog.hits.length ? `<table class="grid"><thead><tr><th>입력일시</th><th>납품일</th><th>부대</th><th>품명</th><th>기준량 × 인원</th><th>총소요량</th><th>단위·규격</th><th></th></tr></thead><tbody>${PlanLog.hits.map((r, i) =>
+      `<tr><td>${esc(r.at.slice(5, 16))}</td><td>${r.del ? D.short(r.del) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left">${esc(r.name)}</td><td>${r.base ? `${fmtN(r.base)}${r.utype === 'kg' ? 'g' : '개'} × ${fmtN(r.hc)}명` : '-'}</td><td class="num">${r.total ? fmtN(r.total, 2) : '-'}</td><td>${r.utype} · ${r.spec}</td><td><button type="button" class="btn sm light" data-use="${i}">불러오기</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">저장한 예정량이 없습니다 (입력 기록은 2개월 뒤 삭제됩니다)</div>';
+  },
+  clear() { $('plgUnit').value = ''; $('plgName').value = ''; DF.set(document.querySelector('.plg-date'), '', true); $('plgResult').classList.add('hidden'); },
+  // 입력 칸 아래에 새 줄로 불러온다 (비어 있는 마지막 줄이 있으면 그 줄에). 수정해서 새로 저장하면 된다
+  use(r) {
+    if (!r) return;
+    const mode = document.querySelector(`input[name=calcMode][value="${r.mode}"]`); if (mode && !mode.checked) { mode.checked = true; Predict.applyMode(); }
+    const body = $('predictBody'), last = body.lastElementChild;
+    const tr = last && !last.querySelector('.g-name').value.trim() ? last : Predict.addRow(true), q = c => tr.querySelector('.' + c);
+    DF.set(q('g-date'), Predict.basis() === 'delivery' ? r.del : r.meal, true); q('g-unit').value = r.unit; q('g-name').value = r.name;
+    q('g-cat').value = r.cat; q('g-cat').dataset.auto = '1';
+    q('g-base').value = r.base || ''; q('g-hc').value = r.hc || ''; if (r.hc) { q('g-hc').dataset.manual = '1'; q('g-hc').classList.add('manual'); }
+    q('g-total').value = r.total || ''; q('g-utype').value = r.utype; q('g-spec').value = r.spec;
+    Predict.onUnit(tr); Predict.baseHint(tr); Predict.queue(tr); Predict.saveDraft();
+    tr.scrollIntoView({ block: 'center' }); toast(`${r.unit} ${r.name} 기록을 입력 칸에 불러왔습니다. 고친 뒤 저장하면 새로 저장됩니다`, 4000);
+  }
+};
 const Predict = {
   mode: () => document.querySelector('input[name=calcMode]:checked').value,
   basis: () => document.querySelector('input[name=dateBasis]:checked').value,
@@ -1453,8 +1496,13 @@ const Predict = {
     document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.calcAll(); Predict.saveDraft(); }));
     $('predictAll').addEventListener('change', e => body.querySelectorAll('.pick').forEach(c => { c.checked = e.target.checked; c.closest('tr').classList.toggle('picked', c.checked); }));
     AC.bind($('pickedUnit'), AC.units);
+    AC.bind($('plgUnit'), AC.units, PlanLog.show); AC.bind($('plgName'), AC.products, PlanLog.show); DF.mount($('plgDate'), 'plg-date', '');
+    ['plgUnit', 'plgName'].forEach(id => $(id).addEventListener('input', PlanLog.show));
+    $('plgBox').addEventListener('datechange', PlanLog.show);
+    $('plgResult').addEventListener('click', e => { const b = e.target.closest('[data-use]'); if (b) PlanLog.use(PlanLog.hits[+b.dataset.use]); });
   },
   render() {
+    PlanLog.load();
     Predict.calcAll();
   },
   addRow(silent) {
@@ -1694,7 +1742,10 @@ const Predict = {
     if (!confirm(msg + '\n\n계속할까요?')) return;
     Busy.start('예정량 저장 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, ...Predict.planCells(x.r, x.kg, x.pack), '', '', x.meal, x.r.unit, '', '', '', '', x.r.utype, x.r.simple, Predict.calcNote(x.r)] })), ledgerOps });
+      const at = new Date(stamp).toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }), mode = Predict.mode();   // 입력 기록(예정량기록 시트): 나중에 기준량·인원을 참고할 수 있게 남긴다 (2개월 뒤 자동 삭제)
+      const logRows = recs.map(x => [at, x.del || '', x.meal || '', x.r.unit, x.r.cat, x.r.name, x.r.base || '', x.r.hc || '', x.r.total || '', x.r.utype, x.r.spec, mode, x.id]);
+      const res = await Api.post('ledger', { action: 'planSave', rows: recs.map(x => ({ values: [x.id, x.del, x.r.cat, x.r.name, ...Predict.planCells(x.r, x.kg, x.pack), '', '', x.meal, x.r.unit, '', '', '', '', x.r.utype, x.r.simple, Predict.calcNote(x.r)] })), ledgerOps, logRows });
+      PlanLog.rows = null;
       recs.forEach(x => { if (Hist.byId.has(x.id)) return; const rec = { id: x.id, src: 'plan', delDate: x.del, mealDate: x.meal, cat: x.r.cat, name: x.r.name, unit: x.r.unit, planEa: x.r.qty, planKg: x.kg, confEa: null, confKg: null, basis: Predict.calcNote(x.r), price: Names.product(x.r.name)?.price || null, unitType: x.r.utype, simple: x.r.simple }; Hist.derive(rec); Hist.records.push(rec); });
       Hist.reindex();
       App.rendered.confirm = false;
@@ -2592,16 +2643,12 @@ const Ledger = {
       return res;
     } catch (e) { toast('저장 실패: ' + e.message, 6000); }
   },
-  // 입고(발주) 추가: 지금 누른(수정 중인) 납품 줄에 입고 일정을 넣는다. 별도 줄을 만들지 않는다
-  curName() { const p = Ledger.d().byKey.get(Ledger.key); return p ? ((p.product && p.product.name) || p.name) : ''; },
+  // 입고(발주) 추가: 납품 없이 입고만 있는 건을 이 품목에 입고예정(적색) 줄로 넣는다. 납품(출고)은 예정량·확정량 입력에서 추가한다
   async addInbound() {
     const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
-    const o = Ledger.editing;
-    if (!o || !PEND_OUT.has(o.status) || o.unit === EXPIRED_UNIT) return toast('입고를 넣을 납품 줄을 먼저 누르세요 (입고 일정은 그 줄에 들어갑니다)');
-    if (o.inQty) return toast('이 줄에는 이미 입고가 있습니다. 줄을 눌러 나온 수정 칸에서 고치세요');
     const date = DF.get(document.querySelector('.ld-add-date')), qty = num($('ldAddQty').value), exp = DF.get(document.querySelector('.ld-add-exp'));
     if (!qty) return toast('수량을 입력하세요');
-    const res = await Ledger.saveOps([{ ...Ledger.ref(o), op: 'update', fields: { inDate: date, inQty: qty, expiry: exp, inState: '입고예정' } }], `${o.unit} 줄에 입고예정(적색)으로 넣었습니다. 입고가 확정되면 그 줄의 [입고결정]을 누르세요`);
+    const res = await Ledger.saveOps([{ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, status: '입고예정', sorted: true, fields: { inDate: date, inQty: qty, expiry: exp } }], '입고예정(적색)으로 넣었습니다. 입고가 확정되면 그 줄의 [입고결정]을 누르세요');
     if (res) { $('ldAddQty').value = ''; DF.set(document.querySelector('.ld-add-date'), '', true); DF.set(document.querySelector('.ld-add-exp'), '', true); }
   },
   /* --- 엑셀 다운로드 --- */
