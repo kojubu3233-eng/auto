@@ -1139,7 +1139,7 @@ function makeLedgerData() {
       o.pendingIn = !!(o.comb && o.inQty && PLAN_IN.has(o.inSt));
     });
     p.lotRows = [];
-    p.rows.forEach(o => { if (o.lotsArr) o.lotsArr.slice(1).forEach((l, k) => p.lotRows.push({ synth: o, lotIdx: k + 1, sheet: o.sheet, type: o.type, name: o.name, company: o.company, id: o.id, row: o.row, unit: o.unit, status: o.status, inDate: l.d, inQty: l.q, expiry: l.e, inSt: PLAN_IN.has(o.inSt) ? o.inSt : '입고예정', outTotal: 0, isIn: true, isOut: false })); });
+    p.rows.forEach(o => { if (o.lotsArr) o.lotsArr.slice(1).forEach((l, k) => p.lotRows.push({ synth: o, lotIdx: k + 1, sheet: o.sheet, type: o.type, name: o.name, company: o.company, id: o.id, row: o.row, unit: o.unit, status: o.status, inDate: l.d, inQty: l.q, expiry: l.e, inSt: PLAN_IN.has(o.inSt) || o.inSt === '입고완료' ? o.inSt : '입고예정', outTotal: 0, isIn: true, isOut: false })); });
     let last = -1; p.rows.forEach((o, i) => { if (o.stock !== '' && o.stock !== null && o.stock !== undefined) last = i; });
     let stock = 0, planIn = 0, planOut = 0;
     // 납품기한 초과 처리 줄: 바로 위 입고 줄(로트)에서 그 수량만큼 빠진 것으로 본다
@@ -1155,7 +1155,7 @@ function makeLedgerData() {
         if (o.outTotal && ACTUAL_OUT.has(o.status)) stock -= o.outTotal - po;
       }
     });
-    p.lotRows.forEach(o => { planIn += o.inQty; if (p.rows.indexOf(o.synth) <= last && o.synth.stock !== '') stock -= o.inQty; });   // 둘째 이후 입고분(예정)도 시트 재고(합계 수량 기준)에서 뺀다
+    p.lotRows.forEach(o => { if (!PLAN_IN.has(o.inSt)) return; planIn += o.inQty; if (p.rows.indexOf(o.synth) <= last && o.synth.stock !== '') stock -= o.inQty; });   // 둘째 이후 입고분(예정)도 시트 재고(합계 수량 기준)에서 뺀다
     if (last >= 0) stock += p.rows[last].stock;
     // 남은 재고는 최근 입고분부터 채워진 것으로 본다(선입선출)
     const lots = L.allocate(p, stock).lots;
@@ -3458,6 +3458,13 @@ const Logi = {
           if (!doneParents.has(par)) { doneParents.add(par); ops.push({ ...Ledger.ref(par), op: 'update', fields: { inLots: remaining } }); entries.push({ ts: new Date().toISOString(), kind: 'adj', sheet: p.sheet, name: p.name, date: '', qty: 0, fields: {}, id: par.id }); }
         } else if (o.synth) viaInsert = true;
       }
+      if (!viaInsert && lines.length > 1) {   // 한 건을 여러 날·여러 줄로 나눠 받은 경우: 새 줄을 만들지 않고 같은 줄 한 칸에 날짜·수량을 함께 적는다
+        const fields = { inDate: lines[0].date, inQty: total, expiry: lines[0].exp, inLots: lines.map(l => ({ d: l.date, q: l.qty, e: l.exp })) };
+        if (o.comb) fields.inState = '입고완료';
+        ops.push(o.comb ? { ...Ledger.ref(o), op: 'update', fields } : { ...Ledger.ref(o), op: 'update', status: '입고완료', fields });
+        entries.push({ ts: new Date().toISOString(), kind: 'in', sheet: p.sheet, name: p.name, company: p.company, date: lines[0].date, qty: total, unit: '', expiry: lines[0].exp, status: '입고완료', fields, id: o.id || '' });
+        continue;
+      }
       lines.forEach((l, k) => {
         const fields = { inDate: l.date, inQty: l.qty, expiry: l.exp }, status = '입고완료';
         if (k === 0 && o.comb && !viaInsert) fields.inState = '입고완료';   // 납품 줄은 출고 상태를 그대로 두고 입고 쪽만 완료로 바꾼다
@@ -3487,9 +3494,10 @@ const Logi = {
     const ins = Logi.log.filter(x => x.kind === 'in' && (x.ts.slice(0, 10) === t || x.date === t)).slice(-50).reverse()
       .map(x => ({ x, r: x.ok === false ? null : Logi.findRow(x) }))
       .filter(({ x, r }) => x.ok === false || r || !Logi.inYear(x));
-    Logi.todayIn = ins.map(({ x }) => x);
-    $('logiTodayIn').innerHTML = ins.length ? ins.map(({ x, r }, i) => {
-      const qty = (r ? r.inQty : 0) || x.qty, date = (r && r.inDate) || x.date, exp = r ? r.expiry : x.expiry;
+    const insL = []; ins.forEach(({ x, r }) => { if (r && r.lotsArr && !PLAN_IN.has(r.inSt)) r.lotsArr.forEach(l => insL.push({ x, r, l })); else insL.push({ x, r, l: null }); });   // 나뉘어 받은 입고는 날짜별로 따로 보여 준다
+    Logi.todayIn = insL.map(({ x }) => x);
+    $('logiTodayIn').innerHTML = insL.length ? insL.map(({ x, r, l }, i) => {
+      const qty = l ? l.q : (r ? r.inQty : 0) || x.qty, date = l ? l.d : (r && r.inDate) || x.date, exp = l ? (l.e || (r && r.expiry) || '') : r ? r.expiry : x.expiry;
       return `<div class="list-row editable k-in" data-t="${i}" title="누르면 수정할 수 있습니다"><div><div class="l-name">입고 · ${esc(x.name)}</div><div class="l-sub">${D.short(date)} ${exp ? '소비기한 ' + D.short(exp) : ''}</div></div><div class="num"><b>${fmtN(qty)}</b><div class="l-sub">${x.ok === false ? '<span class="tag danger">실패</span>' : '<span class="tag in">입고</span>'}</div></div></div>`;
     }).join('') : '<div class="empty">오늘 입고한 내역이 없습니다</div>';
     // 안전장치: 오늘까지 처리됐어야 하는데 아직 처리되지 않은 입고·출고 예정
