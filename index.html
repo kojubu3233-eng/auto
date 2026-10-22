@@ -2547,7 +2547,7 @@ const Ledger = {
     const st = !PEND_OUT.has(o.status) && PLAN_IN.has(o.inSt), cmb = !st && inEd && outEd && o.inSt !== '입고완료' && !!(o.inDate && o.inQty);   // st: 입고 줄 / cmb: 납품 줄(입고일을 적으면 입고결정 가능)
     const decide = (st || cmb) ? `<label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
-      <td>${inEd ? DF.html('e-inDate', o.inDate || '') + `<span class="in2-d">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotD(k, l.d)).join('') : ''}</span>` + (o.inQty ? `<div class="mt8">${Ledger.LOT_ADD}</div>` : '') : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` + `<span class="in2-q">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotQ(k, l.q, l.e)).join('') : ''}</span>` : ''}</td><td>${inEd ? DF.html('e-expiry', o.expiry || '', 'future') : ''}</td>
+      <td>${inEd ? DF.html('e-inDate', o.inDate || '') + `<span class="in2-d">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotD(k, l.d)).join('') : ''}</span>` + `<div class="mt8">${Ledger.LOT_ADD}</div>` : ''}</td><td>${inEd ? `<input type="number" class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` + `<span class="in2-q">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotQ(k, l.q, l.e)).join('') : ''}</span>` : ''}</td><td>${inEd ? DF.html('e-expiry', o.expiry || '', 'future') : ''}</td>
       <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="number" class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
       <td>${esc(o.unit || '')}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
       <td>${decide}<div class="row mt8" style="flex-wrap:nowrap"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="cancel">취소</button><button type="button" class="btn sm danger" data-act="delete">삭제</button></div>${outEd ? '<div class="hint mt8">출고 날짜·수량은 예정량·확정량 입력에서 수정</div>' : ''}</td></tr>`;
@@ -2598,6 +2598,7 @@ const Ledger = {
     const ds = [...tr.querySelectorAll('.e-inDateX')], qs = [...tr.querySelectorAll('.e-inQtyX')];
     const extra = ds.map((d, i) => ({ d: DF.get(d), q: num(qs[i] && qs[i].value) || 0, e: (qs[i] && qs[i].dataset.e) || '' })).filter(x => x.d && x.q > 0);
     if (ds.length > extra.length) toast('입고일 추가분은 날짜와 수량을 모두 입력해야 반영됩니다');
+    if (extra.length && !(inDate && inQty)) toast('첫째 입고일과 수량을 먼저 입력해야 추가 입고일이 반영됩니다');
     if (extra.length && inDate && inQty) f.inLots = [{ d: inDate, q: inQty, e: f.expiry || '' }, ...extra];
     else if (o && o.lotsArr) f.inLots = inDate && inQty ? [{ d: inDate, q: inQty, e: f.expiry || '' }] : [];   // 추가분을 모두 지우면 보통 입고로 되돌린다
     return f;
