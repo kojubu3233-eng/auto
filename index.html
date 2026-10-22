@@ -1406,7 +1406,7 @@ const Home = {
 
     const dueDefs = [['1개월', 0, 30, 'warn'], ['2개월', 31, 60, ''], ['3개월', 61, 90, ''], ['4개월 이상', 91, 1e9, '']];
     Home.due = dueDefs.map(([label, lo, hi, cls]) => ({ label, cls, items: lots.filter(x => x.left !== null && x.left >= lo && x.left <= hi) }));
-    const unknown = lots.filter(x => !x.l.deadline);
+    const unknown = lots.filter(x => !x.l.deadline && !(x.l.inDate && x.l.inDate > t));   // 입고일이 아직 안 온 입고 예정분은 소비기한을 모를 수밖에 없으므로 제외
     if (unknown.length) Home.due.push({ label: '정보 없음', cls: '', items: unknown, note: '소비기한 또는 품목정보(보관방법·소비기한) 미입력' });
     $('dueBuckets').innerHTML = Home.due.map((b, i) => `<button class="bucket ${b.cls} ${Home.open.due === i ? 'on' : ''}" onclick="Home.detail('due',${i})" title="${esc(b.note || '')}">
       <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div></button>`).join('');
