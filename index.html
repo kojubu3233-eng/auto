@@ -26,6 +26,8 @@ h3 { font-size:13px; font-weight:700; }
 .mb8 { margin-bottom:8px; } .mb12 { margin-bottom:12px; } .mt8 { margin-top:8px; } .mt12 { margin-top:12px; }
 .muted { color:var(--muted); font-size:12px; }
 .hint { color:var(--muted-2); font-size:11px; }
+.zone-total { display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; padding:8px 12px; margin-bottom:10px; background:var(--accent-soft); border-radius:8px; font-size:13px; }
+.zone-total b { font-size:16px; color:var(--accent); }
 .hidden { display:none !important; }
 
 .btn { padding:8px 14px; border:none; border-radius:8px; font-weight:600; cursor:pointer; color:#fff; background:var(--accent); font-size:13px; }
@@ -459,6 +461,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <span class="ac-wrap" style="flex:1;min-width:120px"><input type="text" id="zoneName" autocomplete="off" placeholder="품명 검색" style="width:100%"><span class="ac-list"></span></span>
     </div>
     <div class="sub-tabs" id="zoneWh" style="margin-bottom:10px"></div>
+    <div class="zone-total" id="zoneTotal"></div>
     <div class="table-wrap" style="max-height:640px">
       <table id="zoneTable">
         <thead><tr><th>납품일</th><th>창고</th><th>품명</th><th>보관</th><th>단위</th><th>계획량(EA)</th><th>kg</th><th>출고량(EA)</th><th>kg</th><th>급식일</th><th>부대명</th><th>지역</th><th style="min-width:220px">비고</th></tr></thead>
@@ -2196,6 +2199,9 @@ const Zone = {
     MS.setup(document.querySelector('[data-ms=zreg]'), '지역', uniq(x => x.reg).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })), Zone.sel.reg, Zone.render);
     MS.setup(document.querySelector('[data-ms=zunit]'), '부대', uniq(x => x.r.unit).sort((a, b) => a.localeCompare(b, 'ko')), Zone.sel.unit, Zone.render);
     const list = Zone.filtered(all), shown = list.slice(0, 800);
+    // 지금 걸린 조건(납품일·지역·창고·부대·품명)에 해당하는 건의 합계: 출고 kg은 소수 둘째 자리까지
+    const tot = list.reduce((a, x) => { const c = x.r.confKg; a.plan += x.r.planKg || 0; a.planEa += x.r.planEa || 0; if (c !== null && c !== undefined) { a.kg += c; a.done++; } if (x.r.confEa !== null && x.r.confEa !== undefined) a.ea += x.r.confEa; return a; }, { plan: 0, planEa: 0, kg: 0, ea: 0, done: 0 }), k2 = v => v.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    $('zoneTotal').innerHTML = `<span>출고 합계 <b>${k2(tot.kg)} kg</b></span><span>출고량 <b>${fmtN(tot.ea)}</b>개</span><span class="muted">계획 ${k2(tot.plan)} kg · ${fmtN(tot.planEa)}개</span><span class="muted">${list.length.toLocaleString()}건 중 확정 ${tot.done.toLocaleString()}건</span>`;
     let prev = '';
     $('zoneBody').innerHTML = shown.map(x => {
       const r = x.r, first = r.delDate !== prev; prev = r.delDate;
