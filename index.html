@@ -828,9 +828,14 @@ const PriceBook = () => ({
   load(rows) {
     const b = this; b.map = new Map();
     (rows || []).slice(1).forEach(r => {
-      const v = num(r[1]), d = String(r[2] || '').slice(0, 10); if (!r[0] || !(v > 0)) return;
+      const v = num(r[1]), raw = String(r[2] || '').trim(); if (!r[0] || !(v > 0)) return;
+      // 날짜 형식: 2026-10-20 / 2026.10.20 / 26.10.20 / 2026/10/20 / 10/20 모두 인정, 못 읽는 날짜는 줄을 무시(전체 적용 방지)
+      let d = '';
+      if (raw) { const m = raw.match(/^(\d{2,4})?\D*?(\d{1,2})\D+(\d{1,2})\D*$/); if (!m) return;
+        const y = m[1] ? (m[1].length === 2 ? '20' + m[1] : m[1]) : String(new Date().getFullYear());
+        d = `${y}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`; if (!D.isIso(d)) return; }
       const k = Names.norm(String(r[0])); if (!b.map.has(k)) b.map.set(k, []);
-      b.map.get(k).push({ from: D.isIso(d) ? d : '', v });
+      b.map.get(k).push({ from: d, v });
     });
     b.map.forEach(l => l.sort((a, c) => a.from.localeCompare(c.from)));
   },
