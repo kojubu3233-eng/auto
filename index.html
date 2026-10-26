@@ -821,25 +821,27 @@ const Store = {
 addEventListener('pagehide', () => Store.flush());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Store.flush(); });
 
-/* ---------- 매입가 (자동화시스템 시트의 '매입가' 탭: 제품명 · 1개당 매입가 VAT별도) ---------- */
+/* ---------- 가격표: 매입가·단가이력 탭 (제품명 · 1개당 가격 VAT별도 · 적용시작일) ---------- */
 // 같은 제품을 여러 줄 적어 두면 납품일에 맞는 줄을 쓴다: 적용시작일이 납품일 이전인 줄 중 가장 늦은 줄, 시작일이 비어 있으면 '처음부터의 가격'
-const Cost = {
+const PriceBook = () => ({
   map: new Map(),
   load(rows) {
-    Cost.map = new Map();
+    const b = this; b.map = new Map();
     (rows || []).slice(1).forEach(r => {
       const v = num(r[1]), d = String(r[2] || '').slice(0, 10); if (!r[0] || !(v > 0)) return;
-      const k = Names.norm(String(r[0])); if (!Cost.map.has(k)) Cost.map.set(k, []);
-      Cost.map.get(k).push({ from: D.isIso(d) ? d : '', v });
+      const k = Names.norm(String(r[0])); if (!b.map.has(k)) b.map.set(k, []);
+      b.map.get(k).push({ from: D.isIso(d) ? d : '', v });
     });
-    Cost.map.forEach(l => l.sort((a, b) => a.from.localeCompare(b.from)));
+    b.map.forEach(l => l.sort((a, c) => a.from.localeCompare(c.from)));
   },
+  changed(name) { const p = Names.product(name), l = this.map.get(Names.norm(p ? p.name : name)); return !!l && l.some(x => x.from); },   // 적용시작일이 있는(=가격이 바뀐 적 있는) 제품인지
   of(name, date) {
-    const p = Names.product(name), l = Cost.map.get(Names.norm(p ? p.name : name)); if (!l) return null;
+    const p = Names.product(name), l = this.map.get(Names.norm(p ? p.name : name)); if (!l) return null;
     let v = null; for (const x of l) { if (!x.from || !date || x.from <= date) v = x.v; else break; }
     return v === null && !date ? l[l.length - 1].v : v;
   }
-};
+});
+const Cost = PriceBook(), Sell = PriceBook();   // 매입가 / 판매 단가
 
 /* ---------- 서버 ---------- */
 const Api = {
@@ -1294,7 +1296,7 @@ const App = {
     App.boot = boot;
     Holidays.map = boot.holidays || {};
     Names.load(boot.products, boot.units);
-    Cost.load(boot.costs);
+    Cost.load(boot.costs); Sell.load(boot.sells);
     Hist.load(boot);
     if (!fromCache) Store.setSoon('boot', boot);
   },
@@ -1329,9 +1331,10 @@ const App = {
     if (!errs.length && !Sync.autoDone) { Sync.autoDone = true; Sync.run(true).catch(() => {}); }   // 불러온 직후 두 시트를 자동으로 맞춘다 (화면을 연 뒤 1회)
   },
   async fetchBoot(y, force) {
-    const [boot, cost] = await Promise.all([Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' }), Api.get('hist', { action: 'read', sheet: '매입가' }).catch(() => null)]);   // 매입가 탭이 없거나 실패해도 나머지는 정상 동작
+    const [boot, cost, sell] = await Promise.all([Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' }), Api.get('hist', { action: 'read', sheet: '매입가' }).catch(() => null), Api.get('hist', { action: 'read', sheet: '단가이력' }).catch(() => null)]);   // 매입가·단가이력 탭이 없거나 실패해도 나머지는 정상 동작
     if (!Array.isArray(boot.products) || !Array.isArray(boot.history)) throw new Error('자동화시스템 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
     boot.costs = cost && Array.isArray(cost.values) ? cost.values : (App.boot && App.boot.costs) || null;
+    boot.sells = sell && Array.isArray(sell.values) ? sell.values : (App.boot && App.boot.sells) || null;
     return boot;
   },
   async reloadBoot() {
@@ -1960,7 +1963,8 @@ const Confirm = {
   basisOf: r => r.basis || '',
   pack(r) { const p = Names.product(r.name); if (p && p.pack) return p.pack; if (r.planEa && r.planKg) return r.planKg / r.planEa; return null; },
   unitLabel(r) { if (r.unitType) return r.unitType; const p = Names.product(r.name); return p ? `팩(${p.pack}kg)` : '-'; },
-  price(r) { return r.price ?? Names.product(r.name)?.price ?? null; },
+  // 단가: 단가이력 탭에 적용시작일이 있는 제품은 납품일에 맞는 줄(시작일 이전은 시작일 없는 '처음 가격' 줄), 그 외 제품은 시트에 저장된 단가 → 단가이력 → 품목정보 순
+  price(r) { return (Sell.changed(r.name) ? Sell.of(r.name, r.delDate) : null) ?? r.price ?? Sell.of(r.name, r.delDate) ?? Names.product(r.name)?.price ?? null; },
   cost(r) { return Cost.of(r.name, r.delDate); },
   // 예정매출 계산용 예정량: 소숫점 첫째 자리까지 (단순산술값 → 기준량×급식인원 기록 순으로 구하고, 예정(개)와 크게 다르면 예정(개)를 쓴다)
   planQty(r) {
