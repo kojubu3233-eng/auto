@@ -976,7 +976,8 @@ const AC = {
   memo(key, build) { const k = Hist.ver + ':' + Names.units.length + ':' + Names.products.length; const m = AC._m[key]; if (m && m.k === k) return m.v; return (AC._m[key] = { k, v: build() }).v; },
   _m: {},
   units: () => AC.memo('u', () => [...new Set([...Names.units.map(u => u.name), ...Hist.units()].map(normUnit))].sort().map(n => ({ label: n }))),
-  products: () => AC.memo('p', () => [...new Set([...Names.products.map(p => p.name), ...Hist.names()])].sort().map(n => ({ label: n }))),
+  // 품목정보의 별칭(예: 콩두부 = 콩두부(푸드라인))으로만 남은 이력 품명은 목록에서 빼서 같은 품목이 두 번 나오지 않게 한다
+  products: () => AC.memo('p', () => [...new Set([...Names.products.map(p => p.name), ...Hist.names().filter(n => { const k = Names.norm(n); if (Names.byName.has(k)) return true; const a = Names.aliasIdx.get(k); return !(a && a.length === 1); })])].sort().map(n => ({ label: n }))),
   ledgerNames: () => [...new Set(LedgerData.standard().map(p => p.name))].sort().map(n => ({ label: n })),
   outUnits: () => [...new Set(LedgerData.standard().flatMap(p => p.rows.map(o => o.unit)).filter(Boolean))].sort().map(n => ({ label: n })),
   // 글자 입력 필터에 목록(드롭다운)을 붙인다: 칸을 누르면 목록이 뜨고, 고르면 바로 필터가 적용된다
