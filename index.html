@@ -822,10 +822,23 @@ addEventListener('pagehide', () => Store.flush());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Store.flush(); });
 
 /* ---------- 매입가 (자동화시스템 시트의 '매입가' 탭: 제품명 · 1개당 매입가 VAT별도) ---------- */
+// 같은 제품을 여러 줄 적어 두면 납품일에 맞는 줄을 쓴다: 적용시작일이 납품일 이전인 줄 중 가장 늦은 줄, 시작일이 비어 있으면 '처음부터의 가격'
 const Cost = {
   map: new Map(),
-  load(rows) { Cost.map = new Map(); (rows || []).slice(1).forEach(r => { const v = num(r[1]); if (r[0] && v > 0) Cost.map.set(Names.norm(String(r[0])), v); }); },
-  of(name) { const p = Names.product(name); const v = Cost.map.get(Names.norm(p ? p.name : name)); return v === undefined ? null : v; }
+  load(rows) {
+    Cost.map = new Map();
+    (rows || []).slice(1).forEach(r => {
+      const v = num(r[1]), d = String(r[2] || '').slice(0, 10); if (!r[0] || !(v > 0)) return;
+      const k = Names.norm(String(r[0])); if (!Cost.map.has(k)) Cost.map.set(k, []);
+      Cost.map.get(k).push({ from: D.isIso(d) ? d : '', v });
+    });
+    Cost.map.forEach(l => l.sort((a, b) => a.from.localeCompare(b.from)));
+  },
+  of(name, date) {
+    const p = Names.product(name), l = Cost.map.get(Names.norm(p ? p.name : name)); if (!l) return null;
+    let v = null; for (const x of l) { if (!x.from || !date || x.from <= date) v = x.v; else break; }
+    return v === null && !date ? l[l.length - 1].v : v;
+  }
 };
 
 /* ---------- 서버 ---------- */
@@ -1948,7 +1961,7 @@ const Confirm = {
   pack(r) { const p = Names.product(r.name); if (p && p.pack) return p.pack; if (r.planEa && r.planKg) return r.planKg / r.planEa; return null; },
   unitLabel(r) { if (r.unitType) return r.unitType; const p = Names.product(r.name); return p ? `팩(${p.pack}kg)` : '-'; },
   price(r) { return r.price ?? Names.product(r.name)?.price ?? null; },
-  cost(r) { return Cost.of(r.name); },
+  cost(r) { return Cost.of(r.name, r.delDate); },
   // 예정매출 계산용 예정량: 소숫점 첫째 자리까지 (단순산술값 → 기준량×급식인원 기록 순으로 구하고, 예정(개)와 크게 다르면 예정(개)를 쓴다)
   planQty(r) {
     const ea = r.planEa; if (ea === null || ea === undefined) return null;
