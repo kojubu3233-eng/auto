@@ -360,6 +360,10 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <div class="row between mb12"><h2>납품기한 임박</h2></div>
       <div class="list-box" id="dueSoon"><div class="empty">불러오는 중</div></div>
     </div>
+    <div class="panel">
+      <div class="row between mb12"><h2>납품기한 초과</h2></div>
+      <div class="list-box" id="dueOver"><div class="empty">불러오는 중</div></div>
+    </div>
   </div>
 </section>
 
@@ -893,11 +897,12 @@ const Names = {
     }
     Names.cache.set(raw, r); return r;
   },
-  // 납품 시 남아 있어야 하는 소비기한 비율: 냉장·상온 1/2, 냉동(또는 미입력) 2/3
-  fraction: storage => /냉장|상온/.test(storage || '') ? 1 / 2 : 2 / 3,
-  // 부대 사용기한(납품기한) = 소비기한 - 소비기한(개월) × 비율  예) 12개월 냉동 → 소비기한 - 8개월
+  // 납품 시 남아 있어야 하는 소비기한 비율: 냉장 또는 소비기한 2주(14일) 이내 제품 1/2, 그 외 2/3
+  fraction: (storage, days) => /냉장/.test(storage || '') || (days > 0 && days <= 14) ? 1 / 2 : 2 / 3,
+  // 부대 사용기한(납품기한) = 소비기한 - 소비기한(개월 또는 일) × 비율  예) 12개월 냉동 → 소비기한 - 8개월
   deadline(expiry, product) {
-    if (!D.isIso(expiry) || !product || !product.shelfMonths) return '';
+    if (!D.isIso(expiry) || !product) return '';
+    if (!product.shelfMonths) return product.shelfDays ? D.add(expiry, -Math.round(product.shelfDays * Names.fraction(product.storage, product.shelfDays))) : '';
     const months = product.shelfMonths * Names.fraction(product.storage);
     return Number.isInteger(months) ? D.addMonths(expiry, -months) : D.add(expiry, -Math.round(months * 30.44));
   },
@@ -1410,7 +1415,7 @@ const Home = {
     $('ageBuckets').innerHTML = Home.age.map((b, i) => `<button class="bucket ${i === 4 ? 'warn' : ''} ${Home.open.age === i ? 'on' : ''}" onclick="Home.detail('age',${i})">
       <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div></button>`).join('');
 
-    const dueDefs = [['1개월', 0, 30, 'warn'], ['2개월', 31, 60, ''], ['3개월', 61, 90, ''], ['4개월 이상', 91, 1e9, '']];
+    const dueDefs = [['4개월 이상', 91, 1e9, ''], ['3개월', 61, 90, ''], ['2개월', 31, 60, ''], ['1개월', 0, 30, 'warn'], ['납품기한 초과', -1e9, -1, 'danger']];
     Home.due = dueDefs.map(([label, lo, hi, cls]) => ({ label, cls, items: lots.filter(x => x.left !== null && x.left >= lo && x.left <= hi) }));
     const unknown = lots.filter(x => !x.l.deadline && !(x.l.inDate && x.l.inDate > t));   // 입고일이 아직 안 온 입고 예정분은 소비기한을 모를 수밖에 없으므로 제외
     if (unknown.length) Home.due.push({ label: '정보 없음', cls: '', items: unknown, note: '소비기한 또는 품목정보(보관방법·소비기한) 미입력' });
@@ -1433,6 +1438,8 @@ const Home = {
     const dueRow = (x, cls) => `<div class="list-row"><div><div class="l-name">${esc(x.p.name)}</div><div class="l-sub">소비기한 ${D.short(x.l.expiry)} · 납품기한 ${D.short(x.l.deadline)}</div></div>
       <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${x.left < 0 ? -x.left + '일 초과' : x.left + '일 남음'}</span></div></div></div>`;
     $('dueSoon').innerHTML = soon.length ? soon.map(x => dueRow(x, 'warn')).join('') : `<div class="empty">${dueDays()}일 이내 납품기한 재고가 없습니다</div>`;
+    const over = lots.filter(x => x.left !== null && x.left < 0).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
+    $('dueOver').innerHTML = over.length ? over.map(x => dueRow(x, 'danger')).join('') : '<div class="empty">납품기한이 초과된 재고가 없습니다</div>';
   },
   detail(kind, i, keep) {
     if (!keep && Home.open[kind] === i) return Home.closeDetail(kind);
@@ -1447,7 +1454,7 @@ const Home = {
       $('ageDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td>${x.l.inDate ? D.short(x.l.inDate) : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td class="num">${x.age !== null ? x.age + '일' : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
     } else {
       items.sort((a, c) => String(a.l.deadline || '9').localeCompare(String(c.l.deadline || '9')));
-      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left !== null ? x.left + '일' : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
+      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left === null ? '-' : x.left < 0 ? -x.left + '일 초과' : x.left + '일'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
     }
   },
   closeDetail(kind) {
