@@ -447,7 +447,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
         <thead><tr>
           <th style="width:34px"><input type="checkbox" id="confirmAll" title="화면에 보이는 행 전체 선택"></th><th data-sort="delDate">납품일</th><th data-sort="unit">부대</th><th data-sort="name">품명</th><th data-sort="cat">구분</th><th>단위</th>
           <th>단순산술값</th><th>예정(개)</th><th>예정(kg)</th><th>확정(개)</th><th>확정(kg)</th>
-          <th>단가</th><th>예정매출</th><th>확정매출</th><th style="min-width:260px">비고</th><th data-sort="rate">오차율</th><th data-sort="mealDate">급식일</th><th>관리</th>
+          <th>매입가</th><th>단가</th><th>예정매출</th><th>확정매출</th><th style="min-width:260px">비고</th><th data-sort="rate">오차율</th><th data-sort="mealDate">급식일</th><th>관리</th>
         </tr></thead>
         <tbody id="confirmBody"></tbody>
       </table>
@@ -820,6 +820,13 @@ const Store = {
 };
 addEventListener('pagehide', () => Store.flush());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') Store.flush(); });
+
+/* ---------- 매입가 (자동화시스템 시트의 '매입가' 탭: 제품명 · 1개당 매입가 VAT별도) ---------- */
+const Cost = {
+  map: new Map(),
+  load(rows) { Cost.map = new Map(); (rows || []).slice(1).forEach(r => { const v = num(r[1]); if (r[0] && v > 0) Cost.map.set(Names.norm(String(r[0])), v); }); },
+  of(name) { const p = Names.product(name); const v = Cost.map.get(Names.norm(p ? p.name : name)); return v === undefined ? null : v; }
+};
 
 /* ---------- 서버 ---------- */
 const Api = {
@@ -1274,6 +1281,7 @@ const App = {
     App.boot = boot;
     Holidays.map = boot.holidays || {};
     Names.load(boot.products, boot.units);
+    Cost.load(boot.costs);
     Hist.load(boot);
     if (!fromCache) Store.setSoon('boot', boot);
   },
@@ -1308,8 +1316,9 @@ const App = {
     if (!errs.length && !Sync.autoDone) { Sync.autoDone = true; Sync.run(true).catch(() => {}); }   // 불러온 직후 두 시트를 자동으로 맞춘다 (화면을 연 뒤 1회)
   },
   async fetchBoot(y, force) {
-    const boot = await Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' });
+    const [boot, cost] = await Promise.all([Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' }), Api.get('hist', { action: 'read', sheet: '매입가' }).catch(() => null)]);   // 매입가 탭이 없거나 실패해도 나머지는 정상 동작
     if (!Array.isArray(boot.products) || !Array.isArray(boot.history)) throw new Error('자동화시스템 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
+    boot.costs = cost && Array.isArray(cost.values) ? cost.values : (App.boot && App.boot.costs) || null;
     return boot;
   },
   async reloadBoot() {
@@ -1659,7 +1668,7 @@ const Predict = {
     const simple = Math.round(req / div);
     const pack = Names.product(name)?.pack;
     const simpleKg = utype === 'kg' ? Math.round(req) : (pack ? Math.round(req * pack) : null);
-    tr.dataset.simple = simple; tr.dataset.simpleKg = simpleKg ?? ''; tr.dataset.ready = '1';
+    tr.dataset.simple = simple; tr.dataset.simpleD = Math.round(req / div * 10) / 10; tr.dataset.simpleKg = simpleKg ?? ''; tr.dataset.ready = '1';
     const os = q('o-simple');
     os.innerHTML = `<div class="s-ea">${fmtN(simple)}<span class="u">ea</span></div><div class="s-kg">${simpleKg === null ? '-' : fmtN(simpleKg) + '<span class="u">kg</span>'}</div>`;
     os.title = `${utype === 'kg' ? `총소요량 ${fmtN(req, 2)}kg ÷ 포장규격 ${spec}kg` : `총소요량 ${fmtN(req)}ea`} (반올림)` + (hcNote ? ' · ' + hcNote : '');
@@ -1684,7 +1693,7 @@ const Predict = {
     return {
       tr, date: DF.get(q('g-date')), meals: Predict.basis() === 'delivery' ? Predict.meals(tr) : [], unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
       total: num(q('g-total').value), base: Predict.mode() === 'person' ? num(q('g-base').value) : null, hc: Predict.mode() === 'person' ? num(tr.dataset.hc) : null, utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
-      simple: num(tr.dataset.simple), simpleKg: num(tr.dataset.simpleKg), qty
+      simple: num(tr.dataset.simpleD), simpleKg: num(tr.dataset.simpleKg), qty
     };
   },
   // 입력한 내용 전체 지우기 (임시저장도 함께 삭제)
@@ -1939,28 +1948,39 @@ const Confirm = {
   pack(r) { const p = Names.product(r.name); if (p && p.pack) return p.pack; if (r.planEa && r.planKg) return r.planKg / r.planEa; return null; },
   unitLabel(r) { if (r.unitType) return r.unitType; const p = Names.product(r.name); return p ? `팩(${p.pack}kg)` : '-'; },
   price(r) { return r.price ?? Names.product(r.name)?.price ?? null; },
+  cost(r) { return Cost.of(r.name); },
+  // 예정매출 계산용 예정량: 소숫점 첫째 자리까지 (단순산술값 → 기준량×급식인원 기록 순으로 구하고, 예정(개)와 크게 다르면 예정(개)를 쓴다)
+  planQty(r) {
+    const ea = r.planEa; if (ea === null || ea === undefined) return null;
+    let x = null;
+    if (r.simple && !Number.isInteger(r.simple)) x = r.simple;
+    else { const m = /^([\d,.]+)\s*g\s*×\s*([\d,]+)\s*명/.exec(r.basis || ''), pk = Confirm.pack(r); if (m && pk) x = num(m[1]) * num(m[2]) / 1000 / pk; }
+    return x !== null && Math.abs(x - ea) <= 0.5 ? Math.round(x * 10) / 10 : ea;
+  },
   renderRows() {
     const list = Confirm.filtered(); Confirm.rows = list.slice(0, 400);
     const cell = (r, k, cls) => { const d = Confirm.dirty.get(r.id); const v = d && k in d ? d[k] : r[k]; return `<input type="text" data-num step="any" class="num c-${k} ${cls}${d && k in d ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${v ?? ''}" style="width:76px">`; };
     $('confirmBody').innerHTML = Confirm.rows.map(r => {
-      const pr = Confirm.price(r), cEa = Confirm.dirty.get(r.id)?.confEa ?? r.confEa;
+      const pr = Confirm.price(r), cost = Confirm.cost(r), cEa = Confirm.dirty.get(r.id)?.confEa ?? r.confEa;
       const confCls = r.confEa !== null || r.confKg !== null ? 'c-conf' : '';
       const ed = Confirm.editId === r.id;
       return `<tr data-id="${esc(r.id)}"${ed ? ' class="editing"' : ''}><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${ed ? '<span class="ie-del"></span>' : r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${ed ? `<span class="ac-wrap"><input type="text" class="ie-name" value="${esc(r.name)}" autocomplete="off" style="width:100%;min-width:150px"><span class="ac-list"></span></span>` : esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
         <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${ed ? `<input type="text" data-num step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
-        <td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * r.planEa : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
+        <td class="num">${fmtN(cost)}</td><td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * Confirm.planQty(r) : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
         <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${esc(mealTxt(r) || '-')}</td>
         <td style="white-space:nowrap">${ed ? `<button class="btn sm ok" data-act="save" data-id="${esc(r.id)}">저장</button> <button class="btn sm light" data-act="cancel" data-id="${esc(r.id)}">취소</button>` : `<button class="btn sm light" data-act="edit" data-id="${esc(r.id)}">수정</button> <button class="btn sm danger" data-act="del" data-id="${esc(r.id)}">삭제</button>`}</td></tr>`;
-    }).join('') || '<tr><td colspan="18" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
+    }).join('') || '<tr><td colspan="19" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
     $('confirmAll').checked = Confirm.rows.length > 0 && Confirm.rows.every(r => Confirm.picked.has(r.id));
     const er = Confirm.editId && Confirm.rows.find(r => r.id === Confirm.editId);
     if (er) { DF.mount(document.querySelector('#confirmBody .ie-del'), 'cf-del', er.delDate || ''); AC.bind(document.querySelector('#confirmBody .ie-name'), AC.products); }
     else Confirm.editId = null;
-    const sum = list.reduce((a, r) => { const pr = Confirm.price(r) || 0; a.planQty += r.planEa || 0; a.confQty += r.confEa || 0; a.plan += pr * (r.planEa || 0); a.conf += pr * (r.confEa || 0); return a; }, { planQty: 0, confQty: 0, plan: 0, conf: 0 });
+    // 총 매입가·마진은 매입가가 입력된 품목만 계산한다 (매입가 없는 확정 건은 제외하고 건수를 표시)
+    const sum = list.reduce((a, r) => { const pr = Confirm.price(r) || 0, cs = Confirm.cost(r), ce = r.confEa || 0; a.planQty += r.planEa || 0; a.confQty += r.confEa || 0; a.plan += pr * (r.planEa ? Confirm.planQty(r) : 0); a.conf += pr * ce; if (ce) { if (cs === null) a.noCost++; else { a.cost += cs * ce; a.margin += (pr - cs) * ce; } } return a; }, { planQty: 0, confQty: 0, plan: 0, conf: 0, cost: 0, margin: 0, noCost: 0 });
     const box = (label, val, sub) => `<div class="stat-box"><div class="b-label">${label}</div><div class="b-val">${val}</div>${sub ? `<div class="b-sub">${sub}</div>` : ''}</div>`;
     $('confirmStats').innerHTML = box('예정 수량', fmtN(sum.planQty) + '<span class="hint"> 개</span>', '') + box('예정 금액', fmtN(sum.plan) + '<span class="hint"> 원</span>', '') +
-      box('확정 수량', fmtN(sum.confQty) + '<span class="hint"> 개</span>', '') + box('확정 금액', fmtN(sum.conf) + '<span class="hint"> 원</span>', '');
+      box('확정 수량', fmtN(sum.confQty) + '<span class="hint"> 개</span>', '') + box('확정 금액', fmtN(sum.conf) + '<span class="hint"> 원</span>', '') +
+      box('총 매입가', fmtN(sum.cost) + '<span class="hint"> 원</span>', sum.noCost ? `매입가 미입력 ${sum.noCost}건 제외` : '') + box('마진 금액', fmtN(sum.margin) + '<span class="hint"> 원</span>', sum.cost ? `마진율 ${(sum.margin / (sum.cost + sum.margin) * 100).toFixed(1)}%` : '');
     if (Zone.active) Zone.render();
     $('confirmSummary').textContent = `${list.length.toLocaleString()}건${list.length > 400 ? ' (화면에는 400건까지 표시, 필터로 좁혀 보세요)' : ''} · 미저장 ${Confirm.dirty.size}건`;
   },
@@ -2166,7 +2186,7 @@ const Confirm = {
       const pk = packOf(r), pr = Confirm.price(r);
       const f = pk && r.planEa !== null && r.planEa !== undefined ? Math.round(r.planEa * pk * 1000) / 1000 : r.planKg;
       const h = pk && r.confEa !== null && r.confEa !== undefined ? Math.round(r.confEa * pk * 1000) / 1000 : r.confKg;
-      const l = pr && r.planEa ? pr * r.planEa : null, m = pr && r.confEa !== null && r.confEa !== undefined ? pr * r.confEa : null;
+      const l = pr && r.planEa ? pr * Confirm.planQty(r) : null, m = pr && r.confEa !== null && r.confEa !== undefined ? pr * r.confEa : null;
       sumL += l || 0; sumF += f || 0; sumM += m || 0; sumH += h || 0;
       return { r, pk, pr, f, h, l, m };
     });
@@ -2195,7 +2215,7 @@ const Confirm = {
       const H = put('H', null, { fmt: NUM1 }); if (r.confEa !== null && r.confEa !== undefined && pk) H.value = { formula: `G${n}*${pk}`, result: h }; else if (h !== null && h !== undefined) H.value = h;
       const md = multiMeal(r) ? null : dt(r.mealDate); if (md) put('I', md, { fmt: DT }); else put('I', r.rawMeal || '');
       put('J', r.unit); put('K', pr, { fmt: NUM });
-      const L = put('L', null, { fmt: NUM }); if (pr) L.value = { formula: `E${n}*K${n}`, result: l || 0 };
+      const L = put('L', null, { fmt: NUM }); if (pr) L.value = l || 0;
       const M = put('M', null, { fmt: NUM }); if (pr && r.confEa !== null && r.confEa !== undefined) M.value = { formula: `G${n}*K${n}`, result: m || 0 };
       put('N', ((Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id)) ? Confirm.dirty.get(r.id).note : r.note) || '').alignment = { horizontal: 'left', vertical: 'middle' };
       put('O', ''); put('P', '');
