@@ -834,7 +834,6 @@ const PriceBook = () => ({
     });
     b.map.forEach(l => l.sort((a, c) => a.from.localeCompare(c.from)));
   },
-  changed(name) { const p = Names.product(name), l = this.map.get(Names.norm(p ? p.name : name)); return !!l && l.some(x => x.from); },   // 적용시작일이 있는(=가격이 바뀐 적 있는) 제품인지
   of(name, date) {
     const p = Names.product(name), l = this.map.get(Names.norm(p ? p.name : name)); if (!l) return null;
     let v = null; for (const x of l) { if (!x.from || !date || x.from <= date) v = x.v; else break; }
@@ -1963,8 +1962,8 @@ const Confirm = {
   basisOf: r => r.basis || '',
   pack(r) { const p = Names.product(r.name); if (p && p.pack) return p.pack; if (r.planEa && r.planKg) return r.planKg / r.planEa; return null; },
   unitLabel(r) { if (r.unitType) return r.unitType; const p = Names.product(r.name); return p ? `팩(${p.pack}kg)` : '-'; },
-  // 단가: 단가이력 탭에 적용시작일이 있는 제품은 납품일에 맞는 줄(시작일 이전은 시작일 없는 '처음 가격' 줄), 그 외 제품은 시트에 저장된 단가 → 단가이력 → 품목정보 순
-  price(r) { return (Sell.changed(r.name) ? Sell.of(r.name, r.delDate) : null) ?? r.price ?? Sell.of(r.name, r.delDate) ?? Names.product(r.name)?.price ?? null; },
+  // 단가: 단가이력 탭(가격이 바뀐 제품만 적음)에서 납품일에 맞는 줄 → 없으면 시트에 저장된 단가 → 품목정보 단가
+  price(r) { return Sell.of(r.name, r.delDate) ?? r.price ?? Names.product(r.name)?.price ?? null; },
   cost(r) { return Cost.of(r.name, r.delDate); },
   // 예정매출 계산용 예정량: 소숫점 첫째 자리까지 (단순산술값 → 기준량×급식인원 기록 순으로 구하고, 예정(개)와 크게 다르면 예정(개)를 쓴다)
   planQty(r) {
