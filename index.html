@@ -1407,7 +1407,11 @@ const Home = {
   open: { age: null, due: null },
   lots() {
     const out = [], t = D.today();   // 보관일수(age)·납품기한까지 남은 일수(left)는 한 번만 계산해 둔다
-    LedgerData.standard().forEach(p => p.lots.forEach(l => out.push({ p, l, age: l.inDate ? D.diff(t, l.inDate) : null, left: l.deadline ? D.diff(l.deadline, t) : null })));
+    LedgerData.standard().forEach(p => {
+      p.lots.forEach(l => out.push({ p, l, age: l.inDate ? D.diff(t, l.inDate) : null, left: l.deadline ? D.diff(l.deadline, t) : null }));
+      // '납품기한 초과'로 처리해 둔 수량은 아직 창고에 있는 초과 재고로 보고 초과 카드에만 넣는다(보관일수에는 넣지 않음)
+      p.expired.forEach((q, row) => { const dl = Names.deadline(row.expiry, p.product); out.push({ p, l: { inDate: row.inDate, expiry: row.expiry, deadline: dl, remain: q }, age: null, left: dl ? Math.min(D.diff(dl, t), -1) : -1 }); });
+    });
     return out;
   },
   render() {
