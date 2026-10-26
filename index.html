@@ -397,7 +397,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <table class="grid m-card" id="predictTable">
         <thead><tr>
           <th class="sel-col"><input type="checkbox" id="predictAll"></th>
-          <th id="dateHead" style="width:150px">납품일</th><th style="width:130px">부대</th><th style="min-width:170px">품명</th><th style="width:100px">구분</th>
+          <th id="dateHead" style="width:150px">납품일</th><th class="meal-col" style="width:190px" title="납품일 기준일 때 급식일을 직접 정할 수 있습니다. 비우면 부대별정보로 자동 계산합니다">급식일</th><th style="width:130px">부대</th><th style="min-width:170px">품명</th><th style="width:100px">구분</th>
           <th class="person-only hidden" style="width:80px">기준량</th><th class="person-only hidden" style="width:85px">급식인원</th><th class="total-only" style="width:95px">총소요량</th><th style="width:70px">단위</th><th style="width:75px">포장규격</th>
           <th style="width:110px">예정량(산술값)</th>
         </tr></thead>
@@ -1067,6 +1067,7 @@ const Hist = {
   },
   derive(rec) {
     const p = rec.planKg ?? rec.planEa, cf = rec.confKg ?? rec.confEa;
+    if (!rec.cat) { const pr = Names.product(rec.name); if (pr && pr.category) rec.cat = pr.category; }   // 시트에 구분이 비어 있으면 품목정보의 구분으로 채운다
     rec.plan = p; rec.conf = cf;
     rec.rate = (p && cf !== null && cf !== undefined) ? (cf - p) / p * 100 : null;
   },
@@ -1506,7 +1507,8 @@ const Predict = {
     document.querySelectorAll('input[name=calcMode]').forEach(r => r.addEventListener('change', Predict.applyMode));
     document.addEventListener('visibilitychange', () => { if (document.hidden) Predict.saveDraft(true); });
     window.addEventListener('pagehide', () => Predict.saveDraft(true));
-    document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.calcAll(); Predict.saveDraft(); }));
+    document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.applyBasis(); Predict.calcAll(); Predict.saveDraft(); }));
+    body.addEventListener('click', e => { const b = e.target.closest('.g-addmeal'); if (b) Predict.addMealRow(b.closest('tr')); });
     $('predictAll').addEventListener('change', e => body.querySelectorAll('.pick').forEach(c => { c.checked = e.target.checked; c.closest('tr').classList.toggle('picked', c.checked); }));
     AC.bind($('pickedUnit'), AC.units);
     AC.bind($('plgUnit'), AC.units, PlanLog.show); AC.bind($('plgName'), AC.products, PlanLog.show); DF.mount($('plgDate'), 'plg-date', '');
@@ -1527,6 +1529,7 @@ const Predict = {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td class="sel-col"><input type="checkbox" class="pick"></td>
       <td><span class="row" style="flex-wrap:nowrap;gap:0">${DF.html('g-date', lastDate)}<span class="g-badge"></span></span></td>
+      <td class="meal-col ${Predict.basis() === 'delivery' ? '' : 'hidden'}"><span class="row" style="flex-wrap:nowrap;gap:4px">${DF.html('g-meal', '')}<button type="button" class="btn sm light g-addmeal" title="같은 납품일에 급식일이 다른 줄을 아래에 추가">+급식일</button></span><div class="hint g-mealauto"></div></td>
       <td class="ac-wrap"><input type="text" class="g-unit" value="${esc(lastUnit)}" autocomplete="off" placeholder="부대"><span class="ac-list"></span></td>
       <td class="ac-wrap"><input type="text" class="g-name" autocomplete="off" placeholder="품명"><span class="ac-list"></span></td>
       <td><input type="text" class="g-cat" placeholder="자동"></td>
@@ -1546,6 +1549,16 @@ const Predict = {
     if (!silent) { tr.querySelector('.g-date').focus(); Predict.saveDraft(); }
     return tr;
   },
+  // 같은 납품일에 급식일이 다른 줄 추가: 납품일·부대·품명·구분·단위·규격을 그대로 복사하고 급식일은 비워 둔다
+  addMealRow(tr) {
+    const src = c => tr.querySelector('.' + c), nr = Predict.addRow(true), q = c => nr.querySelector('.' + c);
+    tr.parentNode.insertBefore(nr, tr.nextSibling);
+    DF.set(q('g-date'), DF.get(src('g-date')), true); q('g-unit').value = src('g-unit').value; q('g-name').value = src('g-name').value;
+    q('g-cat').value = src('g-cat').value; if (src('g-cat').dataset.auto === '1') q('g-cat').dataset.auto = '1';
+    q('g-base').value = src('g-base').value; q('g-utype').value = src('g-utype').value; q('g-spec').value = src('g-spec').value;
+    Predict.baseHint(nr); Predict.onUnit(nr); Predict.saveDraft(); q('g-meal').focus();
+  },
+  applyBasis() { const d = Predict.basis() === 'delivery'; document.querySelectorAll('#predictTable .meal-col').forEach(el => el.classList.toggle('hidden', !d)); },
   // 샘플 기본값: 국·탕류는 0, 그 외 1kg 이하 제품은 1, 1kg 초과는 0 (출고 입력 시 직접 바꿀 수 있음)
   sample(lp, name) {
     const p = Names.product(name) || lp.product;
@@ -1589,12 +1602,14 @@ const Predict = {
     const date = DF.get(q('g-date'));
     q('g-badge').innerHTML = Holidays.badge(date);
     const unit = normUnit(q('g-unit').value), name = q('g-name').value.trim();
+    const mealIn = Predict.basis() === 'delivery' ? DF.get(q('g-meal')) : '', mealAuto = Predict.basis() === 'delivery' && date ? Names.counterpart(unit, date, 'delivery') : '';
+    q('g-mealauto').textContent = mealIn ? '' : (mealAuto ? '자동 ' + D.short(mealAuto) : '');
     const utype = q('g-utype').value, spec = num(q('g-spec').value) || 1;
     let req, needHc = false, hcNote = '';
     const set = (cls, v) => { const el = q(cls); el.textContent = v === null ? '-' : fmtN(v, 1); el.title = ''; };
     if (Predict.mode() === 'person') {
       const hcIn = q('g-hc');
-      const meal = Predict.basis() === 'meal' ? date : (Names.counterpart(unit, date, 'delivery') || date);
+      const meal = Predict.basis() === 'meal' ? date : (mealIn || mealAuto || date);
       const auto = Names.headcount(unit, meal);
       const kindName = { WORK: '평일', SAT: '토요일', HOLI: D.isIso(meal) && D.toDate(meal).getDay() === 0 ? '일요일' : '공휴일' }[Holidays.kind(meal)] || '';
       const autoNote = auto ? `급식일 ${D.short(meal)} ${kindName} 기준 ${fmtN(auto)}명 (${unit} 부대별정보)` : `${unit || '부대'}의 식수인원이 부대별정보에 없습니다. 직접 입력하세요`;
@@ -1640,7 +1655,7 @@ const Predict = {
     const name = q('g-name').value.trim(); if (!name || tr.dataset.ready !== '1') return null;
     const qty = num(tr.dataset.simple);
     return {
-      tr, date: DF.get(q('g-date')), unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
+      tr, date: DF.get(q('g-date')), meal: Predict.basis() === 'delivery' ? DF.get(q('g-meal')) : '', unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
       total: num(q('g-total').value), base: Predict.mode() === 'person' ? num(q('g-base').value) : null, hc: Predict.mode() === 'person' ? num(tr.dataset.hc) : null, utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
       simple: num(tr.dataset.simple), simpleKg: num(tr.dataset.simpleKg), qty
     };
@@ -1658,7 +1673,7 @@ const Predict = {
     const run = () => {
       const q = (tr, c) => tr.querySelector('.' + c);
       const rows = [...document.querySelectorAll('#predictBody tr')].map(tr => ({
-        date: DF.get(q(tr, 'g-date')), unit: q(tr, 'g-unit').value, name: q(tr, 'g-name').value, cat: q(tr, 'g-cat').value, catAuto: q(tr, 'g-cat').dataset.auto === '1',
+        date: DF.get(q(tr, 'g-date')), meal: DF.get(q(tr, 'g-meal')), unit: q(tr, 'g-unit').value, name: q(tr, 'g-name').value, cat: q(tr, 'g-cat').value, catAuto: q(tr, 'g-cat').dataset.auto === '1',
         base: q(tr, 'g-base').value, hc: q(tr, 'g-hc').value, hcManual: q(tr, 'g-hc').dataset.manual === '1', total: q(tr, 'g-total').value, utype: q(tr, 'g-utype').value, spec: q(tr, 'g-spec').value
       }));
       const empty = rows.every(r => !r.name.trim() && !r.total && !r.base && !r.hc);
@@ -1671,10 +1686,10 @@ const Predict = {
     const mode = document.querySelector(`input[name=calcMode][value="${d.mode}"]`); if (mode) mode.checked = true;
     const basis = document.querySelector(`input[name=dateBasis][value="${d.basis}"]`); if (basis) basis.checked = true;
     $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일';
-    $('predictBody').innerHTML = '';
+    $('predictBody').innerHTML = ''; Predict.applyBasis();
     d.rows.forEach(r => {
       const tr = Predict.addRow(true), q = c => tr.querySelector('.' + c);
-      DF.set(q('g-date'), r.date, true); q('g-unit').value = r.unit || ''; q('g-name').value = r.name || '';
+      DF.set(q('g-date'), r.date, true); DF.set(q('g-meal'), r.meal || '', true); q('g-unit').value = r.unit || ''; q('g-name').value = r.name || '';
       q('g-cat').value = r.cat || ''; if (r.catAuto) q('g-cat').dataset.auto = '1';
       q('g-base').value = r.base || ''; q('g-hc').value = r.hc || ''; if (r.hcManual) { q('g-hc').dataset.manual = '1'; q('g-hc').classList.add('manual'); }
       q('g-total').value = r.total || ''; q('g-utype').value = r.utype || 'kg'; q('g-spec').value = r.spec || 1;
@@ -1729,7 +1744,7 @@ const Predict = {
     const basis = Predict.basis(), stamp = Date.now();
     const recsAll = rows.map((r, i) => {
       const other = Names.counterpart(r.unit, r.date, basis);
-      const del = basis === 'delivery' ? r.date : other, meal = basis === 'meal' ? r.date : other;
+      const del = basis === 'delivery' ? r.date : other, meal = basis === 'meal' ? r.date : (r.meal || other);   // 납품일 기준일 때 급식일을 직접 적었으면 그 값을 쓴다
       const p = Names.product(r.name);
       const kg = r.utype === 'kg' ? Math.round(r.qty * r.spec * 100) / 100 : (p && p.pack ? Math.round(r.qty * p.pack * 100) / 100 : r.qty);
       // 행마다 저장용 ID를 한 번만 만들어 둔다 → 실패 후 다시 저장해도 중복되지 않는다
