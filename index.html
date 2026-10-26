@@ -1161,9 +1161,16 @@ function makeLedgerData() {
     p.rows.forEach(o => { if (o.lotsArr) o.lotsArr.slice(1).forEach((l, k) => p.lotRows.push({ synth: o, lotIdx: k + 1, sheet: o.sheet, type: o.type, name: o.name, company: o.company, id: o.id, row: o.row, unit: o.unit, status: o.status, inDate: l.d, inQty: l.q, expiry: l.e, inSt: PLAN_IN.has(o.inSt) || o.inSt === '입고완료' ? o.inSt : '입고예정', outTotal: 0, isIn: true, isOut: false })); });
     let last = -1; p.rows.forEach((o, i) => { if (o.stock !== '' && o.stock !== null && o.stock !== undefined) last = i; });
     let stock = 0, planIn = 0, planOut = 0;
-    // 납품기한 초과 처리 줄: 바로 위 입고 줄(로트)에서 그 수량만큼 빠진 것으로 본다
+    // 납품기한 초과 처리 줄: 위쪽 입고 줄 중 소비기한이 가장 빠른(=기한이 먼저 지난) 입고분에서 그 수량만큼 빠진 것으로 본다
     p.expired = new Map();
-    p.rows.forEach((o, i) => { if (o.unit === EXPIRED_UNIT && o.outTotal && i > 0 && p.rows[i - 1].inQty) p.expired.set(p.rows[i - 1], (p.expired.get(p.rows[i - 1]) || 0) + o.outTotal); });
+    p.rows.forEach((o, i) => {
+      if (o.unit !== EXPIRED_UNIT || !o.outTotal) return;
+      const ins = p.rows.slice(0, i).filter(r => r.inQty);
+      if (!ins.length) return;
+      const dated = ins.filter(r => D.isIso(r.expiry)).sort((a, b) => a.expiry.localeCompare(b.expiry));
+      const t = dated[0] || ins[ins.length - 1];
+      p.expired.set(t, (p.expired.get(t) || 0) + o.outTotal);
+    });
     p.rows.forEach((o, i) => {
       const inJ = i <= last && o.stock !== '';
       // 입고일이 이미 지났는데 입고 처리가 안 된 건은 재고수불대장(J열)처럼 이미 들어온 것으로 본다 (출고일이 지난 미처리 출고를 이미 나간 것으로 보는 것과 같은 방식)
