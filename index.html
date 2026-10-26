@@ -1410,7 +1410,7 @@ const Home = {
     LedgerData.standard().forEach(p => {
       p.lots.forEach(l => out.push({ p, l, age: l.inDate ? D.diff(t, l.inDate) : null, left: l.deadline ? D.diff(l.deadline, t) : null }));
       // '납품기한 초과'로 처리해 둔 수량은 아직 창고에 있는 초과 재고로 보고 초과 카드에만 넣는다(보관일수에는 넣지 않음)
-      p.expired.forEach((q, row) => { const dl = Names.deadline(row.expiry, p.product); out.push({ p, l: { inDate: row.inDate, expiry: row.expiry, deadline: dl, remain: q }, age: null, left: dl ? Math.min(D.diff(dl, t), -1) : -1 }); });
+      p.expired.forEach((q, row) => { const dl = Names.deadline(row.expiry, p.product); out.push({ p, l: { inDate: row.inDate, expiry: row.expiry, deadline: dl, remain: q }, age: null, left: dl ? Math.min(D.diff(dl, t), -1) : -1, exp: true }); });
     });
     return out;
   },
@@ -1428,7 +1428,7 @@ const Home = {
 
     const dueDefs = [['4개월 이상', 91, 1e9, ''], ['3개월', 61, 90, ''], ['2개월', 31, 60, ''], ['1개월', 0, 30, 'warn'], ['납품기한 초과', -1e9, -1, 'danger']];
     Home.due = dueDefs.map(([label, lo, hi, cls]) => ({ label, cls, items: lots.filter(x => x.left !== null && x.left >= lo && x.left <= hi) }));
-    const unknown = lots.filter(x => !x.l.deadline && !(x.l.inDate && x.l.inDate > t));   // 입고일이 아직 안 온 입고 예정분은 소비기한을 모를 수밖에 없으므로 제외
+    const unknown = lots.filter(x => !x.exp && !x.l.deadline && !(x.l.inDate && x.l.inDate > t));   // 입고일이 아직 안 온 입고 예정분은 소비기한을 모를 수밖에 없으므로 제외
     if (unknown.length) Home.due.push({ label: '정보 없음', cls: '', items: unknown, note: '소비기한 또는 품목정보(보관방법·소비기한) 미입력' });
     $('dueBuckets').innerHTML = Home.due.map((b, i) => `<button class="bucket ${b.cls} ${Home.open.due === i ? 'on' : ''}" onclick="Home.detail('due',${i})" title="${esc(b.note || '')}">
       <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div></button>`).join('');
@@ -1446,10 +1446,10 @@ const Home = {
       <div class="num"><b>${fmtN(o.outTotal)}</b><div class="l-sub">${tagOf(o.status)}</div></div></div>`).join('') : '<div class="empty">오늘 출고가 없습니다</div>';
 
     const soon = lots.filter(x => x.left !== null && x.left >= 0 && x.left <= dueDays()).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
-    const dueRow = (x, cls) => `<div class="list-row"><div><div class="l-name">${esc(x.p.name)}</div><div class="l-sub">소비기한 ${D.short(x.l.expiry)} · 납품기한 ${D.short(x.l.deadline)}</div></div>
-      <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${x.left < 0 ? -x.left + '일 초과' : x.left + '일 남음'}</span></div></div></div>`;
+    const dueRow = (x, cls) => `<div class="list-row"><div><div class="l-name">${esc(x.p.name)}</div><div class="l-sub">${x.l.expiry ? '소비기한 ' + D.short(x.l.expiry) + ' · 납품기한 ' + D.short(x.l.deadline) : '소비기한 미입력'}</div></div>
+      <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${!x.l.deadline ? '초과 처리' : x.left < 0 ? -x.left + '일 초과' : x.left + '일 남음'}</span></div></div></div>`;
     $('dueSoon').innerHTML = soon.length ? soon.map(x => dueRow(x, 'warn')).join('') : `<div class="empty">${dueDays()}일 이내 납품기한 재고가 없습니다</div>`;
-    const over = lots.filter(x => x.left !== null && x.left < 0).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
+    const over = lots.filter(x => x.left !== null && x.left < 0).sort((a, b) => String(a.l.deadline || '9').localeCompare(String(b.l.deadline || '9')));
     $('dueOver').innerHTML = over.length ? over.map(x => dueRow(x, 'danger')).join('') : '<div class="empty">납품기한이 초과된 재고가 없습니다</div>';
   },
   detail(kind, i, keep) {
@@ -1465,7 +1465,7 @@ const Home = {
       $('ageDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td>${x.l.inDate ? D.short(x.l.inDate) : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td class="num">${x.age !== null ? x.age + '일' : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
     } else {
       items.sort((a, c) => String(a.l.deadline || '9').localeCompare(String(c.l.deadline || '9')));
-      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left === null ? '-' : x.left < 0 ? -x.left + '일 초과' : x.left + '일'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
+      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left === null ? '-' : !x.l.deadline ? '초과 처리' : x.left < 0 ? -x.left + '일 초과' : x.left + '일'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
     }
   },
   closeDetail(kind) {
