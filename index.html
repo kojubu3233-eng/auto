@@ -1334,18 +1334,30 @@ const App = {
     $('loadErrorText').innerHTML = errs.map(esc).join('<br>');
     if (!errs.length) Sync.shownSig = null;   // 새로 불러온 데이터 기준으로 누락 팝업을 다시 띄운다
     App.refreshViews();
+    App.applyPrices();
     if (!errs.length && !Sync.autoDone) { Sync.autoDone = true; Sync.run(true).catch(() => {}); }   // 불러온 직후 두 시트를 자동으로 맞춘다 (화면을 연 뒤 1회)
   },
   async fetchBoot(y, force) {
-    const [boot, cost, sell] = await Promise.all([Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' }), Api.get('hist', { action: 'read', sheet: '매입가' }).catch(() => null), Api.get('hist', { action: 'read', sheet: '단가이력' }).catch(() => null)]);   // 매입가·단가이력 탭이 없거나 실패해도 나머지는 정상 동작
+    App._pricesP = Promise.all([Api.get('hist', { action: 'read', sheet: '매입가' }).catch(() => null), Api.get('hist', { action: 'read', sheet: '단가이력' }).catch(() => null)]);   // 매입가·단가이력은 기다리지 않고 따로 받는다 (탭이 없거나 실패해도 나머지는 정상 동작)
+    const boot = await Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' });
     if (!Array.isArray(boot.products) || !Array.isArray(boot.history)) throw new Error('자동화시스템 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
-    boot.costs = cost && Array.isArray(cost.values) ? cost.values : (App.boot && App.boot.costs) || null;
-    boot.sells = sell && Array.isArray(sell.values) ? sell.values : (App.boot && App.boot.sells) || null;
+    boot.costs = (App.boot && App.boot.costs) || null;   // 먼저 저장된 값으로 보여 주고, 최신 값은 applyPrices가 도착하는 대로 반영
+    boot.sells = (App.boot && App.boot.sells) || null;
     return boot;
+  },
+  async applyPrices() {
+    const [cost, sell] = await (App._pricesP || Promise.resolve([null, null]));
+    const c = cost && Array.isArray(cost.values) ? cost.values : null, s = sell && Array.isArray(sell.values) ? sell.values : null;
+    if (!App.boot || (!c && !s)) return;
+    let changed = false;
+    if (c && JSON.stringify(c) !== JSON.stringify(App.boot.costs)) { App.boot.costs = c; Cost.load(c); changed = true; }
+    if (s && JSON.stringify(s) !== JSON.stringify(App.boot.sells)) { App.boot.sells = s; Sell.load(s); changed = true; }
+    if (changed) { Store.setSoon('boot', App.boot); App.refreshViews(); }
   },
   async reloadBoot() {
     try { App.applyBoot(await App.fetchBoot(new Date().getFullYear(), true)); } catch (e) { toast('자동화시스템 새로고침 실패: ' + e.message); }
     App.refreshViews();
+    App.applyPrices();
   },
   // 저장 응답에 담겨 온 '바뀐 탭' 데이터를 화면 데이터에 끼워 넣는다 (전체 재조회 불필요). 반영하지 못하면 false
   applyPatch(patch) {
