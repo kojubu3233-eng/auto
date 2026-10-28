@@ -3302,7 +3302,24 @@ const Logi = {
     const lots = p.lots.map(l => ({ exp: l.expiry || '', remain: l.remain })).sort((a, b) => (a.exp || '9999').localeCompare(b.exp || '9999'));
     p.rows.forEach(o => { if (PEND_OUT.has(o.status) && o.lines) o.lines.forEach(l => { if ((l.ship || o.outDate) > today) { const x = lots.find(z => z.exp === l.exp); if (x) x.remain = Math.max(0, x.remain - l.qty); } }); });
     const res = new Map();
-    p.rows.filter(o => PEND_OUT.has(o.status) && o.outTotal && !o.lines).sort((a, b) => String(a.outDate).localeCompare(String(b.outDate)) || a.row - b.row).forEach(o => {
+    // 납품일이 지났는데 출고처리가 안 된 건은 재고(잔량)에서 이미 빠져 있다. 남은 재고(lots)에서 또 빼면 '재고 부족'으로 나오므로,
+    // 입고분을 입고 순서대로 쌓아 '이미 나간 수량' 구간 중 맨 끝(가장 최근 출고)을 이 건들에 선입선출로 맞춘다
+    const past = p.rows.filter(o => PEND_OUT.has(o.status) && o.outTotal && !o.lines && o.outDate && o.outDate <= today).sort((a, b) => String(a.outDate).localeCompare(String(b.outDate)) || a.row - b.row);
+    if (past.length) {
+      const ins = p.rows.filter(o => o.inQty && ACTUAL_IN.has(o.inSt)).map(o => ({ exp: o.expiry || '', qty: o.inQty - ((p.expired && p.expired.get(o)) || 0) })).filter(x => x.qty > 0);
+      let pos = Math.max(0, ins.reduce((a, x) => a + x.qty, 0) - Math.max(0, p.stock) - past.reduce((a, o) => a + o.outTotal, 0));
+      past.forEach(o => {
+        let need = o.outTotal, off = 0; const lines = [];
+        for (const x of ins) {
+          const hi = off + x.qty; off = hi; if (!need || pos >= hi) continue;
+          const q = Math.min(hi - pos, need); pos += q; need -= q;
+          const last = lines[lines.length - 1]; if (last && last.exp === x.exp) last.qty += q; else lines.push({ exp: x.exp, qty: q, ship: '' });
+        }
+        if (need) lines.push({ exp: '', qty: need, ship: '', short: true });
+        res.set(o, lines);
+      });
+    }
+    p.rows.filter(o => PEND_OUT.has(o.status) && o.outTotal && !o.lines && !res.has(o)).sort((a, b) => String(a.outDate).localeCompare(String(b.outDate)) || a.row - b.row).forEach(o => {
       let need = o.outTotal; const lines = [];
       for (const l of lots) { if (!need) break; if (l.remain <= 0) continue; const q = Math.min(l.remain, need); l.remain -= q; need -= q; lines.push({ exp: l.exp, qty: q, ship: '' }); }
       if (need) lines.push({ exp: '', qty: need, ship: '', short: true });
