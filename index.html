@@ -1130,6 +1130,8 @@ const ACTUAL_IN = { has: s => !PLAN_IN.has(s) };
 // 둘째 이후 입고분은 p.lotRows에 따로 두고, 입고 예정을 보는 곳(입고 스케줄·알림·물류관리 입고)에서만 함께 본다
 const parseLotsStr = str => String(str || '').split(';').map(x => x.trim()).filter(Boolean).map(x => { const [d, q, e] = x.split('|'); return { d: d || '', q: +q || 0, e: e || '' }; }).filter(l => l.q > 0);
 const inRowsOf = p => p.lotRows && p.lotRows.length ? p.rows.concat(p.lotRows) : p.rows;
+// 이미 들어온 입고분을 입고 순서대로: 입고일이 나뉜 줄은 둘째 이후 입고분(lotRows)을 첫 입고분 바로 뒤에 둔다 (재고 소비기한 배분·선입선출에 모두 쓴다)
+const inEntries = p => { const t = D.today(), out = []; p.rows.forEach(o => { if (o.inQty && ACTUAL_IN.has(o.inSt)) out.push(o); (p.lotRows || []).forEach(l => { if (l.synth === o && ACTUAL_IN.has(l.inSt) && !(l.inDate > t)) out.push(l); }); }); return out; };
 const ACTUAL_OUT = { has: () => true };
 const EXPIRED_UNIT = '납품기한 초과';   // 납품기한 초과 처리로 넣은 출고 줄의 부대칸 표시
 const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입고결정': 'c-conf', '출고확정': 'c-conf', '입고완료': 'c-done', '이월': 'c-done', '출고완료': 'c-done', '': 'c-done' };
@@ -1219,10 +1221,9 @@ function makeLedgerData() {
     p.nextDeadline = ds[0] || '';
   },
   allocate(p, stock) {
-    const lots = []; let need = Math.max(0, stock);
-    for (let i = p.rows.length - 1; i >= 0 && need > 0; i--) {
-      const o = p.rows[i];
-      if (!(o.inQty && ACTUAL_IN.has(o.inSt))) continue;
+    const lots = [], ins = inEntries(p); let need = Math.max(0, stock);
+    for (let i = ins.length - 1; i >= 0 && need > 0; i--) {
+      const o = ins[i];
       const avail = o.inQty - ((p.expired && p.expired.get(o)) || 0);   // 초과 처리된 수량은 제외
       if (avail <= 0) continue;
       const take = Math.min(avail, need); need -= take;
@@ -3302,7 +3303,7 @@ const Logi = {
   pastInfo(p, today) {
     const past = p.rows.filter(o => PEND_OUT.has(o.status) && o.outTotal && !o.lines && o.outDate && o.outDate <= today).sort((a, b) => String(a.outDate).localeCompare(String(b.outDate)) || a.row - b.row);
     if (!past.length) return null;
-    const ins = p.rows.filter(o => o.inQty && ACTUAL_IN.has(o.inSt)).map(o => ({ exp: o.expiry || '', qty: o.inQty - ((p.expired && p.expired.get(o)) || 0) })).filter(x => x.qty > 0);
+    const ins = inEntries(p).map(o => ({ exp: o.expiry || '', qty: o.inQty - ((p.expired && p.expired.get(o)) || 0) })).filter(x => x.qty > 0);
     return { past, ins, pos: Math.max(0, ins.reduce((a, x) => a + x.qty, 0) - Math.max(0, p.stock) - past.reduce((a, o) => a + o.outTotal, 0)) };
   },
   // 소비기한별 잔량: 납품일이 지난 미처리 건이 있으면 그 건들이 나가기 '전' 잔량(출고처리 때 어디서 얼마 나가는지 보이도록), 없으면 현재 잔량
@@ -3886,7 +3887,8 @@ const Estate = {
   refs: [], sel: new Set(), bound: false,
   // 소비기한 수정: 그 재고가 들어온 입고 줄의 소비기한을 바꾸고, 같은 소비기한으로 잡혀 있던 출고 배분(출고 탭)도 함께 옮긴다
   async editExpiry(r, val) {
-    const o = r.o, old = o.expiry || '', ops = [{ ...Ledger.ref(o), op: 'update', fields: { expiry: val } }];
+    const o = r.o, old = o.expiry || '', sy = o.synth;   // 입고일이 나뉜 줄의 둘째 이후 입고분은 분할 정보(inLots)에서 해당 칸만 고친다
+    const ops = [sy ? { ...Ledger.ref(sy), op: 'update', fields: { inLots: sy.lotsArr.map((l, i) => i === o.lotIdx ? { ...l, e: val } : l) } } : { ...Ledger.ref(o), op: 'update', fields: { expiry: val } }];
     if (old) r.p.rows.forEach(x => {
       if (PEND_OUT.has(x.status) && x.lines && x.lines.some(l => l.exp === old)) ops.push({ ...Ledger.ref(x), op: 'update', fields: { ships: fmtShips(x.lines.map(l => ({ ...l, exp: l.exp === old ? val : l.exp }))) } });
     });
