@@ -1207,6 +1207,7 @@ function makeLedgerData() {
       if (po) { planOut += po; if (inJ) stock += po; }
       if (i > last) {
         if (o.inQty && ACTUAL_IN.has(o.inSt)) stock += o.inQty;
+        p.lotRows.forEach(l => { if (l.synth === o && ACTUAL_IN.has(l.inSt) && !(l.inDate > today)) stock += l.inQty; });   // 입고일이 나뉜 줄의 둘째 이후 입고분도 시트 재고(J열) 뒤에 이어진 줄이면 더한다
         if (o.outTotal && ACTUAL_OUT.has(o.status)) stock -= o.outTotal - po;
       }
     });
@@ -3737,7 +3738,7 @@ const Logi = {
     const date = DF.get(document.querySelector('.print-date')); if (!date) return toast('일자를 입력하세요');
     const ins = [], outs = [];
     LedgerData.standard().forEach(p => {
-      const i = p.rows.filter(o => o.inDate === date && o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.inSt));
+      const i = inRowsOf(p).filter(o => o.inDate === date && o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.inSt));
       const o = [];
       p.rows.forEach(r => { if (r.outTotal && ACTUAL_OUT.has(r.status)) shipParts(r).forEach(x => { if (x.date === date && (!PEND_OUT.has(r.status) || x.date <= D.today())) o.push({ expiry: x.exp || r.expiry || '', outTotal: x.qty, unit: r.unit }); }); });
       if (i.length) ins.push({ p, rows: i });
@@ -3794,17 +3795,18 @@ const Report = {
   // 특정 일자 마감 재고 = 현재고 - 그 이후 입고 + 그 이후 출고
   stockAt(p, day) {
     let s = p.stock;
+    inEntries(p).forEach(o => { if (o.inDate > day) s -= o.inQty; });
     p.rows.forEach(o => {
-      if (o.inQty && ACTUAL_IN.has(o.inSt) && o.inDate > day) s -= o.inQty;
       if (o.outTotal && ACTUAL_OUT.has(o.status)) shipParts(o).forEach(x => { if (x.date > day && (!PEND_OUT.has(o.status) || x.date <= D.today())) s += x.qty; });
     });
     return s;
   },
   lotsAt(p, day, stock) {
     const res = new Map(); let need = Math.max(0, stock);
-    for (let i = p.rows.length - 1; i >= 0 && need > 0; i--) {
-      const o = p.rows[i];
-      if (!(o.inQty && ACTUAL_IN.has(o.inSt)) || (o.inDate && o.inDate > day)) continue;
+    const ins = inEntries(p);
+    for (let i = ins.length - 1; i >= 0 && need > 0; i--) {
+      const o = ins[i];
+      if (o.inDate && o.inDate > day) continue;
       const t = Math.min(o.inQty, need); need -= t; res.set(o, t);
     }
     return res;
@@ -3813,7 +3815,7 @@ const Report = {
     const prevDay = D.add(day, -1), out = [];
     LedgerData.standard().forEach(p => {
       const end = Report.stockAt(p, day), prev = Report.stockAt(p, prevDay);
-      const ins = p.rows.filter(o => o.inQty && o.status !== '이월' && ACTUAL_IN.has(o.inSt) && o.inDate === day);
+      const ins = inEntries(p).filter(o => o.status !== '이월' && o.inDate === day);
       const outs = [];   // 그날 출고된 조각: 출고일(없으면 납품일) 기준
       p.rows.forEach(o => { if (o.outTotal && ACTUAL_OUT.has(o.status)) shipParts(o).forEach(x => { if (x.date === day && (!PEND_OUT.has(o.status) || x.date <= D.today())) outs.push({ o, qty: x.qty, unit: o.unit }); }); });
       const inQty = ins.reduce((a, o) => a + o.inQty, 0), outQty = outs.reduce((a, x) => a + x.qty, 0);
@@ -3985,10 +3987,9 @@ const Snap = {
   saveToday() { const t = D.today(); Snap.data[t] = Snap.make(t); Snap.persist(); Snap.render(); toast(`${D.short(t)} 현황을 백업했습니다`); },
   async fill() {
     const days = new Set([D.today()]), t = D.today();
-    LedgerData.standard().forEach(p => p.rows.forEach(o => {
-      if (o.inQty && ACTUAL_IN.has(o.inSt) && o.status !== '이월' && o.inDate && o.inDate <= t) days.add(o.inDate);
+    LedgerData.standard().forEach(p => { inEntries(p).forEach(o => { if (o.status !== '이월' && o.inDate && o.inDate <= t) days.add(o.inDate); }); p.rows.forEach(o => {
       if (o.outTotal && ACTUAL_OUT.has(o.status) && o.outDate && o.outDate <= t) days.add(o.outDate);
-    }));
+    }); });
     const todo = [...days].filter(d => !Snap.data[d]).sort();
     if (!todo.length) return toast('이미 모든 날짜가 백업되어 있습니다');
     if (!confirm(`입고·출고가 있었던 ${todo.length}일의 현황을 현재 시트 기준으로 만들어 저장합니다.\n(과거 날짜는 현재 시트 내용으로 다시 계산한 값입니다) 계속할까요?`)) return;
