@@ -3298,16 +3298,29 @@ const Logi = {
   outDraft: {}, outGroups: [],
   outKey: o => o.id || (o.sheet + '#' + o.row),
   // 확정 건별 자동 배분(선입선출): 이미 출고일이 잡혀 아직 나가지 않은 수량은 해당 소비기한에서 먼저 뺀다
+  // 납품일이 지났는데 출고처리가 안 된 건(past), 입고분 순서(ins), 그 건들이 나가기 전에 이미 나간 수량(pos)
+  pastInfo(p, today) {
+    const past = p.rows.filter(o => PEND_OUT.has(o.status) && o.outTotal && !o.lines && o.outDate && o.outDate <= today).sort((a, b) => String(a.outDate).localeCompare(String(b.outDate)) || a.row - b.row);
+    if (!past.length) return null;
+    const ins = p.rows.filter(o => o.inQty && ACTUAL_IN.has(o.inSt)).map(o => ({ exp: o.expiry || '', qty: o.inQty - ((p.expired && p.expired.get(o)) || 0) })).filter(x => x.qty > 0);
+    return { past, ins, pos: Math.max(0, ins.reduce((a, x) => a + x.qty, 0) - Math.max(0, p.stock) - past.reduce((a, o) => a + o.outTotal, 0)) };
+  },
+  // 소비기한별 잔량: 납품일이 지난 미처리 건이 있으면 그 건들이 나가기 '전' 잔량(출고처리 때 어디서 얼마 나가는지 보이도록), 없으면 현재 잔량
+  lotsBefore(p, today) {
+    const pi = Logi.pastInfo(p, today); if (!pi) return p.lots;
+    const m = new Map(); let off = 0;
+    pi.ins.forEach(x => { const hi = off + x.qty; off = hi; const r = Math.min(x.qty, hi - pi.pos); if (r > 0 && x.exp) m.set(x.exp, (m.get(x.exp) || 0) + r); });
+    return [...m].map(([expiry, remain]) => ({ expiry, remain }));
+  },
   suggest(p, today) {
     const lots = p.lots.map(l => ({ exp: l.expiry || '', remain: l.remain })).sort((a, b) => (a.exp || '9999').localeCompare(b.exp || '9999'));
     p.rows.forEach(o => { if (PEND_OUT.has(o.status) && o.lines) o.lines.forEach(l => { if ((l.ship || o.outDate) > today) { const x = lots.find(z => z.exp === l.exp); if (x) x.remain = Math.max(0, x.remain - l.qty); } }); });
     const res = new Map();
     // 납품일이 지났는데 출고처리가 안 된 건은 재고(잔량)에서 이미 빠져 있다. 남은 재고(lots)에서 또 빼면 '재고 부족'으로 나오므로,
     // 입고분을 입고 순서대로 쌓아 '이미 나간 수량' 구간 중 맨 끝(가장 최근 출고)을 이 건들에 선입선출로 맞춘다
-    const past = p.rows.filter(o => PEND_OUT.has(o.status) && o.outTotal && !o.lines && o.outDate && o.outDate <= today).sort((a, b) => String(a.outDate).localeCompare(String(b.outDate)) || a.row - b.row);
-    if (past.length) {
-      const ins = p.rows.filter(o => o.inQty && ACTUAL_IN.has(o.inSt)).map(o => ({ exp: o.expiry || '', qty: o.inQty - ((p.expired && p.expired.get(o)) || 0) })).filter(x => x.qty > 0);
-      let pos = Math.max(0, ins.reduce((a, x) => a + x.qty, 0) - Math.max(0, p.stock) - past.reduce((a, o) => a + o.outTotal, 0));
+    const pi = Logi.pastInfo(p, today);
+    if (pi) {
+      const { past, ins } = pi; let pos = pi.pos;
       past.forEach(o => {
         let need = o.outTotal, off = 0; const lines = [];
         for (const x of ins) {
@@ -3370,12 +3383,12 @@ const Logi = {
     if (!groups.length) { body.innerHTML = '<tr><td colspan="11" class="empty">출고할 건이 없습니다 (확정량을 입력한 건 중 납품일이 지나지 않은 건이 나타납니다)</td></tr>'; return; }
     body.innerHTML = groups.map((g, gi) => {
       const { p, o, lines, dirty } = g, n = lines.length;
-      const baseOpts = p.lots.filter(l => l.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(l => ({ v: l.expiry, t: `${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})` }));
-      const lotOpts = sel => { const opts = sel && !baseOpts.some(x => x.v === sel) ? baseOpts.concat({ v: sel, t: `${D.short(sel)} (잔량 0 · 소진)` }) : baseOpts; return '<option value="">미지정</option>' + opts.map(x => `<option value="${x.v}"${x.v === sel ? ' selected' : ''}>${esc(x.t)}</option>`).join(''); };
+      const pendPast = PEND_OUT.has(o.status) && !o.lines && o.outDate <= today, baseOpts = (pendPast ? Logi.lotsBefore(p, today) : p.lots).filter(l => l.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(l => ({ v: l.expiry, t: `${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})` }));
+      const lotOpts = sel => { const opts = sel && !baseOpts.some(x => x.v === sel) ? baseOpts.concat({ v: sel, t: D.short(sel) }) : baseOpts; return '<option value="">미지정</option>' + opts.map(x => `<option value="${x.v}"${x.v === sel ? ' selected' : ''}>${esc(x.t)}</option>`).join(''); };
       const finished = !dirty && lines.every(l => l.ship && l.ship <= today), anyDone = !dirty && lines.some(l => l.ship && l.ship <= today), btns = `<button type="button" class="btn sm ok" data-act="save">출고처리</button>${anyDone ? '<button type="button" class="btn sm light mt8" data-act="cancel">처리 취소</button>' : ''}`;
       return lines.map((l, li) => {
         const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
-        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${anyDone ? D.short(o.outDate) : DF.html('odel', o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">현재 보유고 ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
+        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${anyDone ? D.short(o.outDate) : DF.html('odel', o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">현재 보유고 ${fmtN(Math.max(p.stock, 0))}${pendPast ? ' <span class="hint">(이 건 출고 반영 후)</span>' : ''}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
         const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
         return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
       }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
