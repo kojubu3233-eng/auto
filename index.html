@@ -849,13 +849,22 @@ const PriceBook = () => ({
       b.map.get(k).push({ from: d, v });
     });
     b.map.forEach(l => l.sort((a, c) => a.from.localeCompare(c.from)));
+    // 이름이 조금 달라도 찾도록: 괄호(업체명 등)를 뺀 이름, 품목정보 이름·별칭으로 연결 (둘 이상에 걸리면 쓰지 않는다)
+    b.alias = new Map(); const add = (a, k) => { if (!a || b.map.has(a)) return; b.alias.set(a, b.alias.has(a) && b.alias.get(a) !== k ? null : k); };
+    b.map.forEach((l, k) => { add(PriceBook.base(k), k); const pr = Names.product(k) || (Names.resolve(k) || {}).product; if (pr) { add(Names.norm(pr.name), k); add(PriceBook.base(Names.norm(pr.name)), k); } });
+  },
+  find(name) {
+    const b = this, p = Names.product(name) || (Names.resolve(name) || {}).product, keys = [p && Names.norm(p.name), Names.norm(name)].filter(Boolean);
+    for (const k of keys.concat(keys.map(PriceBook.base))) { if (b.map.has(k)) return b.map.get(k); const a = b.alias && b.alias.get(k); if (a) return b.map.get(a); }
+    return null;
   },
   of(name, date) {
-    const p = Names.product(name), l = this.map.get(Names.norm(p ? p.name : name)); if (!l) return null;
+    const l = this.find(name); if (!l) return null;
     let v = null; for (const x of l) { if (!x.from || !date || x.from <= date) v = x.v; else break; }
     return v === null && !date ? l[l.length - 1].v : v;
   }
 });
+PriceBook.base = k => String(k || '').replace(/\(.*?\)/g, '');
 const Cost = PriceBook(), Sell = PriceBook();   // 매입가 / 판매 단가
 
 /* ---------- 서버 ---------- */
