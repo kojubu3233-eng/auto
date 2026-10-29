@@ -2458,12 +2458,14 @@ const Ledger = {
     $('ldBody').addEventListener('click', e => {   // 소비기한이 있으면 글자로만 보여주고 [수정]을 눌렀을 때만 고칠 수 있다 (비어 있으면 바로 입력칸)
       const b = e.target.closest('.lexp-edit'); if (!b) return;
       const tr = b.closest('tr[data-i]'), it = tr && Ledger.shown[+tr.dataset.i]; if (!it) return;
-      const w = b.closest('.lexp-wrap'); w.innerHTML = DF.html('lexp', it.o.expiry || '', 'future');
+      const lot = b.closest('.lexp-lot'), w = lot || b.closest('.lexp-wrap');   // 입고일이 나뉜 줄은 둘째 이후 소비기한도 각각 수정
+      w.innerHTML = DF.html('lexp', (lot ? (it.o.lotsArr[+lot.dataset.k + 1] || {}).e : it.o.expiry) || '', 'future');
     });
     $('ldBody').addEventListener('datechange', e => {   // 소비기한 칸: 수정 버튼을 누른 뒤에만 저장
       if (!e.target.classList.contains('lexp')) return;
       const tr = e.target.closest('tr[data-i]'), it = tr && Ledger.shown[+tr.dataset.i]; if (!it) return;
-      Ledger.saveOps([{ ...Ledger.ref(it.o), op: 'update', fields: { expiry: DF.get(e.target) } }], '소비기한을 저장했습니다');
+      const lot = e.target.closest('.lexp-lot'), v = DF.get(e.target);
+      Ledger.saveOps([{ ...Ledger.ref(it.o), op: 'update', fields: lot ? { inLots: it.o.lotsArr.map((l, i) => i === +lot.dataset.k + 1 ? { ...l, e: v } : l) } : { expiry: v } }], '소비기한을 저장했습니다');
     });
     $('estateBody').addEventListener('datechange', e => {
       if (!e.target.classList.contains('es-exp')) return;
@@ -2641,7 +2643,7 @@ const Ledger = {
       const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + (p.expired.has(o) ? ' row-grey' : '');
       const inNote = o.note ? `<div class="hint">${esc(o.note)}</div>` : '';
       const html = `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${md(l.d)}</div>`).join('') : ''}${inNote}</td><td class="num ${o.inQty && PLAN_IN.has(o.inSt) ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${fmtN(l.q)}</div>`).join('') : ''}</td>
-        <td class="lexp-wrap">${!o.inQty ? '' : o.expiry ? `<span class="lexp-view">${D.short(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
+        <td class="lexp-wrap">${!o.inQty ? '' : (o.expiry ? `<span class="lexp-view">${D.short(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')) + (o.lotsArr ? o.lotsArr.slice(1).map((l, k) => `<div class="lexp-lot" data-k="${k}">${l.e ? `<span class="lexp-view">${D.short(l.e)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</div>`).join('') : '')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
         <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td>
         <td class="num ${soon ? 'warn-cell' : ''}">${soon ? fmtN(soon) : ''}</td><td>${statusCell(o)}</td></tr>`;
       // 수정 중인 줄은 원래 줄을 그대로 두고 바로 아래에 입력 줄을 붙인다
