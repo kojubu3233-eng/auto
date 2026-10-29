@@ -147,6 +147,17 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .out-grp td{border-top:2px solid var(--border)}
 .out-act{display:none}
 .out-grp.dirty td,.out-line.dirty td{background:#fffbeb}
+@media (min-width:761px){
+  /* 출고 탭 표: 칸 테두리를 진하게, 납품 건 사이는 굵은 선, 건마다 배경을 번갈아 */
+  #outPlanBody td{border:1px solid #BDB6A6;padding:6px 6px}
+  #outPlanBody tr.out-grp td{border-top:3px solid #5F584A}
+  #outPlanBody tr.g1 td{background:#F5F2EA}
+  #outPlanBody tr.g0 td{background:#fff}
+  #outPlanBody tr.dirty td{background:#fffbeb}
+  #outPlanBody tr.out-line:not(.out-grp) td{border-top:1px dashed #BDB6A6}
+  #outPlanBody td input[type=text]:not([readonly]),#outPlanBody td select{border:1px solid #8E8778;background:#fff}
+  #outPlanBody td .hint{margin-top:2px}
+}
 #estateTable .sub td{background:var(--surface-alt);font-weight:700}
 #estateTable .dl-over{color:#c0392b;font-weight:600}.dl-soon{color:#b45309;font-weight:600}
 .alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
@@ -3404,7 +3415,7 @@ const Logi = {
         const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
         const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${anyDone ? D.short(o.outDate) : DF.html('odel', o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">${pendPast ? '이 건 출고 반영 후 보유고' : '현재 보유고'} ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
         const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? '<div class="hint">확정 수량이 바뀌어 배분을 다시 계산했습니다</div>' : ''}</td>` : '';
-        return `<tr class="out-line ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
+        return `<tr class="out-line g${gi % 2} ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
       }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
     }).join('');
   },
