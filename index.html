@@ -284,7 +284,7 @@ tr.edit-row td { background:#FFFBEB !important; }
   .m-led tbody td.m-wide .tag { align-self:flex-start; }
   .m-led .edit-row td .row { flex-wrap:wrap; }
   .m-led .edit-row td[data-label=""] { grid-column:1/-1; }
-  .m-card tbody td:empty, .m-card tbody td.m-skip { display:none; }
+  .m-card tbody td:empty { display:none; }
   .m-card tbody td.num { text-align:left !important; }
   .m-card tbody td input[type=text], .m-card tbody td input[type=number], .m-card tbody td select { width:100% !important; border:1px solid var(--border) !important; border-radius:6px; background:var(--surface); }
   .m-card tbody td .dfield { display:flex; width:100%; } .m-card tbody td .dfield input.dinput { flex:1; width:auto !important; min-width:0; }
@@ -457,7 +457,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <table id="confirmTable" class="m-card">
         <thead><tr>
           <th style="width:34px"><input type="checkbox" id="confirmAll" title="화면에 보이는 행 전체 선택"></th><th data-sort="delDate">납품일</th><th data-sort="unit">부대</th><th data-sort="name">품명</th><th data-sort="cat">구분</th><th>단위</th>
-          <th>단순산술값</th><th>예정(개)</th><th>예정(kg)</th><th>확정(개)</th><th>확정(kg)</th>
+          <th>예정(개)</th><th>예정(kg)</th><th>확정(개)</th><th>확정(kg)</th>
           <th>매입가</th><th>단가</th><th>예정매출</th><th>확정매출</th><th style="min-width:260px">비고</th><th data-sort="rate">오차율</th><th data-sort="mealDate">급식일</th><th>관리</th>
         </tr></thead>
         <tbody id="confirmBody"></tbody>
@@ -2027,12 +2027,12 @@ const Confirm = {
       const confCls = r.confEa !== null || r.confKg !== null ? 'c-conf' : '';
       const ed = Confirm.editId === r.id;
       return `<tr data-id="${esc(r.id)}"${ed ? ' class="editing"' : ''}><td><input type="checkbox" class="c-pick" data-id="${esc(r.id)}" ${Confirm.picked.has(r.id) ? 'checked' : ''}></td><td>${ed ? '<span class="ie-del"></span>' : r.delDate ? D.short(r.delDate) : '-'}</td><td>${esc(r.unit)}</td><td style="text-align:left;font-weight:600">${ed ? `<span class="ac-wrap"><input type="text" class="ie-name" value="${esc(r.name)}" autocomplete="off" style="width:100%;min-width:150px"><span class="ac-list"></span></span>` : esc(r.name)}</td><td>${esc(r.cat)}</td><td>${esc(Confirm.unitLabel(r))}</td>
-        <td class="num">${fmtN(r.simple, 1)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${ed ? `<input type="text" data-num step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${fmtN(r.planKg, 2)}</td>
+        <td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${ed ? `<input type="text" data-num step="any" class="num ie-qty" value="${r.planEa ?? ''}" style="width:76px">` : fmtN(r.planEa)}</td><td class="num c-plan" title="${esc(Confirm.basisOf(r) || '기준량×인원 기록 없음 (저장 기능 도입 전에 입력한 건)')}">${fmtN(r.planKg, 2)}</td>
         <td>${cell(r, 'confEa', confCls)}</td><td>${cell(r, 'confKg', confCls)}</td>
         <td class="num">${fmtN(cost)}</td><td class="num">${fmtN(pr)}</td><td class="num">${fmtN(pr && r.planEa ? pr * Confirm.planQty(r) : null)}</td><td class="num o-sales">${fmtN(pr && cEa !== null && cEa !== undefined ? pr * cEa : null)}</td><td><input type="text" class="c-note${Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${esc(Confirm.dirty.get(r.id) && 'note' in Confirm.dirty.get(r.id) ? Confirm.dirty.get(r.id).note : r.note || '')}" placeholder="납품 참고사항" maxlength="200" style="width:100%;min-width:250px"></td>
         <td class="num" style="color:${r.rate > 0 ? 'var(--warn)' : 'var(--conf)'}">${r.rate === null ? '-' : (r.rate > 0 ? '+' : '') + Math.round(r.rate) + '%'}</td><td>${esc(mealTxt(r) || '-')}</td>
         <td style="white-space:nowrap">${ed ? `<button class="btn sm ok" data-act="save" data-id="${esc(r.id)}">저장</button> <button class="btn sm light" data-act="cancel" data-id="${esc(r.id)}">취소</button>` : `<button class="btn sm light" data-act="edit" data-id="${esc(r.id)}">수정</button> <button class="btn sm danger" data-act="del" data-id="${esc(r.id)}">삭제</button>`}</td></tr>`;
-    }).join('') || '<tr><td colspan="19" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
+    }).join('') || '<tr><td colspan="18" class="empty">해당 조건의 납품계획이 없습니다</td></tr>';
     $('confirmAll').checked = Confirm.rows.length > 0 && Confirm.rows.every(r => Confirm.picked.has(r.id));
     const er = Confirm.editId && Confirm.rows.find(r => r.id === Confirm.editId);
     if (er) { DF.mount(document.querySelector('#confirmBody .ie-del'), 'cf-del', er.delDate || ''); AC.bind(document.querySelector('#confirmBody .ie-name'), AC.products); }
@@ -4165,7 +4165,7 @@ document.addEventListener('DOMContentLoaded', () => App.init());
         if (td.colSpan > 1 || td.classList.contains('m-tail')) return;
         const l = hs[i] || ''; td.dataset.label = l;
         if (l === '' || l === '품명' || l === '제품' || l === '소비기한' || l === '비고' || l === '관리') td.classList.add('m-wide');
-        if (l === '관리') td.classList.add('m-row'); else if (l === '단순산술값') td.classList.add('m-skip');
+        if (l === '관리') td.classList.add('m-row');
       });
     }
   };
