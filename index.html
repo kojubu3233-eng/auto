@@ -101,6 +101,7 @@ tr.picked td { background:#FFFBEB !important; }
 .bucket .b-label { font-size:12px; color:var(--muted); font-weight:600; }
 .bucket .b-val { font-size:20px; font-weight:700; margin-top:2px; }
 .bucket .b-sub { font-size:11px; color:var(--muted-2); }
+.bucket .b-won { font-size:12px; font-weight:600; color:var(--ink); margin-top:2px; }
 .bucket.on { border-color:var(--accent); background:var(--accent-soft); }
 .bucket.warn .b-val { color:var(--warn); } .bucket.danger .b-val { color:var(--danger); }
 .home-grid { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
@@ -146,6 +147,8 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .snap-legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin:0 3px 0 8px;vertical-align:middle}
 .out-grp td{border-top:2px solid var(--border)}
 .out-act{display:none}
+#costBody td.cost-recent{background:#FEF9C3}
+#costTable th[data-cs]{cursor:pointer}
 .out-grp.dirty td,.out-line.dirty td{background:#fffbeb}
 @media (min-width:761px){
   /* 출고 탭 표: 칸 테두리를 진하게, 납품 건 사이는 굵은 선, 건마다 배경을 번갈아 */
@@ -333,6 +336,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
   <button class="tab-btn" data-tab="confirm">확정량 입력</button>
   <button class="tab-btn" data-tab="ledger">재고수불대장</button>
   <button class="tab-btn" data-tab="logistics">물류관리</button>
+  <button class="tab-btn" data-tab="cost">원가관리</button>
 </nav>
 <div id="loadError" class="banner hidden" style="background:var(--danger-soft);color:var(--danger);border-color:#E9D9D6"><span id="loadErrorText"></span><button class="btn sm danger" onclick="App.reload(true)">다시 시도</button></div>
 <div id="alertBar" class="alert-bar hidden"></div>
@@ -622,6 +626,22 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
   </div>
 </section>
 
+<!-- 원가관리 -->
+<section id="tab-cost" class="hidden">
+  <div class="panel">
+    <div class="row between mb12"><h2>원가관리</h2><span class="hint" id="costSummary"></span></div>
+    <div class="controls mb8">
+      <input type="text" id="costQ" placeholder="품명 검색" style="width:160px" oninput="CostMgr.render()">
+      <select id="costCat" onchange="CostMgr.render()"><option value="">전체 구분</option></select>
+      <label class="row muted"><input type="checkbox" id="costMissing" onchange="CostMgr.render()"> 매입가 없는 품목만</label>
+      <span class="hint">매입가 칸에 바로 입력하면 저장됩니다 (금액은 모두 VAT 별도). 최근 30일 안에 바뀐 매입가는 노란색, [이력]을 누르면 변경 내역이 보입니다</span>
+    </div>
+    <div class="table-wrap" style="max-height:640px"><table class="m-card" id="costTable"><thead><tr>
+      <th data-cs="cat">구분</th><th data-cs="name">품명</th><th data-cs="cost">매입가</th><th data-cs="sell">판매가</th><th data-cs="margin">마진금액</th><th data-cs="rate">마진율</th><th>매입가 적용일</th>
+    </tr></thead><tbody id="costBody"></tbody></table></div>
+  </div>
+</section>
+
 <div id="modalRoot"></div>
 <div id="busy" class="hidden"><div class="busy-box"><span class="spin"></span><span id="busyText">저장 중입니다</span></div></div>
 <div id="toast" class="toast hidden"></div>
@@ -835,9 +855,9 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* ---------- 가격표: 매입가·단가이력 탭 (제품명 · 1개당 가격 VAT별도 · 적용시작일) ---------- */
 // 같은 제품을 여러 줄 적어 두면 납품일에 맞는 줄을 쓴다: 적용시작일이 납품일 이전인 줄 중 가장 늦은 줄, 시작일이 비어 있으면 '처음부터의 가격'
 const PriceBook = () => ({
-  map: new Map(),
+  map: new Map(), label: new Map(),
   load(rows) {
-    const b = this; b.map = new Map();
+    const b = this; b.map = new Map(); b.label = new Map();
     (rows || []).slice(1).forEach(r => {
       const v = num(r[1]), raw = String(r[2] || '').trim(); if (!r[0] || !(v > 0)) return;
       // 날짜 형식: 2026-10-20 / 2026.10.20 / 26.10.20 / 2026/10/20 / 10/20 모두 인정, 못 읽는 날짜는 줄을 무시(전체 적용 방지)
@@ -845,19 +865,20 @@ const PriceBook = () => ({
       if (raw) { const m = raw.match(/^(\d{2,4})?\D*?(\d{1,2})\D+(\d{1,2})\D*$/); if (!m) return;
         const y = m[1] ? (m[1].length === 2 ? '20' + m[1] : m[1]) : String(new Date().getFullYear());
         d = `${y}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`; if (!D.isIso(d)) return; }
-      const k = Names.norm(String(r[0])); if (!b.map.has(k)) b.map.set(k, []);
-      b.map.get(k).push({ from: d, v });
+      const k = Names.norm(String(r[0])); if (!b.map.has(k)) { b.map.set(k, []); b.label.set(k, String(r[0]).trim()); }
+      b.map.get(k).push({ from: d, v, note: String(r[3] || '').trim() });
     });
     b.map.forEach(l => l.sort((a, c) => a.from.localeCompare(c.from)));
     // 이름이 조금 달라도 찾도록: 괄호(업체명 등)를 뺀 이름, 품목정보 이름·별칭으로 연결 (둘 이상에 걸리면 쓰지 않는다)
     b.alias = new Map(); const add = (a, k) => { if (!a || b.map.has(a)) return; b.alias.set(a, b.alias.has(a) && b.alias.get(a) !== k ? null : k); };
     b.map.forEach((l, k) => { add(PriceBook.base(k), k); const pr = Names.product(k) || (Names.resolve(k) || {}).product; if (pr) { add(Names.norm(pr.name), k); add(PriceBook.base(Names.norm(pr.name)), k); } });
   },
-  find(name) {
+  keyOf(name) {   // 이 품목에 해당하는 매입가(단가이력) 탭의 이름 키
     const b = this, p = Names.product(name) || (Names.resolve(name) || {}).product, keys = [p && Names.norm(p.name), Names.norm(name)].filter(Boolean);
-    for (const k of keys.concat(keys.map(PriceBook.base))) { if (b.map.has(k)) return b.map.get(k); const a = b.alias && b.alias.get(k); if (a) return b.map.get(a); }
+    for (const k of keys.concat(keys.map(PriceBook.base))) { if (b.map.has(k)) return k; const a = b.alias && b.alias.get(k); if (a) return a; }
     return null;
   },
+  find(name) { const k = this.keyOf(name); return k ? this.map.get(k) : null; },
   of(name, date) {
     const l = this.find(name); if (!l) return null;
     let v = null; for (const x of l) { if (!x.from || !date || x.from <= date) v = x.v; else break; }
@@ -1412,14 +1433,14 @@ const App = {
   show(tab) {
     App.tab = tab;
     document.querySelectorAll('#tabBar .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    ['home', 'predict', 'confirm', 'ledger', 'logistics'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
+    ['home', 'predict', 'confirm', 'ledger', 'logistics', 'cost'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
     Alerts.render();
     App.renderTab(tab);
   },
   renderTab(tab) {
     if (App.rendered[tab]) return;
     App.rendered[tab] = true;
-    ({ home: Home, predict: Predict, confirm: Confirm, ledger: Ledger, logistics: Logi })[tab].render();
+    ({ home: Home, predict: Predict, confirm: Confirm, ledger: Ledger, logistics: Logi, cost: CostMgr })[tab].render();
   },
   savePrefs() { Store.set('prefs', App.prefs); }
 };
@@ -1472,6 +1493,61 @@ const Link = {
   close() { $('modalRoot').innerHTML = ''; }
 };
 
+/* ---------- 원가관리 ---------- */
+// 품목별 매입가·판매가(VAT 별도)·마진. 매입가를 고치면 자동화시스템 시트 '매입가' 탭에 적용시작일(오늘) 줄이 추가되어 이력이 남는다
+const CostMgr = {
+  RECENT: 30, sort: { k: 'cat', d: 1 }, bound: false,
+  rows() {
+    const t = D.today(), q = Names.norm($('costQ').value), cat = $('costCat').value, onlyMiss = $('costMissing').checked;
+    return Names.products.filter(p => (!cat || p.category === cat) && (!q || Names.norm(p.name).includes(q) || (p.aliases || []).some(a => Names.norm(a).includes(q)))).map(p => {
+      const hist = Cost.find(p.name) || [], cost = Cost.of(p.name, t), sell = Sell.of(p.name, t) ?? p.price ?? null;
+      const cur = hist.filter(x => !x.from || x.from <= t).pop();
+      const margin = cost != null && sell != null ? sell - cost : null, rate = margin != null && sell ? margin / sell * 100 : null;
+      return { p, hist, cost, sell, margin, rate, from: cur ? cur.from : '', recent: !!(cur && cur.from && hist.length > 1 && D.diff(t, cur.from) <= CostMgr.RECENT) };
+    }).filter(r => !onlyMiss || r.cost == null);
+  },
+  render() {
+    if (!CostMgr.bound) {
+      CostMgr.bound = true;
+      $('costBody').addEventListener('change', e => { if (e.target.classList.contains('cost-in')) CostMgr.save(e.target.closest('tr').dataset.n, num(e.target.value), e.target); });
+      $('costBody').addEventListener('click', e => { const b = e.target.closest('[data-act="hist"]'); if (b) CostMgr.history(b.closest('tr').dataset.n); });
+      document.querySelector('#costTable thead').addEventListener('click', e => { const th = e.target.closest('[data-cs]'); if (!th) return; const k = th.dataset.cs; CostMgr.sort = { k, d: CostMgr.sort.k === k ? -CostMgr.sort.d : 1 }; CostMgr.render(); });
+    }
+    const sel = $('costCat'), cats = [...new Set(Names.products.map(p => p.category).filter(Boolean))].sort();
+    if (sel.options.length !== cats.length + 1) { const v = sel.value; sel.innerHTML = '<option value="">전체 구분</option>' + cats.map(c => `<option>${esc(c)}</option>`).join(''); sel.value = v; }
+    const { k, d } = CostMgr.sort, val = r => k === 'cat' ? (r.p.category || '') + '\u0000' + r.p.name : k === 'name' ? r.p.name : r[k];
+    const rows = CostMgr.rows().sort((a, b) => { const x = val(a), y = val(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (typeof x === 'string' ? x.localeCompare(y) : x - y) * d; });
+    const miss = rows.filter(r => r.cost == null).length, rs = rows.filter(r => r.rate != null);
+    $('costSummary').textContent = `${rows.length}개 품목 · 매입가 없음 ${miss}개${rs.length ? ` · 평균 마진율 ${(rs.reduce((a, r) => a + r.rate, 0) / rs.length).toFixed(1)}%` : ''}`;
+    $('costBody').innerHTML = rows.map(r => `<tr data-n="${esc(r.p.name)}"><td>${esc(r.p.category || '')}</td><td style="text-align:left">${esc(r.p.name)}</td>
+      <td class="num ${r.recent ? 'cost-recent' : ''}"${r.recent ? ` title="${D.short(r.from)}에 변경"` : ''}><input type="text" data-num class="cost-in num" value="${r.cost ?? ''}" placeholder="미입력" style="width:90px">${r.hist.length > 1 ? ` <button type="button" class="btn sm light" data-act="hist">이력 ${r.hist.length}</button>` : ''}</td>
+      <td class="num">${fmtN(r.sell)}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td>${r.from ? D.short(r.from) : (r.cost != null ? '처음부터' : '')}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
+  },
+  async save(name, v, input) {
+    const t = D.today(), cur = Cost.of(name, t);
+    if (!(v > 0)) { toast('매입가는 0보다 큰 숫자로 입력하세요'); input.value = cur ?? ''; return; }
+    if (v === cur) return;
+    const label = Cost.label.get(Cost.keyOf(name)) || name;
+    if (cur != null && !confirm(`${name} 매입가를 ${fmtN(cur)}원 → ${fmtN(v)}원으로 바꿉니다.\n오늘(${D.short(t)})부터 적용되고, 이전 매입가는 이력으로 남습니다.`)) { input.value = cur; return; }
+    Busy.start('매입가 저장 중입니다');
+    try {
+      const res = await Api.post('ledger', { action: 'costSave', name: label, price: v, date: t });
+      if (!res || !Array.isArray(res.values)) throw new Error((res && res.error) || '저장 결과를 받지 못했습니다');
+      App.boot.costs = res.values; Cost.load(res.values); Store.setSoon('boot', App.boot);
+      toast(`${name} 매입가 ${fmtN(v)}원 저장${cur != null ? ` (${D.short(t)}부터 적용)` : ''}`);
+      App.refreshViews();
+    } catch (e) { toast('매입가 저장 실패: ' + e.message, 6000); input.value = cur ?? ''; }
+    finally { Busy.end(); }
+  },
+  history(name) {
+    const l = Cost.find(name) || [], t = D.today();
+    $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:480px">
+      <div class="row between mb12"><h2>${esc(name)} 매입가 이력</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
+      <table><thead><tr><th>적용시작일</th><th>매입가</th><th>변동</th><th>비고</th></tr></thead><tbody>${l.map((x, i) => { const pv = i ? l[i - 1].v : null, cur = x === l.filter(y => !y.from || y.from <= t).pop();
+        return `<tr${cur ? ' style="font-weight:700"' : ''}><td>${x.from ? D.short(x.from) : '처음부터'}</td><td class="num">${fmtN(x.v)}원</td><td class="num">${pv == null ? '' : (x.v > pv ? '+' : '') + fmtN(x.v - pv)}</td><td style="text-align:left">${esc(x.note || '')}${cur ? ' <span class="tag conf">현재</span>' : ''}</td></tr>`; }).reverse().join('')}</tbody></table></div></div>`;
+  }
+};
+
 /* ---------- 홈 ---------- */
 const Home = {
   open: { age: null, due: null },
@@ -1488,20 +1564,22 @@ const Home = {
     const t = D.today();
     $('todayLabel').textContent = D.short(t);
     const lots = Home.lots();
+    // 카드별 매입가 합계 (수량 × 오늘 기준 매입가). 매입가가 없는 품목 수량은 빼고 *로 표시
+    const won = items => { let s = 0, miss = 0; items.forEach(x => { const c = Cost.of(x.p.product ? x.p.product.name : x.p.name, t); if (c == null) miss += x.l.remain; else s += c * x.l.remain; }); return `<div class="b-won"${miss ? ` title="매입가가 없는 ${fmtN(miss)}개는 금액에서 빠졌습니다"` : ''}>${fmtN(Math.round(s))}원${miss ? ' *' : ''}</div>`; };
 
     const ageDefs = [['30일 이내', 0, 30], ['31~60일', 31, 60], ['61~90일', 61, 90], ['91~180일', 91, 180], ['180일 초과', 181, 1e9]];
     Home.age = ageDefs.map(([label, lo, hi]) => ({ label, items: lots.filter(x => x.age !== null && x.age >= lo && x.age <= hi) }));
     const noDate = lots.filter(x => !x.l.inDate);
     if (noDate.length) Home.age.push({ label: '입고일 없음', items: noDate });
     $('ageBuckets').innerHTML = Home.age.map((b, i) => `<button class="bucket ${i === 4 ? 'warn' : ''} ${Home.open.age === i ? 'on' : ''}" onclick="Home.detail('age',${i})">
-      <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div></button>`).join('');
+      <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div>${won(b.items)}</button>`).join('');
 
     const dueDefs = [['4개월 이상', 91, 1e9, ''], ['3개월', 61, 90, ''], ['2개월', 31, 60, ''], ['1개월', 0, 30, 'warn'], ['납품기한 초과', -1e9, -1, 'danger']];
     Home.due = dueDefs.map(([label, lo, hi, cls]) => ({ label, cls, items: lots.filter(x => x.left !== null && x.left >= lo && x.left <= hi) }));
     const unknown = lots.filter(x => !x.exp && !x.l.deadline && !(x.l.inDate && x.l.inDate > t));   // 입고일이 아직 안 온 입고 예정분은 소비기한을 모를 수밖에 없으므로 제외
     if (unknown.length) Home.due.push({ label: '정보 없음', cls: '', items: unknown, note: '소비기한 또는 품목정보(보관방법·소비기한) 미입력' });
     $('dueBuckets').innerHTML = Home.due.map((b, i) => `<button class="bucket ${b.cls} ${Home.open.due === i ? 'on' : ''}" onclick="Home.detail('due',${i})" title="${esc(b.note || '')}">
-      <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div></button>`).join('');
+      <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div>${won(b.items)}</button>`).join('');
     if (Home.open.age !== null) Home.detail('age', Home.open.age, true);
     if (Home.open.due !== null) Home.detail('due', Home.open.due, true);
 
