@@ -369,6 +369,74 @@ tr.edit-row td { background:#FFFBEB !important; }
   #inPlanBody tr.plan-main td:nth-child(7) { order:6; grid-column:span 5; } #inPlanBody tr.plan-main td:nth-child(8) { order:7; grid-column:span 7; }
   #inPlanBody tr.plan-main td:nth-child(3) { order:8; } #inPlanBody tr.plan-main td:nth-child(4) { order:9; } #inPlanBody tr.plan-main td:nth-child(10) { order:10; }
   #inPlanBody tr.plan-main td:nth-child(10)::before { display:none; }
+
+  /* ===== 휴대폰 2단계: 날짜 묶음 제목 · 한 줄 목록 · 눌러서 펼치기 ===== */
+  /* 날짜가 바뀌는 첫 건 위에 '11/02(월) · 5건' 제목 */
+  .m-card tbody tr.m-dfirst { position:relative; margin-top:34px !important; }
+  .m-card tbody tr.m-dfirst::before { content:attr(data-mhead); position:absolute; left:2px; right:2px; top:-28px; padding:4px 8px; font-size:13px; font-weight:700; color:var(--ink); background:var(--surface-alt); border-radius:6px; }
+
+  /* 확정량 입력: 접힌 줄 = [체크] 부대/품명 · 예정 · 확정 입력칸 (누르면 단가·매출·비고·버튼이 펼쳐짐) */
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) { grid-template-columns:24px minmax(0,1fr) 56px 88px; gap:0 8px; padding:8px 10px; margin:0 2px; border-radius:0; border-width:0 1px 1px; cursor:pointer; align-items:center; }
+  #confirmTable tbody tr[data-id].m-dfirst:not(.m-open):not(.editing) { border-top-width:1px; border-radius:8px 8px 0 0; }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td { display:none; }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(1) { display:flex; grid-area:1/1/3/2; }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(3) { display:block; grid-area:1/2/2/3; font-size:11.5px; font-weight:600; color:var(--muted); }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(4) { display:block; grid-area:2/2/3/3; font-size:14px; }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(7) { display:flex; grid-area:1/3/3/4; text-align:right !important; }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(9) { display:flex; grid-area:1/4/3/5; }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(7)::before { content:"예정"; }
+  #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(9)::before { content:"확정"; }
+  #confirmTable tbody tr.m-open { border:2px solid var(--accent); }
+  /* 물류관리 출고 머리: [체크] 납품일 · 부대 를 한 줄로 */
+  #outPlanBody tr.out-grp td:nth-child(1), #outPlanBody tr.out-grp td:nth-child(2) { align-self:center; }
+  #outPlanBody tr.out-grp td:nth-child(1) { flex-direction:row; align-items:center; gap:6px; }
+  #outPlanBody tr.out-grp td:nth-child(1)::before, #outPlanBody tr.out-grp td:nth-child(2)::before { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(1) { min-width:0; overflow:hidden; } #outPlanBody tr.out-grp td:nth-child(1) .dfield { width:auto; flex:1; min-width:0; } #outPlanBody tr.out-grp td:nth-child(2) { text-align:right !important; }
+
+  /* 원가관리: 접힌 줄 = 품명 · 매입가 · 판매가 · 마진율 (누르면 구분·마진금액·적용일·이력·삭제) */
+  #costBody tr[data-n]:not(.m-open) { grid-template-columns:minmax(0,1fr) 78px 78px 46px; gap:0 6px; padding:8px; margin:0 2px; border-radius:0; border-width:0 1px 1px; cursor:pointer; align-items:end; }
+  #costBody tr[data-n]:first-child:not(.m-open) { border-top-width:1px; }
+  #costBody tr[data-n]:not(.m-open) > td { display:none; }
+  #costBody tr[data-n]:not(.m-open) > td:nth-child(2) { display:block; grid-column:1; align-self:center; font-weight:600; }
+  #costBody tr[data-n]:not(.m-open) > td:nth-child(2)::before { display:none; }
+  #costBody tr[data-n]:not(.m-open) > td:nth-child(3), #costBody tr[data-n]:not(.m-open) > td:nth-child(4), #costBody tr[data-n]:not(.m-open) > td:nth-child(6) { display:flex; }
+  #costBody tr[data-n]:not(.m-open) td[data-label]::before { font-size:10px; margin-bottom:0; }
+  #costBody tr[data-n]:not(.m-open) .btn { display:none; }
+  #costBody tr.m-open { border:2px solid var(--accent); }
+  #costTable thead { display:none; }
+
+  /* 예정량 입력: 3줄 카드 (납품일·부대 / 품명·구분 / 소요량·단위·규격 / 예정량·급식일) */
+  #predictTable tbody tr { grid-template-columns:repeat(12,minmax(0,1fr)); gap:4px 6px; padding:8px; }
+  #predictTable tbody td { grid-column:span 3; }
+  #predictTable tbody td[data-label]::before { font-size:10px; margin-bottom:0; }
+  #predictTable tbody td:nth-child(1) { order:1; grid-column:span 1; align-self:center; }
+  #predictTable tbody td:nth-child(2) { order:2; grid-column:span 6; } #predictTable tbody td:nth-child(4) { order:3; grid-column:span 5; }
+  #predictTable tbody td:nth-child(5) { order:4; grid-column:span 8; } #predictTable tbody td:nth-child(6) { order:5; grid-column:span 4; }
+  #predictTable tbody td:nth-child(7) { order:6; } #predictTable tbody td:nth-child(8) { order:7; } #predictTable tbody td:nth-child(9) { order:8; grid-column:span 6; }
+  #predictTable tbody td:nth-child(10) { order:9; } #predictTable tbody td:nth-child(11) { order:10; }
+  #predictTable tbody td:nth-child(12) { order:11; grid-column:1/-1; flex-direction:row; align-items:center; gap:8px; font-weight:700; }
+  #predictTable tbody td:nth-child(3) { order:12; grid-column:1/-1; }
+
+  /* 홈: 알림은 제목 한 줄만 (누르면 펼침), 목록은 4건까지 + 더보기 */
+  #alertBar, #alertBar2 { padding:8px 12px; margin-bottom:8px; }
+  #alertBar:not(.m-open) > :not(:first-child), #alertBar2:not(.m-open) > :not(:first-child) { display:none; }
+  #alertBar > :first-child, #alertBar2 > :first-child { margin:0; cursor:pointer; }
+  #alertBar > :first-child::after, #alertBar2 > :first-child::after { content:"펼치기 ▾"; font-size:12px; color:var(--muted); white-space:nowrap; }
+  #alertBar.m-open > :first-child::after, #alertBar2.m-open > :first-child::after { content:"접기 ▴"; }
+  #alertBar.m-open > :first-child, #alertBar2.m-open > :first-child { margin-bottom:8px; }
+  .home-grid .panel { padding:12px; } .home-grid .panel h2 { font-size:15px; }
+  .buckets { gap:6px; }
+  .list-box:not(.m-open) > .list-row:nth-child(n+5) { display:none; }
+  .list-box:has(> .list-row:nth-child(5))::after { content:"더보기 ▾"; display:block; text-align:center; padding:9px; color:var(--accent); font-weight:600; cursor:pointer; border-top:1px solid var(--border-soft); }
+  .list-box.m-open:has(> .list-row:nth-child(5))::after { content:"접기 ▴"; }
+
+  /* 재고수불대장: 품목 목록 = 한 줄 (품명 · 재고) */
+  .prod-grid:has(> .prod-box:not(.cat-box)) { grid-template-columns:1fr; gap:0; }
+  .prod-box:not(.cat-box) { display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:10px; align-items:center; border-radius:0; border-width:0 1px 1px; padding:8px 10px; }
+  .prod-box:not(.cat-box):first-child { border-top-width:1px; border-radius:8px 8px 0 0; }
+  .prod-box:not(.cat-box) > * { grid-column:1; margin:0 !important; }
+  .prod-box:not(.cat-box) > .p-stock { grid-column:2; grid-row:1/3; text-align:right; }
+  .prod-box:not(.cat-box) > div:last-child:empty { display:none; }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 
@@ -4404,7 +4472,30 @@ document.addEventListener('DOMContentLoaded', () => App.init());
       });
     }
   };
-  const run = () => document.querySelectorAll('table.m-card').forEach(t => { if (t._mo) return; t._mo = new MutationObserver(() => { cancelAnimationFrame(t._raf); t._raf = requestAnimationFrame(() => label(t)); }); t._mo.observe(t.tBodies[0], { childList: true }); label(t); });
+  // 날짜가 바뀌는 첫 건에 '11/02(월) · n건' 제목을 달고, 펼쳐 둔 줄은 다시 그려도 펼친 채로 둔다
+  const open = new Set(), wk = d => d ? D.short(d) : '날짜 없음';
+  const heads = t => {
+    const tb = t.tBodies[0]; if (!tb || !mq.matches) return;
+    let rows = [];
+    if (tb.id === 'confirmBody') rows = [...tb.querySelectorAll('tr[data-id]')].map(tr => { const r = Confirm.rows.find(x => x.id === tr.dataset.id); return { tr, d: r ? r.delDate : '', miss: r && r.confEa == null && r.confKg == null }; });
+    else if (tb.id === 'outPlanBody') rows = [...tb.querySelectorAll('tr.out-grp')].map(tr => { const g = (Logi.outGroups || [])[+tr.dataset.g]; return { tr, d: g ? g.o.outDate : '' }; });
+    else if (tb.id === 'inPlanBody') rows = [...tb.querySelectorAll('tr.plan-main')].map(tr => { const x = ((Logi.plans || {}).in || [])[+tr.dataset.i]; return { tr, d: x ? x.d : '' }; });
+    else if (tb.id !== 'costBody') return;
+    const cnt = {}; rows.forEach(x => { const c = cnt[x.d] || (cnt[x.d] = { n: 0, m: 0 }); c.n++; if (x.miss) c.m++; });
+    rows.forEach((x, i) => { const f = !i || rows[i - 1].d !== x.d; x.tr.classList.toggle('m-dfirst', f); if (f) x.tr.dataset.mhead = `${wk(x.d)} · ${cnt[x.d].n}건${cnt[x.d].m ? ` · 미입력 ${cnt[x.d].m}` : ''}`; });
+    tb.querySelectorAll('tr[data-id], tr[data-n]').forEach(tr => tr.classList.toggle('m-open', open.has(tb.id + '|' + (tr.dataset.id || tr.dataset.n))));
+  };
+  // 휴대폰: 확정량·원가관리 줄을 누르면 펼치고, 알림 제목·목록 '더보기'를 누르면 펼친다 (입력칸·버튼을 누를 때는 그대로)
+  document.addEventListener('click', e => {
+    if (!mq.matches) return;
+    const t = e.target;
+    if (t.closest('input,button,select,label,a,textarea,.dfield,.ac-list,.modal')) return;
+    const tr = t.closest('#confirmBody tr[data-id]:not(.editing), #costBody tr[data-n]');
+    if (tr) { const k = tr.parentElement.id + '|' + (tr.dataset.id || tr.dataset.n); open.has(k) ? open.delete(k) : open.add(k); tr.classList.toggle('m-open', open.has(k)); return; }
+    const ah = t.closest('#alertBar > :first-child, #alertBar2 > :first-child'); if (ah) return ah.parentElement.classList.toggle('m-open');
+    if (t.classList.contains('list-box')) t.classList.toggle('m-open');
+  });
+  const run = () => document.querySelectorAll('table.m-card').forEach(t => { if (t._mo) return; t._mo = new MutationObserver(() => { cancelAnimationFrame(t._raf); t._raf = requestAnimationFrame(() => { label(t); heads(t); }); }); t._mo.observe(t.tBodies[0], { childList: true }); label(t); heads(t); });
   document.addEventListener('DOMContentLoaded', run);
   mq.addEventListener('change', () => document.querySelectorAll('table.m-card tbody tr').forEach(tr => delete tr.dataset.m) || run());
 })();
