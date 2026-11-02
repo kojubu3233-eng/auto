@@ -634,7 +634,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <input type="text" id="costQ" placeholder="품명 검색" style="width:160px" oninput="CostMgr.render()">
       <select id="costCat" onchange="CostMgr.render()"><option value="">전체 구분</option></select>
       <label class="row muted"><input type="checkbox" id="costMissing" onchange="CostMgr.render()"> 매입가 없는 품목만</label>
-      <span class="hint">매입가·판매가 칸에 바로 입력하면 저장됩니다 (금액은 모두 VAT 별도, 판매가는 품목정보에도 반영). 최근 30일 안에 바뀐 칸은 노란색, [이력]을 누르면 변경 내역이 보입니다</span>
+      <span class="hint">매입가·판매가 칸에 바로 입력하면 저장됩니다 (금액은 모두 VAT 별도, 판매가는 품목정보 단가(Vat별도)에도 반영). 최근 30일 안에 바뀐 칸은 노란색, [이력]을 누르면 변경 내역이 보입니다</span>
     </div>
     <div class="table-wrap" style="max-height:640px"><table class="m-card" id="costTable"><thead><tr>
       <th data-cs="cat">구분</th><th data-cs="name">품명</th><th data-cs="cost">매입가</th><th data-cs="sell">판매가</th><th data-cs="margin">마진금액</th><th data-cs="rate">마진율</th><th>매입가 적용일</th>
@@ -1544,23 +1544,22 @@ const CostMgr = {
     } catch (e) { toast('매입가 저장 실패: ' + e.message, 6000); input.value = cur ?? ''; }
     finally { Busy.end(); }
   },
-  // 판매가(VAT 별도) 변경: 품목정보 단가(VAT 포함 = ×1.1)를 바꾸고, 확정량 입력(DB_Master)의 오늘 이전 납품 건 단가는 지금 값으로 고정해 지난 매출이 바뀌지 않게 한다. 단가이력에 변경 기록
+  // 판매가(VAT 별도) 변경: 품목정보 단가(Vat별도) 칸에 그 값을 그대로 적고, 확정량 입력(DB_Master)의 오늘 이전 납품 건 단가는 지금 값으로 고정해 지난 매출이 바뀌지 않게 한다. 단가이력에 변경 기록
   async saveSell(name, v, input) {
     const t = D.today(), pr = Names.product(name) || (Names.resolve(name) || {}).product; if (!pr) return;
     const cur = Sell.of(pr.name, t) ?? pr.price;
     if (!(v > 0)) { toast('판매가는 0보다 큰 숫자로 입력하세요'); input.value = cur == null ? '' : Math.round(cur); return; }
     if (cur != null && Math.abs(v - cur) < 0.5) return;
-    const vat = Math.round(v * 1.1);
-    if (!confirm(`${pr.name} 판매가(VAT 별도)를 ${fmtN(cur == null ? null : Math.round(cur))}원 → ${fmtN(v)}원으로 바꿉니다.\n\n· 품목정보 단가(VAT 포함)도 ${fmtN(vat)}원으로 바뀝니다\n· 확정량 입력은 오늘(${D.short(t)}) 납품분부터 새 단가로 계산됩니다\n· 지난 납품분은 기존 단가로 고정되어 매출이 바뀌지 않습니다`)) { input.value = cur == null ? '' : Math.round(cur); return; }
+    if (!confirm(`${pr.name} 판매가(VAT 별도)를 ${fmtN(cur == null ? null : Math.round(cur))}원 → ${fmtN(v)}원으로 바꿉니다.\n\n· 품목정보 단가(Vat별도)도 ${fmtN(v)}원으로 바뀝니다\n· 확정량 입력은 오늘(${D.short(t)}) 납품분부터 새 단가로 계산됩니다\n· 지난 납품분은 기존 단가로 고정되어 매출이 바뀌지 않습니다`)) { input.value = cur == null ? '' : Math.round(cur); return; }
     const same = r => (Names.product(r.name) || (Names.resolve(r.name) || {}).product) === pr;
     const freeze = Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate < t && same(r)).map(r => r.id);
     Busy.start('판매가 저장 중입니다 (품목정보·확정량 입력 반영)');
     try {
       const res = await Api.post('ledger', { action: 'sellSave', name: pr.name, price: v, date: t, freeze });
       if (!res || !Array.isArray(res.sells)) throw new Error((res && res.error) || '저장 결과를 받지 못했습니다');
-      App.boot.sells = res.sells; Sell.load(res.sells); pr.priceVat = res.priceVat; pr.price = res.price; Store.setSoon('boot', App.boot);
+      App.boot.sells = res.sells; Sell.load(res.sells); pr.price = res.price; Store.setSoon('boot', App.boot);
       Hist.records.forEach(r => { if (r.src === 'plan' && same(r) && !(r.delDate && r.delDate < t)) r.price = res.price; });   // 오늘 이후 납품분은 새 단가(시트 수식과 같게)
-      toast(`${pr.name} 판매가 ${fmtN(v)}원 저장 (품목정보 VAT 포함 ${fmtN(res.priceVat)}원${res.fixed ? `, 지난 납품 ${res.fixed}건 단가 고정` : ''})`, 6000);
+      toast(`${pr.name} 판매가 ${fmtN(v)}원 저장 (품목정보 단가(Vat별도) 반영${res.fixed ? `, 지난 납품 ${res.fixed}건 단가 고정` : ''})`, 6000);
       App.refreshViews();
     } catch (e) { toast('판매가 저장 실패: ' + e.message, 6000); input.value = cur == null ? '' : Math.round(cur); }
     finally { Busy.end(); }
