@@ -31,6 +31,7 @@ h3 { font-size:13px; font-weight:700; }
 .hidden { display:none !important; }
 .m-ftoggle { display:none; }
 .m-only { display:none; }
+.m-actbar.m-only-bar { display:none; }
 
 .btn { padding:8px 14px; border:none; border-radius:8px; font-weight:600; cursor:pointer; color:#fff; background:var(--accent); font-size:13px; }
 .btn:hover { opacity:.88; }
@@ -345,42 +346,53 @@ tr.edit-row td { background:#FFFBEB !important; }
   #confirmTable tbody tr.editing td:nth-child(2), #confirmTable tbody tr.editing td:nth-child(4) { grid-column:span 6; }
   #confirmTable tbody td.empty { grid-column:1/-1; }
 
-  /* 물류관리 출고: 납품 1건 = 카드, 소비기한 선택은 줄 전체 폭(잔량이 잘리지 않게) */
-  #outPlanBody tr.out-line { grid-template-columns:repeat(12,minmax(0,1fr)); gap:4px 6px; padding:8px; margin:6px 2px 0; }
+  /* 물류관리 입고·출고: 카드 하나에 한 가지 일만 — 글자는 크게, 칸은 줄마다 묶어서 */
+  #inPlanBody td, #outPlanBody td { font-size:14px; }
+  #inPlanBody td[data-label]::before, #outPlanBody td[data-label]::before { font-size:12px; margin-bottom:2px; color:var(--muted); }
+  .m-actbar { display:flex; position:sticky; bottom:58px; z-index:35; gap:8px; margin:10px -4px 0; padding:8px; background:var(--surface); border-top:1px solid var(--border); box-shadow:0 -4px 10px rgba(29,27,24,.08); }
+  .m-actbar .btn { flex:1; min-height:46px; font-size:16px; font-weight:700; }
+  .m-actbar .btn[data-n]::after { content:" (" attr(data-n) "건)"; }
+  .m-nobar { display:none !important; }
+  .m-actbar.m-only-bar { display:flex; }
+
+  /* 출고: 납품 1건 = 카드 — 1줄 부대·납품일 / 2줄 품명 / 3줄 수량 / 이하 소비기한별 출고 */
+  #outPlanBody tr.out-line { grid-template-columns:repeat(12,minmax(0,1fr)); gap:8px 8px; padding:12px; margin:8px 2px 0; }
   #outPlanBody tr.out-line:not(.out-grp) { margin-top:0; border-top-style:dashed; border-top-left-radius:0; border-top-right-radius:0; }
   #outPlanBody tr.out-grp { border-bottom-left-radius:0; border-bottom-right-radius:0; }
-  #outPlanBody tr.out-line td { grid-column:span 4; font-size:12.5px; }
-  #outPlanBody tr.out-line td[data-label]::before { font-size:10px; margin-bottom:0; }
-  #outPlanBody tr.out-grp td:nth-child(1) { grid-column:span 7; } #outPlanBody tr.out-grp td:nth-child(2) { grid-column:span 5; font-weight:700; }
-  #outPlanBody tr.out-grp td:nth-child(3) { grid-column:1/-1; font-size:13.5px; font-weight:700; }
-  #outPlanBody tr.out-grp td:nth-child(3) { display:block; line-height:1.35; }
+  #outPlanBody tr.out-line td { grid-column:span 4; }
+  #outPlanBody tr.out-grp td:nth-child(2) { order:1; grid-column:1/-1; font-size:18px; font-weight:800; text-align:left !important; }
+  #outPlanBody tr.out-grp td:nth-child(2)::before { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(1) { order:2; grid-column:1/-1; }
+  #outPlanBody tr.out-grp td:nth-child(3) { order:3; grid-column:1/-1; display:block; line-height:1.4; font-size:16px; font-weight:700; padding-top:2px; border-top:1px solid var(--border); }
   #outPlanBody tr.out-grp td:nth-child(3)::before { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(3) .hint, #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:inline; margin:0; font-size:11px; font-weight:400; }
-  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { margin-left:8px; color:var(--accent); font-weight:600; }
-  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { grid-column:1/-1; }
-  #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { grid-column:span 4; }
-  #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { grid-column:span 5; }
-  #outPlanBody tr.out-grp td:nth-child(10), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { grid-column:span 3; }
-  #outPlanBody tr.out-line td select { font-size:15px; }
-  #outPlanBody tr.out-act { margin:0 2px 12px; padding:6px 8px; background:var(--surface-alt) !important; border:1px solid var(--border); border-top:0; border-radius:0 0 10px 10px; }
+  #outPlanBody tr.out-grp td:nth-child(3) .hint, #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:inline; margin:0; font-size:12.5px; font-weight:400; }
+  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { margin-left:8px; color:var(--accent); font-weight:700; }
+  #outPlanBody tr.out-grp td:nth-child(4) { order:4; } #outPlanBody tr.out-grp td:nth-child(4) b { font-size:20px; }
+  #outPlanBody tr.out-grp td:nth-child(5) { order:5; } #outPlanBody tr.out-grp td:nth-child(6) { order:6; }
+  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { order:7; grid-column:1/-1; padding-top:8px; border-top:1px dashed var(--border); }
+  #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { order:8; grid-column:span 4; }
+  #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { order:9; grid-column:span 5; }
+  #outPlanBody tr.out-grp td:nth-child(10), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { order:10; grid-column:span 3; }
+  #outPlanBody tr.out-line td select { font-size:16px; }
+  #outPlanBody tr.out-act { margin:0 2px 14px; padding:8px 12px; background:var(--surface-alt) !important; border:1px solid var(--border); border-top:0; border-radius:0 0 10px 10px; }
+  #outPlanBody tr.out-act .btn { min-height:42px; font-size:14px; }
 
-  /* 물류관리 입고: 입고 1건 = 카드 (입고 수량·소비기한을 한 줄에) */
-  #inPlanBody tr.plan-main { grid-template-columns:repeat(12,minmax(0,1fr)); gap:4px 6px; padding:8px; margin:6px 2px; }
-  #inPlanBody tr.plan-main td { grid-column:span 4; font-size:12.5px; }
-  #inPlanBody tr.plan-main td[data-label]::before { font-size:10px; margin-bottom:0; }
+  /* 입고: 입고 1건 = 카드 — 1줄 품명(+한 줄 추가) / 2줄 입고일·예정 / 3줄 입고 수량·소비기한 */
+  #inPlanBody tr.plan-main { grid-template-columns:repeat(12,minmax(0,1fr)); gap:8px 8px; padding:12px; margin:8px 2px; position:relative; }
+  #inPlanBody tr.plan-main td { grid-column:span 4; }
   #inPlanBody tr.plan-main td:nth-child(1) { order:1; grid-column:span 1; }
-  #inPlanBody tr.plan-main td:nth-child(2) { order:2; grid-column:span 11; font-size:13.5px; font-weight:700; }
+  #inPlanBody tr.plan-main td:nth-child(2) { order:2; grid-column:span 11; font-size:17px; font-weight:800; padding-right:84px; line-height:1.3; }
   #inPlanBody tr.plan-main td:nth-child(2)::before { display:none; }
-  #inPlanBody tr.plan-main td:nth-child(5) { order:3; grid-column:span 6; } #inPlanBody tr.plan-main td:nth-child(6) { order:4; grid-column:span 3; } #inPlanBody tr.plan-main td:nth-child(9) { order:5; grid-column:span 3; }
-  #inPlanBody tr.plan-main td:nth-child(7) { order:6; grid-column:span 5; } #inPlanBody tr.plan-main td:nth-child(8) { order:7; grid-column:span 7; }
-  #inPlanBody tr.plan-main { position:relative; }
+  #inPlanBody tr.plan-main td:nth-child(2) .hint { font-size:12.5px; font-weight:400; }
   #inPlanBody tr.plan-main td:nth-child(3), #inPlanBody tr.plan-main td:nth-child(4) { display:none; }
-  #inPlanBody tr.plan-main td:nth-child(2) { padding-right:84px; line-height:1.25; }
-  #inPlanBody tr.plan-main td:nth-child(2) .hint { font-size:11px; font-weight:400; }
   .m-only { display:inline; }
-  #inPlanBody tr.plan-main td:nth-child(10) { position:absolute; top:6px; right:6px; display:block; width:auto; }
+  #inPlanBody tr.plan-main td:nth-child(5) { order:3; grid-column:span 7; } #inPlanBody tr.plan-main td:nth-child(6) { order:4; grid-column:span 5; }
+  #inPlanBody tr.plan-main td:nth-child(6) { font-size:17px; font-weight:800; }
+  #inPlanBody tr.plan-main td:nth-child(7) { order:5; grid-column:span 5; } #inPlanBody tr.plan-main td:nth-child(8) { order:6; grid-column:span 7; }
+  #inPlanBody tr.plan-main td:nth-child(9) { order:7; grid-column:1/-1; flex-direction:row; align-items:baseline; gap:8px; }
+  #inPlanBody tr.plan-main td:nth-child(10) { position:absolute; top:10px; right:10px; display:block; width:auto; }
   #inPlanBody tr.plan-main td:nth-child(10)::before { display:none; }
-  #inPlanBody tr.plan-main td:nth-child(10) .btn { padding:3px 8px; font-size:11px; min-height:0; }
+  #inPlanBody tr.plan-main td:nth-child(10) .btn { padding:4px 10px; font-size:12px; min-height:30px; }
 
   /* 재고수불대장 상세: 카드 대신 PC와 같은 표 (한 화면 폭에 맞춰 열을 줄이고 글자를 작게) */
   .table-wrap:has(> .ld-t) { overflow:visible; border:0; }
@@ -733,7 +745,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <div class="table-wrap" style="max-height:none"><table class="grid m-card"><thead><tr>
         <th class="sel-col"><input type="checkbox" data-all="inPlan"></th><th style="min-width:150px">품명</th><th>보관방법</th><th>보존기간</th><th>입고일</th><th>예정 수량</th><th>입고 수량</th><th>소비기한</th><th>납품기한</th><th></th>
       </tr></thead><tbody id="inPlanBody"></tbody></table></div>
-      <div class="row mt8" style="justify-content:flex-end"><button class="btn ok" onclick="Logi.completeIn()">체크한 건 입고 완료</button></div>
+      <div class="row mt8 m-actbar" style="justify-content:flex-end"><button class="btn ok" id="inDoneBtn" onclick="Logi.completeIn()">체크한 건 입고 완료</button></div>
     </div>
 
     <div data-subpane="out" class="hidden">
@@ -746,10 +758,11 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
         <button class="btn light sm" onclick="Logi.resetOutFilter()">필터 초기화</button>
         <label class="row muted"><input type="checkbox" id="outShowDone"> 출고처리 완료 건도 표시</label>
       </div>
-      <div class="row mb8"><label class="row"><input type="checkbox" id="outPickAll"> 전체 선택</label><button type="button" class="btn ok sm" onclick="Logi.bulkOut()">선택 건 일괄 출고처리</button><span class="hint">출고일을 비워 둔 줄은 오늘 출고로 처리됩니다</span></div>
+      <div class="row mb8"><label class="row"><input type="checkbox" id="outPickAll"> 전체 선택</label><button type="button" class="btn ok sm m-nobar" onclick="Logi.bulkOut()">선택 건 일괄 출고처리</button><span class="hint">출고일을 비워 둔 줄은 오늘 출고로 처리됩니다</span></div>
       <div class="table-wrap" style="max-height:none"><table class="grid m-card m-led" data-labels="11:납품일,부대,품명,수량(계),본품,샘플,소비기한,출고수량,출고일,상태,;4:소비기한,출고수량,출고일,상태"><thead><tr>
         <th>납품일</th><th>부대</th><th style="min-width:140px">품명</th><th>수량(계)</th><th>본품</th><th>샘플</th><th style="min-width:170px">소비기한</th><th>출고수량</th><th>출고일</th><th>상태</th><th></th>
       </tr></thead><tbody id="outPlanBody"></tbody></table></div>
+      <div class="m-actbar m-only-bar"><button type="button" class="btn ok" id="outDoneBtn" onclick="Logi.bulkOut()">선택 건 일괄 출고처리</button></div>
     </div>
 
     <div data-subpane="print" class="hidden">
@@ -4582,6 +4595,8 @@ document.addEventListener('DOMContentLoaded', () => App.init());
       if (on && !tag) { tag = document.createElement('span'); tag.className = 'm-fon'; tag.textContent = '· 적용 중'; t.firstChild.after(tag); } else if (!on && tag) tag.remove();
     });
   });
+  const cnts = () => [['inDoneBtn', '#inPlanBody .pk:checked'], ['outDoneBtn', '#outPlanBody .ogk:checked']].forEach(([id, q]) => { const b = document.getElementById(id); if (!b) return; const n = document.querySelectorAll(q).length; if (n) b.dataset.n = n; else delete b.dataset.n; });
+  document.addEventListener('DOMContentLoaded', () => { cnts(); ['input', 'change', 'click'].forEach(ev => document.addEventListener(ev, () => setTimeout(cnts, 60), true)); });
   document.addEventListener('DOMContentLoaded', () => { fbar(); ['input', 'change', 'click', 'datechange'].forEach(ev => document.addEventListener(ev, () => setTimeout(fbar, 60), true)); });
   const run = () => document.querySelectorAll('table.m-card').forEach(t => { if (t._mo) return; t._mo = new MutationObserver(() => { cancelAnimationFrame(t._raf); t._raf = requestAnimationFrame(() => { label(t); heads(t); }); }); t._mo.observe(t.tBodies[0], { childList: true }); label(t); heads(t); });
   document.addEventListener('DOMContentLoaded', run);
