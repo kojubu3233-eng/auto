@@ -392,27 +392,32 @@ tr.edit-row td { background:#FFFBEB !important; }
   #inPlanBody tr.plan-extra { background:var(--surface-alt); }
 
   /* 출고: 납품 1건 = 2줄 (납품일·부대·품명·수량·본품·샘플 / 소비기한·출고수량·출고일·상태), 소비기한 추가 시 아래 줄이 더해짐 */
-  [data-subpane="out"] .m-card thead tr, #outPlanBody tr.out-line { grid-template-columns:22px 56px minmax(0,1fr) 40px 46px 42px; }
+  [data-subpane="out"] .m-card thead tr, #outPlanBody tr.out-line { grid-template-columns:22px minmax(0,1fr) 54px 40px 46px 42px; }
   [data-subpane="out"] .m-led thead { display:block; }
-  [data-subpane="out"] .m-card thead th:nth-child(-n+10):not(:nth-child(1)) { display:block; }
-  [data-subpane="out"] .m-card thead th:nth-child(2) { grid-column:2; grid-row:1; text-align:left; } [data-subpane="out"] .m-card thead th:nth-child(3) { grid-column:3; grid-row:1; text-align:left; }
-  [data-subpane="out"] .m-card thead th:nth-child(4) { grid-column:4; grid-row:1; } [data-subpane="out"] .m-card thead th:nth-child(5) { grid-column:5; grid-row:1; } [data-subpane="out"] .m-card thead th:nth-child(6) { grid-column:6; grid-row:1; }
-  [data-subpane="out"] .m-card thead th:nth-child(10) { grid-column:1; grid-row:2; font-size:0; } [data-subpane="out"] .m-card thead th:nth-child(7) { grid-column:2 / 4; grid-row:2; text-align:left; }
-  [data-subpane="out"] .m-card thead th:nth-child(8) { grid-column:4 / 6; grid-row:2; } [data-subpane="out"] .m-card thead th:nth-child(9) { grid-column:6; grid-row:2; }
+  [data-subpane="out"] .m-card thead th:nth-child(-n+11) { display:block; }
+  [data-subpane="out"] .m-card thead th:nth-child(1) { grid-column:1 / 3; grid-row:1; text-align:left; } [data-subpane="out"] .m-card thead th:nth-child(2) { grid-column:3 / 7; grid-row:1; text-align:left; }
+  [data-subpane="out"] .m-card thead th:nth-child(3) { grid-column:2; grid-row:2; text-align:left; } [data-subpane="out"] .m-card thead th:nth-child(11) { grid-column:3; grid-row:2; font-size:0; } [data-subpane="out"] .m-card thead th:nth-child(11)::after { content:"현재고"; font-size:11px; }
+  [data-subpane="out"] .m-card thead th:nth-child(4) { grid-column:4; grid-row:2; } [data-subpane="out"] .m-card thead th:nth-child(5) { grid-column:5; grid-row:2; } [data-subpane="out"] .m-card thead th:nth-child(6) { grid-column:6; grid-row:2; }
+  [data-subpane="out"] .m-card thead th:nth-child(10) { grid-column:1; grid-row:3; font-size:0; } [data-subpane="out"] .m-card thead th:nth-child(7) { grid-column:2 / 4; grid-row:3; text-align:left; }
+  [data-subpane="out"] .m-card thead th:nth-child(8) { grid-column:4 / 6; grid-row:3; } [data-subpane="out"] .m-card thead th:nth-child(9) { grid-column:6; grid-row:3; }
   #outPlanBody tr.out-line { display:grid; gap:4px 3px; align-items:center; margin:0; padding:6px 4px; border:0; border-radius:0; background:var(--surface); }
   #outPlanBody tr.out-grp { border-top:2px solid #BDB6A6; padding-top:8px; }
   #outPlanBody tr.out-line:not(.out-grp) { padding-top:0; }
   #outPlanBody tr.out-line td { grid-column:auto; }
   #outPlanBody tr.out-line:not(.out-grp) td { grid-row:1; }
-  #outPlanBody tr.out-grp td:nth-child(1) { grid-column:1; grid-row:1; font-size:0; align-self:center; }
-  #outPlanBody tr.out-grp td:nth-child(2) { grid-column:2; grid-row:1; align-self:start; display:block; font-size:13px; font-weight:800; text-align:left !important; overflow-wrap:anywhere; line-height:1.25; }
-  #outPlanBody tr.out-grp td:nth-child(3) { grid-column:3; grid-row:1; align-self:start; display:block; font-size:13px; font-weight:800; line-height:1.25; text-align:left !important; }
-  #outPlanBody tr.out-grp td:nth-child(3) .hint { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:block; margin:1px 0 0; font-size:10.5px; font-weight:700; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  #outPlanBody tr.out-grp td:nth-child(4) { grid-column:4; grid-row:1; align-self:start; font-size:13px; font-weight:800; line-height:1.25; text-align:right !important; }
-  #outPlanBody tr.out-grp td:nth-child(5) { grid-column:5; grid-row:1; } #outPlanBody tr.out-grp td:nth-child(6) { grid-column:6; grid-row:1; }
-  #outPlanBody tr.out-grp td:nth-child(10) { grid-column:1; grid-row:2; } #outPlanBody tr.out-grp td:nth-child(7) { grid-column:2 / 4; grid-row:2; }
-  #outPlanBody tr.out-grp td:nth-child(8) { grid-column:4 / 6; grid-row:2; } #outPlanBody tr.out-grp td:nth-child(9) { grid-column:6; grid-row:2; }
+  #outPlanBody tr.out-grp td:nth-child(1) { grid-column:1 / 3; grid-row:1; flex-direction:row; align-items:center; gap:6px; font-size:14px; font-weight:800; white-space:nowrap; }
+  #outPlanBody tr.out-grp td:nth-child(2) { grid-column:3 / 7; grid-row:1; display:flex !important; justify-content:flex-start !important; font-size:15px; font-weight:800; text-align:left !important; white-space:nowrap; overflow:hidden; }
+  #outPlanBody tr.out-grp td:nth-child(3) { display:contents; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .m-nm, #outPlanBody tr.out-grp td:nth-child(3) > .stock-now, #outPlanBody tr.out-grp td:nth-child(3) > .hint { grid-row:2; align-self:center; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .m-nm { grid-column:2; font-size:13px; font-weight:800; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .hint { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .stock-now { grid-column:3; margin:0; font-size:12px; font-weight:700; color:var(--accent); text-align:right; white-space:nowrap; }
+  #outPlanBody tr.out-grp td:nth-child(3) .sn-l { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .tag { grid-column:3 / 7; grid-row:1; justify-self:end; font-size:10px; }
+  #outPlanBody tr.out-grp td:nth-child(4) { grid-column:4; grid-row:2; align-self:center; font-size:13px; font-weight:800; text-align:right !important; }
+  #outPlanBody tr.out-grp td:nth-child(5) { grid-column:5; grid-row:2; } #outPlanBody tr.out-grp td:nth-child(6) { grid-column:6; grid-row:2; }
+  #outPlanBody tr.out-grp td:nth-child(10) { grid-column:1; grid-row:3; } #outPlanBody tr.out-grp td:nth-child(7) { grid-column:2 / 4; grid-row:3; }
+  #outPlanBody tr.out-grp td:nth-child(8) { grid-column:4 / 6; grid-row:3; } #outPlanBody tr.out-grp td:nth-child(9) { grid-column:6; grid-row:3; }
   #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { grid-column:1; } #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { grid-column:2 / 4; }
   #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { grid-column:4 / 6; } #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { grid-column:6; }
   #outPlanBody tr.out-line td:nth-child(10) , #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { flex-direction:row; justify-content:center; align-items:center; }
@@ -3858,7 +3863,7 @@ const Logi = {
       const finished = !dirty && lines.every(l => l.ship && l.ship <= today), anyDone = !dirty && lines.some(l => l.ship && l.ship <= today), btns = `<button type="button" class="btn sm ok" data-act="save">출고처리</button>${anyDone ? '<button type="button" class="btn sm light mt8" data-act="cancel">처리 취소</button>' : ''}`;
       return lines.map((l, li) => {
         const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
-        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now">${pendPast ? '이 건 출고 반영 후 보유고' : '현재 보유고'} ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
+        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now"><span class="sn-l">${pendPast ? '이 건 출고 반영 후 보유고' : '현재 보유고'}</span> ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
         const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? `<div class="hint">${o.shipsDone ? `출고처리 ${fmtN(o.shipsDone)}개 · 장부 ${fmtN(o.outTotal)}개로 수량이 다릅니다` : '확정 수량이 바뀌어 배분을 다시 계산했습니다'}</div>` : ''}</td>` : '';
         return `<tr class="out-line g${gi % 2} ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
       }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
@@ -4632,7 +4637,7 @@ document.addEventListener('DOMContentLoaded', () => App.init());
   const fit = () => { if (!mq.matches) return; document.querySelectorAll('#inPlanBody tr.plan-main > td:nth-child(2), #outPlanBody tr.out-grp > td:nth-child(3)').forEach(td => {
     let sp = td.querySelector(':scope > .m-nm');
     if (!sp) { const n = td.firstChild; if (!n || n.nodeType !== 3) return; sp = document.createElement('span'); sp.className = 'm-nm'; n.replaceWith(sp); sp.append(n); }
-    const w = td.clientWidth; if (!w) return;
+    const w = sp.clientWidth; if (!w) return;
     let f = 13; sp.style.fontSize = f + 'px'; while (sp.scrollWidth > w && f > 9) sp.style.fontSize = (f -= .5) + 'px';
   }); };
   const run = () => document.querySelectorAll('table.m-card').forEach(t => { if (t._mo) return; t._mo = new MutationObserver(() => { cancelAnimationFrame(t._raf); t._raf = requestAnimationFrame(() => { label(t); heads(t); fit(); }); }); t._mo.observe(t.tBodies[0], { childList: true }); label(t); heads(t); fit(); });
