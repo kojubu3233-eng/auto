@@ -30,6 +30,7 @@ h3 { font-size:13px; font-weight:700; }
 .zone-total b { font-size:16px; color:var(--accent); }
 .hidden { display:none !important; }
 .m-ftoggle { display:none; }
+.m-only { display:none; }
 
 .btn { padding:8px 14px; border:none; border-radius:8px; font-weight:600; cursor:pointer; color:#fff; background:var(--accent); font-size:13px; }
 .btn:hover { opacity:.88; }
@@ -352,7 +353,10 @@ tr.edit-row td { background:#FFFBEB !important; }
   #outPlanBody tr.out-line td[data-label]::before { font-size:10px; margin-bottom:0; }
   #outPlanBody tr.out-grp td:nth-child(1) { grid-column:span 7; } #outPlanBody tr.out-grp td:nth-child(2) { grid-column:span 5; font-weight:700; }
   #outPlanBody tr.out-grp td:nth-child(3) { grid-column:1/-1; font-size:13.5px; font-weight:700; }
+  #outPlanBody tr.out-grp td:nth-child(3) { display:block; line-height:1.35; }
   #outPlanBody tr.out-grp td:nth-child(3)::before { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(3) .hint, #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:inline; margin:0; font-size:11px; font-weight:400; }
+  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { margin-left:8px; color:var(--accent); font-weight:600; }
   #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { grid-column:1/-1; }
   #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { grid-column:span 4; }
   #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { grid-column:span 5; }
@@ -369,8 +373,14 @@ tr.edit-row td { background:#FFFBEB !important; }
   #inPlanBody tr.plan-main td:nth-child(2)::before { display:none; }
   #inPlanBody tr.plan-main td:nth-child(5) { order:3; grid-column:span 6; } #inPlanBody tr.plan-main td:nth-child(6) { order:4; grid-column:span 3; } #inPlanBody tr.plan-main td:nth-child(9) { order:5; grid-column:span 3; }
   #inPlanBody tr.plan-main td:nth-child(7) { order:6; grid-column:span 5; } #inPlanBody tr.plan-main td:nth-child(8) { order:7; grid-column:span 7; }
-  #inPlanBody tr.plan-main td:nth-child(3) { order:8; } #inPlanBody tr.plan-main td:nth-child(4) { order:9; } #inPlanBody tr.plan-main td:nth-child(10) { order:10; }
+  #inPlanBody tr.plan-main { position:relative; }
+  #inPlanBody tr.plan-main td:nth-child(3), #inPlanBody tr.plan-main td:nth-child(4) { display:none; }
+  #inPlanBody tr.plan-main td:nth-child(2) { padding-right:84px; line-height:1.25; }
+  #inPlanBody tr.plan-main td:nth-child(2) .hint { font-size:11px; font-weight:400; }
+  .m-only { display:inline; }
+  #inPlanBody tr.plan-main td:nth-child(10) { position:absolute; top:6px; right:6px; display:block; width:auto; }
   #inPlanBody tr.plan-main td:nth-child(10)::before { display:none; }
+  #inPlanBody tr.plan-main td:nth-child(10) .btn { padding:3px 8px; font-size:11px; min-height:0; }
 
   /* 재고수불대장 상세: 카드 대신 PC와 같은 표 (한 화면 폭에 맞춰 열을 줄이고 글자를 작게) */
   .table-wrap:has(> .ld-t) { overflow:visible; border:0; }
@@ -3961,7 +3971,7 @@ const Logi = {
       const cQty = lots ? stack('qty', (l, k, x) => `<input type="text" data-num class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="text" data-num class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
       const cExp = lots ? stack('exp', (l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
       const cDl = lots ? stack('dl', (l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
-      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
+      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}<span class="m-only"> · ${esc(info?.storage || '-')} · ${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</span></div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${cDate}</td><td class="num">${cPlan}</td>
         <td>${cQty}</td><td>${cExp}</td><td>${cDl}</td>
         <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x, d)).join('');
