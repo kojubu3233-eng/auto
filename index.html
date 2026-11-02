@@ -1515,7 +1515,7 @@ const CostMgr = {
     if (!CostMgr.bound) {
       CostMgr.bound = true;
       $('costBody').addEventListener('change', e => { const n = e.target.closest('tr') && e.target.closest('tr').dataset.n; if (e.target.classList.contains('cost-in')) CostMgr.save(n, num(e.target.value), e.target); else if (e.target.classList.contains('sell-in')) CostMgr.saveSell(n, num(e.target.value), e.target); });
-      $('costBody').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; const n = b.closest('tr').dataset.n; if (b.dataset.act === 'hist') CostMgr.history(n); else if (b.dataset.act === 'shist') CostMgr.history(n, true); });
+      $('costBody').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; const n = b.closest('tr').dataset.n; if (b.dataset.act === 'hist') CostMgr.history(n); else if (b.dataset.act === 'shist') CostMgr.history(n, true); else if (b.dataset.act === 'del') CostMgr.remove(n); });
       document.querySelector('#costTable thead').addEventListener('click', e => { const th = e.target.closest('[data-cs]'); if (!th) return; const k = th.dataset.cs; CostMgr.sort = { k, d: CostMgr.sort.k === k ? -CostMgr.sort.d : 1 }; CostMgr.render(); });
     }
     const sel = $('costCat'), cats = [...new Set(Cost.names.map(nm => ((Names.product(nm) || (Names.resolve(nm) || {}).product) || {}).category).filter(Boolean))].sort();
@@ -1524,44 +1524,69 @@ const CostMgr = {
     const rows = CostMgr.rows().sort((a, b) => { const x = val(a), y = val(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (typeof x === 'string' ? x.localeCompare(y) : x - y) * d; });
     const miss = rows.filter(r => r.cost == null).length, rs = rows.filter(r => r.rate != null);
     $('costSummary').textContent = `${rows.length}개 품목 · 매입가 없음 ${miss}개${rs.length ? ` · 평균 마진율 ${(rs.reduce((a, r) => a + r.rate, 0) / rs.length).toFixed(1)}%` : ''}`;
-    $('costBody').innerHTML = rows.map(r => `<tr data-n="${esc(r.p.name)}"><td>${esc(r.p.category || '')}</td><td style="text-align:left">${esc(r.p.name)}</td>
+    $('costBody').innerHTML = rows.map(r => `<tr data-n="${esc(r.p.name)}"><td>${esc(r.p.category || '')}</td><td style="text-align:left">${esc(r.p.name)} <button type="button" class="btn sm light" data-act="del" title="매입가 탭에서 이 품목 줄을 모두 지웁니다" style="padding:0 6px">✕</button></td>
       <td class="num ${r.recent ? 'cost-recent' : ''}"${r.recent ? ` title="${D.short(r.from)}에 변경"` : ''}><input type="text" data-num class="cost-in num" value="${r.cost ?? ''}" placeholder="미입력" style="width:90px">${r.hist.length > 1 ? ` <button type="button" class="btn sm light" data-act="hist">이력 ${r.hist.length}</button>` : ''}</td>
       <td class="num ${r.srecent ? 'cost-recent' : ''}">${r.p.pr ? `<input type="text" data-num class="sell-in num" value="${r.sell == null ? '' : Math.round(r.sell)}" placeholder="미입력" style="width:90px">${r.sh.length > 1 ? ` <button type="button" class="btn sm light" data-act="shist">이력 ${r.sh.length}</button>` : ''}` : '<span class="hint" title="품목정보에 같은 이름의 품목이 없어 판매가를 정할 수 없습니다">품목정보 없음</span>'}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td>${r.from ? D.short(r.from) : (r.cost != null ? '처음부터' : '')}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
   },
-  async save(name, v, input) {
+  // 금액을 바꾸면 적용시작일을 고르는 창을 띄운다 (기본 오늘). 그 날짜 납품분부터 새 금액, 그 전은 기존 금액
+  ask(title, change, note, cb) {
+    Confirm.modal(title, `<span class="hint">변경</span><b>${change}</b>
+      <label>적용시작일</label><span id="cmDate"></span>
+      <span></span><span class="hint">${note}</span>`, () => { const d = DF.get(document.querySelector('.cm-date')); if (!d) return toast('적용시작일을 고르세요'); Confirm.closeModal(); cb(d); });
+    DF.mount($('cmDate'), 'cm-date', D.today());
+  },
+  save(name, v, input) {
     const t = D.today(), cur = Cost.of(name, t);
     if (!(v > 0)) { toast('매입가는 0보다 큰 숫자로 입력하세요'); input.value = cur ?? ''; return; }
     if (v === cur) return;
-    const label = name;   // 목록이 매입가 탭 이름 그대로이므로 그 이름으로 저장
-    if (cur != null && !confirm(`${name} 매입가를 ${fmtN(cur)}원 → ${fmtN(v)}원으로 바꿉니다.\n오늘(${D.short(t)})부터 적용되고, 이전 매입가는 이력으로 남습니다.`)) { input.value = cur; return; }
+    input.value = cur ?? '';   // 저장되면 다시 그려진다
+    CostMgr.ask(`${esc(name)} 매입가 변경`, `${cur != null ? fmtN(cur) + '원 → ' : ''}${fmtN(v)}원`, '이 날짜 납품분부터 새 매입가가 적용되고, 그 전 납품분은 기존 매입가 그대로입니다. 이전 매입가는 이력으로 남습니다', d => CostMgr.doSave(name, v, d));
+  },
+  async doSave(name, v, d) {
     Busy.start('매입가 저장 중입니다');
     try {
-      const res = await Api.post('ledger', { action: 'costSave', name: label, price: v, date: t });
+      const res = await Api.post('ledger', { action: 'costSave', name, price: v, date: d });   // 목록이 매입가 탭 이름 그대로이므로 그 이름으로 저장
       if (!res || !Array.isArray(res.values)) throw new Error((res && res.error) || '저장 결과를 받지 못했습니다');
       App.boot.costs = res.values; Cost.load(res.values); Store.setSoon('boot', App.boot);
-      toast(`${name} 매입가 ${fmtN(v)}원 저장${cur != null ? ` (${D.short(t)}부터 적용)` : ''}`);
+      toast(`${name} 매입가 ${fmtN(v)}원 저장 (${D.short(d)}부터 적용)`);
       App.refreshViews();
-    } catch (e) { toast('매입가 저장 실패: ' + e.message, 6000); input.value = cur ?? ''; }
+    } catch (e) { toast('매입가 저장 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
   },
-  // 판매가(VAT 별도) 변경: 품목정보 단가(Vat별도) 칸에 그 값을 그대로 적고, 확정량 입력(DB_Master)의 오늘 이전 납품 건 단가는 지금 값으로 고정해 지난 매출이 바뀌지 않게 한다. 단가이력에 변경 기록
-  async saveSell(name, v, input) {
+  // 판매가(VAT 별도) 변경: 품목정보 단가(Vat별도) 칸에 그 값을 그대로 적고, 확정량 입력(DB_Master)의 적용시작일 이전 납품 건 단가는 지금 값으로 고정해 지난 매출이 바뀌지 않게 한다. 단가이력에 변경 기록
+  saveSell(name, v, input) {
     const t = D.today(), pr = Names.product(name) || (Names.resolve(name) || {}).product; if (!pr) return;
     const cur = Sell.of(pr.name, t) ?? pr.price;
     if (!(v > 0)) { toast('판매가는 0보다 큰 숫자로 입력하세요'); input.value = cur == null ? '' : Math.round(cur); return; }
     if (cur != null && Math.abs(v - cur) < 0.5) return;
-    if (!confirm(`${pr.name} 판매가(VAT 별도)를 ${fmtN(cur == null ? null : Math.round(cur))}원 → ${fmtN(v)}원으로 바꿉니다.\n\n· 품목정보 단가(Vat별도)도 ${fmtN(v)}원으로 바뀝니다\n· 확정량 입력은 오늘(${D.short(t)}) 납품분부터 새 단가로 계산됩니다\n· 지난 납품분은 기존 단가로 고정되어 매출이 바뀌지 않습니다`)) { input.value = cur == null ? '' : Math.round(cur); return; }
+    input.value = cur == null ? '' : Math.round(cur);
+    CostMgr.ask(`${esc(pr.name)} 판매가 변경 (VAT 별도)`, `${cur != null ? fmtN(Math.round(cur)) + '원 → ' : ''}${fmtN(v)}원`, `이 날짜 납품분부터 확정량 입력에 새 단가가 적용되고, 그 전 납품분은 기존 단가로 고정됩니다. 품목정보 단가(Vat별도)도 ${fmtN(v)}원으로 바뀝니다`, d => CostMgr.doSaveSell(pr, v, d));
+  },
+  async doSaveSell(pr, v, d) {
     const same = r => (Names.product(r.name) || (Names.resolve(r.name) || {}).product) === pr;
-    const freeze = Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate < t && same(r)).map(r => r.id);
+    const freeze = Hist.records.filter(r => r.src === 'plan' && r.delDate && r.delDate < d && same(r)).map(r => r.id);   // 적용시작일 전 납품 건은 지금 단가로 고정
     Busy.start('판매가 저장 중입니다 (품목정보·확정량 입력 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'sellSave', name: pr.name, price: v, date: t, freeze });
+      const res = await Api.post('ledger', { action: 'sellSave', name: pr.name, price: v, date: d, freeze });
       if (!res || !Array.isArray(res.sells)) throw new Error((res && res.error) || '저장 결과를 받지 못했습니다');
       App.boot.sells = res.sells; Sell.load(res.sells); pr.price = res.price; Store.setSoon('boot', App.boot);
-      Hist.records.forEach(r => { if (r.src === 'plan' && same(r) && !(r.delDate && r.delDate < t)) r.price = res.price; });   // 오늘 이후 납품분은 새 단가(시트 수식과 같게)
-      toast(`${pr.name} 판매가 ${fmtN(v)}원 저장 (품목정보 단가(Vat별도) 반영${res.fixed ? `, 지난 납품 ${res.fixed}건 단가 고정` : ''})`, 6000);
+      Hist.records.forEach(r => { if (r.src === 'plan' && same(r) && !(r.delDate && r.delDate < d)) r.price = res.price; });   // 적용시작일 이후 납품분은 새 단가(시트 수식과 같게)
+      toast(`${pr.name} 판매가 ${fmtN(v)}원 저장 (${D.short(d)}부터 적용${res.fixed ? `, 그 전 납품 ${res.fixed}건 단가 고정` : ''})`, 6000);
       App.refreshViews();
-    } catch (e) { toast('판매가 저장 실패: ' + e.message, 6000); input.value = cur == null ? '' : Math.round(cur); }
+    } catch (e) { toast('판매가 저장 실패: ' + e.message, 6000); }
+    finally { Busy.end(); }
+  },
+  // 품목 삭제: 매입가 탭에서 이 품목 줄(이력 포함)을 모두 지운다. 품목정보·단가이력·확정량 입력은 그대로
+  async remove(name) {
+    const n = (Cost.find(name) || []).length;
+    if (!confirm(`'${name}'을(를) 원가관리에서 삭제합니다.\n\n· 자동화시스템 시트 '매입가' 탭에서 이 품목 줄${n > 1 ? `(이력 ${n}줄 포함)` : ''}이 지워집니다\n· 품목정보·판매가·확정량 입력은 그대로입니다 (확정량 입력의 매입가·마진은 빈칸이 됩니다)\n\n계속할까요?`)) return;
+    Busy.start('품목 삭제 중입니다');
+    try {
+      const res = await Api.post('ledger', { action: 'costDelete', name });
+      if (!res || !Array.isArray(res.values)) throw new Error((res && res.error) || '삭제 결과를 받지 못했습니다');
+      App.boot.costs = res.values; Cost.load(res.values); Store.setSoon('boot', App.boot);
+      toast(`${name} 삭제 (매입가 탭 ${res.removed}줄)`); App.refreshViews();
+    } catch (e) { toast('품목 삭제 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
   },
   // 신제품: 매입가 탭에 새 줄(품명·매입가·적용시작일)을 추가한다. 구분·판매가는 품목정보에 같은 이름이 있으면 그대로 붙는다
@@ -1591,7 +1616,7 @@ const CostMgr = {
     const pr = Names.product(name) || (Names.resolve(name) || {}).product, l = (sell ? (pr && Sell.find(pr.name)) : Cost.find(name)) || [], t = D.today();
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:480px">
       <div class="row between mb12"><h2>${esc(name)} ${sell ? '판매가' : '매입가'} 이력</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
-      <table><thead><tr><th>적용시작일</th><th>매입가</th><th>변동</th><th>비고</th></tr></thead><tbody>${l.map((x, i) => { const pv = i ? l[i - 1].v : null, cur = x === l.filter(y => !y.from || y.from <= t).pop();
+      <table><thead><tr><th>적용시작일</th><th>${sell ? '판매가' : '매입가'}</th><th>변동</th><th>비고</th></tr></thead><tbody>${l.map((x, i) => { const pv = i ? l[i - 1].v : null, cur = x === l.filter(y => !y.from || y.from <= t).pop();
         return `<tr${cur ? ' style="font-weight:700"' : ''}><td>${x.from ? D.short(x.from) : '처음부터'}</td><td class="num">${fmtN(x.v)}원</td><td class="num">${pv == null ? '' : (x.v > pv ? '+' : '') + fmtN(x.v - pv)}</td><td style="text-align:left">${esc(x.note || '')}${cur ? ' <span class="tag conf">현재</span>' : ''}</td></tr>`; }).reverse().join('')}</tbody></table></div></div>`;
   }
 };
