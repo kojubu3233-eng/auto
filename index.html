@@ -629,7 +629,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 <!-- 원가관리 -->
 <section id="tab-cost" class="hidden">
   <div class="panel">
-    <div class="row between mb12"><h2>원가관리</h2><span class="hint" id="costSummary"></span></div>
+    <div class="row between mb12"><h2>원가관리</h2><span class="row"><span class="hint" id="costSummary"></span><button class="btn sm" onclick="CostMgr.openAdd()">+ 품목 추가</button></span></div>
     <div class="controls mb8">
       <input type="text" id="costQ" placeholder="품명 검색" style="width:160px" oninput="CostMgr.render()">
       <select id="costCat" onchange="CostMgr.render()"><option value="">전체 구분</option></select>
@@ -1541,6 +1541,29 @@ const CostMgr = {
       toast(`${name} 매입가 ${fmtN(v)}원 저장${cur != null ? ` (${D.short(t)}부터 적용)` : ''}`);
       App.refreshViews();
     } catch (e) { toast('매입가 저장 실패: ' + e.message, 6000); input.value = cur ?? ''; }
+    finally { Busy.end(); }
+  },
+  // 신제품: 매입가 탭에 새 줄(품명·매입가·적용시작일)을 추가한다. 구분·판매가는 품목정보에 같은 이름이 있으면 그대로 붙는다
+  openAdd() {
+    Confirm.modal('원가관리 품목 추가 (신제품)', `
+      <label>품명</label><span class="ac-wrap"><input type="text" id="caName" autocomplete="off" style="width:100%" placeholder="품목정보와 같은 이름 권장"><span class="ac-list"></span></span>
+      <label>매입가</label><input type="text" data-num id="caPrice" style="width:140px" placeholder="VAT 별도, 1개당">
+      <label>적용시작일</label><span id="caDate"></span>
+      <span></span><span class="hint">구분·판매가는 품목정보에 같은 이름의 품목이 있으면 자동으로 표시됩니다</span>`, CostMgr.add);
+    DF.mount($('caDate'), 'ca-date', D.today()); AC.bind($('caName'), AC.products); $('caName').focus();
+  },
+  async add() {
+    const name = $('caName').value.trim(), price = num($('caPrice').value), date = DF.get(document.querySelector('.ca-date')) || D.today();
+    if (!name || !(price > 0)) return toast('품명과 매입가를 입력하세요');
+    if (Cost.names.some(n => Names.norm(n) === Names.norm(name))) return toast(`'${name}'은(는) 이미 매입가 탭에 있습니다. 목록에서 매입가를 고치세요`);
+    Busy.start('품목 추가 중입니다');
+    try {
+      const res = await Api.post('ledger', { action: 'costSave', name, price, date });
+      if (!res || !Array.isArray(res.values)) throw new Error((res && res.error) || '저장 결과를 받지 못했습니다');
+      App.boot.costs = res.values; Cost.load(res.values); Store.setSoon('boot', App.boot);
+      Confirm.closeModal(); $('costQ').value = name; toast(`${name} 추가 (매입가 ${fmtN(price)}원, ${D.short(date)}부터)`);
+      App.refreshViews();
+    } catch (e) { toast('품목 추가 실패: ' + e.message, 6000); }
     finally { Busy.end(); }
   },
   history(name) {
