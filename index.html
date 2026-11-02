@@ -304,6 +304,71 @@ tr.edit-row td { background:#FFFBEB !important; }
   .re-grid { grid-template-columns:1fr 1fr; }
   .toast { left:10px; right:10px; bottom:10px; max-width:none; }
   .list-row { padding:10px; }
+
+  /* ===== 휴대폰 작업 화면 (확정량 입력·물류관리 중심) ===== */
+  /* 머리말: 따라다니지 않게, 한 줄로 */
+  .header { position:static; padding:8px 10px; margin-bottom:6px; }
+  .header h1 { font-size:15px; } .edit-legend { display:none; }
+  .ld-sticky { top:0; }
+  /* 탭: 화면 아래 고정, 6개 모두 한눈에 */
+  .tab-bar { position:fixed; top:auto; bottom:0; left:0; right:0; z-index:40; margin:0; display:grid; grid-template-columns:repeat(6,1fr); overflow:visible; background:var(--surface); border-top:1px solid var(--border); box-shadow:0 -2px 8px rgba(0,0,0,.06); padding:0 0 env(safe-area-inset-bottom); }
+  .tab-bar .tab-btn { white-space:normal; word-break:keep-all; line-height:1.15; padding:9px 2px; font-size:11.5px; text-align:center; border-bottom:0; border-top:3px solid transparent; min-height:50px; }
+  .tab-bar .tab-btn.active { border-top-color:var(--accent); background:var(--accent-soft); }
+  body { padding-bottom:calc(64px + env(safe-area-inset-bottom)); }
+  .toast { bottom:66px; }
+  .sub-tabs { position:sticky; top:0; z-index:15; background:var(--paper); }
+  /* 확정량 입력 합계 카드: 2열 (큰 금액이 잘리지 않게) */
+  #confirmStats { grid-template-columns:1fr 1fr; } #confirmStats .b-val { font-size:15px; word-break:break-all; }
+
+  /* 확정량 입력 한 건 = 촘촘한 카드 (12칸 격자) */
+  #confirmTable tbody tr { grid-template-columns:repeat(12,minmax(0,1fr)); gap:4px 6px; padding:8px; margin:6px 2px; }
+  #confirmTable tbody td { grid-column:span 3; font-size:12.5px; }
+  #confirmTable tbody td[data-label]::before { font-size:10px; margin-bottom:0; }
+  #confirmTable tbody td:nth-child(1) { order:1; grid-column:span 1; }
+  #confirmTable tbody td:nth-child(2) { order:2; grid-column:span 3; font-weight:700; }
+  #confirmTable tbody td:nth-child(3) { order:3; grid-column:span 3; font-weight:700; }
+  #confirmTable tbody td:nth-child(4) { order:4; grid-column:span 5; font-size:13.5px; }
+  #confirmTable tbody td:nth-child(2)::before, #confirmTable tbody td:nth-child(3)::before, #confirmTable tbody td:nth-child(4)::before { display:none; }
+  #confirmTable tbody td:nth-child(7) { order:5; } #confirmTable tbody td:nth-child(8) { order:6; }
+  #confirmTable tbody td:nth-child(9) { order:7; } #confirmTable tbody td:nth-child(10) { order:8; }
+  #confirmTable tbody td:nth-child(12) { order:9; } #confirmTable tbody td:nth-child(13) { order:10; }
+  #confirmTable tbody td:nth-child(14) { order:11; } #confirmTable tbody td:nth-child(16) { order:12; }
+  #confirmTable tbody td:nth-child(15) { order:13; grid-column:1/-1; }
+  #confirmTable tbody td:nth-child(15) input { min-width:0 !important; }
+  #confirmTable tbody td:nth-child(5) { order:14; grid-column:span 2; } #confirmTable tbody td:nth-child(6) { order:15; grid-column:span 2; }
+  #confirmTable tbody td:nth-child(17) { order:16; grid-column:span 4; } #confirmTable tbody td:nth-child(11) { order:17; grid-column:span 4; }
+  #confirmTable tbody td:nth-child(18) { order:18; grid-column:1/-1; flex-direction:row; gap:8px; justify-content:flex-end; }
+  #confirmTable tbody td:nth-child(18)::before { display:none; } #confirmTable tbody td:nth-child(18) .btn { padding:6px 14px; }
+  #confirmTable tbody tr.editing td:nth-child(2), #confirmTable tbody tr.editing td:nth-child(4) { grid-column:span 6; }
+  #confirmTable tbody td.empty { grid-column:1/-1; }
+
+  /* 물류관리 출고: 납품 1건 = 카드, 소비기한 선택은 줄 전체 폭(잔량이 잘리지 않게) */
+  #outPlanBody tr.out-line { grid-template-columns:repeat(12,minmax(0,1fr)); gap:4px 6px; padding:8px; margin:6px 2px 0; }
+  #outPlanBody tr.out-line:not(.out-grp) { margin-top:0; border-top-style:dashed; border-top-left-radius:0; border-top-right-radius:0; }
+  #outPlanBody tr.out-grp { border-bottom-left-radius:0; border-bottom-right-radius:0; }
+  #outPlanBody tr.out-line td { grid-column:span 4; font-size:12.5px; }
+  #outPlanBody tr.out-line td[data-label]::before { font-size:10px; margin-bottom:0; }
+  #outPlanBody tr.out-grp td:nth-child(1) { grid-column:span 7; } #outPlanBody tr.out-grp td:nth-child(2) { grid-column:span 5; font-weight:700; }
+  #outPlanBody tr.out-grp td:nth-child(3) { grid-column:1/-1; font-size:13.5px; font-weight:700; }
+  #outPlanBody tr.out-grp td:nth-child(3)::before { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { grid-column:1/-1; }
+  #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { grid-column:span 4; }
+  #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { grid-column:span 5; }
+  #outPlanBody tr.out-grp td:nth-child(10), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { grid-column:span 3; }
+  #outPlanBody tr.out-line td select { font-size:15px; }
+  #outPlanBody tr.out-act { margin:0 2px 12px; padding:6px 8px; background:var(--surface-alt) !important; border:1px solid var(--border); border-top:0; border-radius:0 0 10px 10px; }
+
+  /* 물류관리 입고: 입고 1건 = 카드 (입고 수량·소비기한을 한 줄에) */
+  #inPlanBody tr.plan-main { grid-template-columns:repeat(12,minmax(0,1fr)); gap:4px 6px; padding:8px; margin:6px 2px; }
+  #inPlanBody tr.plan-main td { grid-column:span 4; font-size:12.5px; }
+  #inPlanBody tr.plan-main td[data-label]::before { font-size:10px; margin-bottom:0; }
+  #inPlanBody tr.plan-main td:nth-child(1) { order:1; grid-column:span 1; }
+  #inPlanBody tr.plan-main td:nth-child(2) { order:2; grid-column:span 11; font-size:13.5px; font-weight:700; }
+  #inPlanBody tr.plan-main td:nth-child(2)::before { display:none; }
+  #inPlanBody tr.plan-main td:nth-child(5) { order:3; grid-column:span 6; } #inPlanBody tr.plan-main td:nth-child(6) { order:4; grid-column:span 3; } #inPlanBody tr.plan-main td:nth-child(9) { order:5; grid-column:span 3; }
+  #inPlanBody tr.plan-main td:nth-child(7) { order:6; grid-column:span 5; } #inPlanBody tr.plan-main td:nth-child(8) { order:7; grid-column:span 7; }
+  #inPlanBody tr.plan-main td:nth-child(3) { order:8; } #inPlanBody tr.plan-main td:nth-child(4) { order:9; } #inPlanBody tr.plan-main td:nth-child(10) { order:10; }
+  #inPlanBody tr.plan-main td:nth-child(10)::before { display:none; }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
 
