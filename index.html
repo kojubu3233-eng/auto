@@ -346,74 +346,84 @@ tr.edit-row td { background:#FFFBEB !important; }
   #confirmTable tbody tr.editing td:nth-child(2), #confirmTable tbody tr.editing td:nth-child(4) { grid-column:span 6; }
   #confirmTable tbody td.empty { grid-column:1/-1; }
 
-  /* 물류관리 입고·출고: 카드 대신 구분선만 있는 촘촘한 줄 (한 줄에 한 가지씩, 글자는 읽기 좋게) */
+  /* 물류관리 입고·출고: PC 표와 같은 열 순서의 줄 (가로 스크롤 없이 한 화면, 열 제목 고정) */
   .m-actbar { display:flex; position:sticky; bottom:58px; z-index:35; gap:8px; margin:10px -4px 0; padding:8px; background:var(--surface); border-top:1px solid var(--border); box-shadow:0 -4px 10px rgba(29,27,24,.08); }
   .m-actbar .btn { flex:1; min-height:46px; font-size:16px; font-weight:700; }
   .m-actbar .btn[data-n]::after { content:" (" attr(data-n) "건)"; }
   .m-nobar { display:none !important; }
   .m-actbar.m-only-bar { display:flex; }
-  #inPlanBody td, #outPlanBody td { font-size:14px; padding:0; }
+  .m-wk { display:none; }
+  [data-subpane="in"] .table-wrap, [data-subpane="out"] .table-wrap { margin:0 -10px; border:0; }
+  #inPlanBody td, #outPlanBody td { font-size:12px; padding:0; min-width:0; }
   #inPlanBody td[data-label]::before, #outPlanBody td[data-label]::before { display:none; }
   #inPlanBody .dpick, #outPlanBody .dpick { display:none; }
-  #inPlanBody input[type=text], #outPlanBody input[type=text], #outPlanBody select { min-height:34px; padding:0 6px; }
+  #inPlanBody input[type=text], #outPlanBody input[type=text], #outPlanBody select { min-height:30px; padding:0 3px; font-size:12.5px; }
   #inPlanBody .dfield, #outPlanBody .dfield { width:100%; }
   #inPlanBody input.num, #outPlanBody input.num { text-align:right; }
+  #inPlanBody input[type=checkbox], #outPlanBody input[type=checkbox], [data-subpane="in"] thead input[type=checkbox] { width:16px; height:16px; }
+  [data-subpane="in"] .m-card thead tr, [data-subpane="out"] .m-card thead tr { display:grid; gap:2px 3px; padding:5px 4px; background:var(--surface-alt); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
+  [data-subpane="in"] .m-card thead th, [data-subpane="out"] .m-card thead th { display:none; padding:0; font-size:11px; font-weight:700; color:var(--muted); text-align:center; white-space:nowrap; line-height:1.1; }
+  [data-subpane="in"] .m-card thead th:nth-child(6), [data-subpane="in"] .m-card thead th:nth-child(7) { white-space:normal; font-size:10.5px; }
+  [data-subpane="in"] .m-card thead th::after, [data-subpane="out"] .m-card thead th::after { content:none; }
 
-  /* 입고: 1건 = 2줄 (품명·예정·입고수량·소비기한 / 입고일·납품기한) */
-  [data-subpane="in"] .m-card thead tr { display:grid; grid-template-columns:30px minmax(0,1fr) 40px 62px 70px; gap:0 4px; padding:6px 4px; background:var(--surface-alt); border-bottom:1px solid var(--border); }
-  [data-subpane="in"] .m-card thead th { display:none; }
-  [data-subpane="in"] .m-card thead th:nth-child(1), [data-subpane="in"] .m-card thead th:nth-child(2), [data-subpane="in"] .m-card thead th:nth-child(6), [data-subpane="in"] .m-card thead th:nth-child(7), [data-subpane="in"] .m-card thead th:nth-child(8) { display:block; padding:0; font-size:12px; font-weight:700; color:var(--muted); text-align:center; }
-  [data-subpane="in"] .m-card thead th:nth-child(6) { font-size:0; } [data-subpane="in"] .m-card thead th:nth-child(6)::after { content:"예정"; font-size:12px; }
-  [data-subpane="in"] .m-card thead th:nth-child(1) { grid-column:1; } [data-subpane="in"] .m-card thead th:nth-child(1)::after { content:none; }
-  [data-subpane="in"] .m-card thead th:nth-child(2) { grid-column:2; text-align:left; } [data-subpane="in"] .m-card thead th:nth-child(6) { grid-column:3; }
-  [data-subpane="in"] .m-card thead th:nth-child(7) { grid-column:4; } [data-subpane="in"] .m-card thead th:nth-child(8) { grid-column:5; }
-  #inPlanBody tr.plan-main, #inPlanBody tr.plan-extra { display:grid; grid-template-columns:30px minmax(0,1fr) 40px 62px 70px; gap:2px 4px; align-items:center; margin:0; padding:7px 4px; border:0; border-bottom:1px solid var(--border); border-radius:0; background:var(--surface); }
-  #inPlanBody tr.plan-main td, #inPlanBody tr.plan-extra td { grid-column:auto; min-width:0; }
+  /* 입고: 1건 = 1줄 (품명 · 입고일 · 예정 · 입고수량 · 소비기한 · 납품기한 · 한 줄 추가) */
+  [data-subpane="in"] .m-card thead tr, #inPlanBody tr.plan-main, #inPlanBody tr.plan-extra { grid-template-columns:16px minmax(0,1fr) 50px 32px 40px 48px 42px 20px; }
+  [data-subpane="in"] .m-card thead th:nth-child(1), [data-subpane="in"] .m-card thead th:nth-child(2), [data-subpane="in"] .m-card thead th:nth-child(5), [data-subpane="in"] .m-card thead th:nth-child(6), [data-subpane="in"] .m-card thead th:nth-child(7), [data-subpane="in"] .m-card thead th:nth-child(8), [data-subpane="in"] .m-card thead th:nth-child(9) { display:block; }
+  [data-subpane="in"] .m-card thead th:nth-child(1) { grid-column:1; } [data-subpane="in"] .m-card thead th:nth-child(2) { grid-column:2; text-align:left; }
+  [data-subpane="in"] .m-card thead th:nth-child(5) { grid-column:3; } [data-subpane="in"] .m-card thead th:nth-child(6) { grid-column:4; }
+  [data-subpane="in"] .m-card thead th:nth-child(7) { grid-column:5; } [data-subpane="in"] .m-card thead th:nth-child(8) { grid-column:6; } [data-subpane="in"] .m-card thead th:nth-child(9) { grid-column:7; }
+  #inPlanBody tr.plan-main, #inPlanBody tr.plan-extra { display:grid; gap:2px 3px; align-items:center; margin:0; padding:6px 4px; border:0; border-bottom:1px solid var(--border); border-radius:0; background:var(--surface); }
   #inPlanBody tr.plan-main td:nth-child(1) { grid-column:1; }
-  #inPlanBody tr.plan-main td:nth-child(2) { grid-column:2; font-size:15px; font-weight:800; line-height:1.25; text-align:left; }
-  #inPlanBody tr.plan-main td:nth-child(2) .hint { font-size:12px; font-weight:400; }
+  #inPlanBody tr.plan-main td:nth-child(2) { grid-column:2; font-size:13px; font-weight:800; line-height:1.2; text-align:left; overflow-wrap:anywhere; }
+  #inPlanBody tr.plan-main td:nth-child(2) .hint { font-size:10.5px; font-weight:400; }
   #inPlanBody tr.plan-main td:nth-child(3), #inPlanBody tr.plan-main td:nth-child(4) { display:none; }
-  .m-only { display:inline; }
-  #inPlanBody tr.plan-main td:nth-child(6) { grid-column:3; font-weight:700; align-items:center; }
-  #inPlanBody tr.plan-main td:nth-child(7) { grid-column:4; } #inPlanBody tr.plan-main td:nth-child(8) { grid-column:5; }
-  #inPlanBody tr.plan-main td:nth-child(10) { grid-column:1; grid-row:2; }
-  #inPlanBody tr.plan-main td:nth-child(5) { grid-column:2 / 4; grid-row:2; flex-direction:row; align-items:center; gap:6px; }
-  #inPlanBody tr.plan-main td:nth-child(5)::before { display:inline !important; content:"입고일"; font-size:12px; color:var(--muted); }
-  #inPlanBody tr.plan-main td:nth-child(5) .dfield { width:104px; }
-  #inPlanBody tr.plan-main td:nth-child(9) { grid-column:4 / 6; grid-row:2; flex-direction:row; gap:4px; font-size:12px; color:var(--muted); align-items:center; }
-  #inPlanBody tr.plan-main td:nth-child(9)::before { display:inline !important; content:"납품기한"; font-size:12px; color:var(--muted); margin:0; }
-  #inPlanBody tr.plan-main td:nth-child(10) .btn { padding:0; width:28px; height:28px; min-height:0; font-size:0; }
-  #inPlanBody tr.plan-main td:nth-child(10) .btn::before { content:"＋"; font-size:16px; font-weight:700; }
-  #inPlanBody tr.plan-extra td:nth-child(1) { display:none; }
-  #inPlanBody tr.plan-extra td:nth-child(2) { grid-column:1 / 3; font-size:12px; text-align:left !important; }
-  #inPlanBody tr.plan-extra td:nth-child(3) { grid-column:3 / 5; } #inPlanBody tr.plan-extra td:nth-child(5) { grid-column:3 / 5; }
+  #inPlanBody tr.plan-main td:nth-child(5) { grid-column:3; } #inPlanBody tr.plan-main td:nth-child(5) input { font-size:10.5px; padding:0 1px; letter-spacing:-.3px; }
+  #inPlanBody tr.plan-main td:nth-child(6) { grid-column:4; justify-content:center; text-align:right; font-weight:700; }
+  #inPlanBody tr.plan-main td:nth-child(7) { grid-column:5; } #inPlanBody tr.plan-main td:nth-child(8) { grid-column:6; } #inPlanBody tr.plan-main td:nth-child(8) input { font-size:10.5px; padding:0 1px; }
+  #inPlanBody tr.plan-main td:nth-child(9) { grid-column:7; font-size:10px; line-height:1.2; text-align:center; }
+  #inPlanBody tr.plan-main td:nth-child(10) { grid-column:8; }
+  #inPlanBody tr.plan-main td:nth-child(10) .btn, #inPlanBody tr.plan-extra td:nth-child(8) .btn { padding:0; width:20px; height:26px; min-height:0; font-size:0; }
+  #inPlanBody tr.plan-main td:nth-child(10) .btn::before { content:"＋"; font-size:15px; font-weight:700; }
+  #inPlanBody tr.plan-extra td:nth-child(8) .btn::before { content:"✕"; font-size:12px; }
+  #inPlanBody tr.plan-extra td:nth-child(1) { grid-column:1; } #inPlanBody tr.plan-extra td:nth-child(2) { grid-column:2; font-size:10.5px; text-align:right !important; line-height:1.2; }
+  #inPlanBody tr.plan-extra td:nth-child(3) { grid-column:3; } #inPlanBody tr.plan-extra td:nth-child(5) { grid-column:5; }
+  #inPlanBody tr.plan-extra td:nth-child(6) { grid-column:6; } #inPlanBody tr.plan-extra td:nth-child(7) { grid-column:7; font-size:11px; } #inPlanBody tr.plan-extra td:nth-child(8) { grid-column:8; }
+  #inPlanBody tr.plan-extra { background:var(--surface-alt); }
 
-  /* 출고: 납품 1건 = 구분선 있는 줄 묶음 (부대·납품일·수량 / 품명 / 본품·샘플 / 소비기한 / 출고수량·출고일) */
-  #outPlanBody tr.out-line { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:6px 8px; align-items:center; margin:0; padding:7px 4px; border:0; border-radius:0; background:var(--surface); }
-  #outPlanBody tr.out-grp { border-top:2px solid var(--border-strong, #BDB6A6); padding-top:10px; }
-  #outPlanBody tr.out-line:not(.out-grp) { border-top:1px dashed var(--border); }
-  #outPlanBody tr.out-line td { grid-column:span 4; min-width:0; }
-  #outPlanBody tr.out-grp td:nth-child(1) { order:1; grid-column:span 6; flex-direction:row; align-items:center; gap:6px; }
-  #outPlanBody tr.out-grp td:nth-child(2) { order:2; grid-column:span 4; font-size:17px; font-weight:800; text-align:left !important; }
-  #outPlanBody tr.out-grp td:nth-child(4) { order:3; grid-column:span 2; font-size:17px; font-weight:800; text-align:right !important; }
-  #outPlanBody tr.out-grp td:nth-child(3) { order:4; grid-column:1/-1; display:block; line-height:1.4; font-size:15px; font-weight:700; }
-  #outPlanBody tr.out-grp td:nth-child(3) .hint, #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:inline; margin:0; font-size:12px; font-weight:400; }
-  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { margin-left:8px; color:var(--accent); font-weight:700; }
-  #outPlanBody tr.out-grp td:nth-child(5), #outPlanBody tr.out-grp td:nth-child(6) { order:5; grid-column:span 6; flex-direction:row; align-items:center; gap:6px; }
-  #outPlanBody tr.out-grp td:nth-child(6) { order:6; }
-  #outPlanBody tr.out-grp td:nth-child(5)::before, #outPlanBody tr.out-grp td:nth-child(6)::before, #outPlanBody tr.out-grp td:nth-child(8)::before, #outPlanBody tr.out-grp td:nth-child(9)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3)::before { display:inline !important; font-size:12px; color:var(--muted); margin:0; flex:none; }
-  #outPlanBody tr.out-line td input[type=text], #outPlanBody tr.out-line td .dfield { min-width:0; flex:1; }
-  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { order:7; grid-column:1/-1; }
-  #outPlanBody tr.out-grp td:nth-child(7)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1)::before { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { order:8; grid-column:span 5; flex-direction:row; align-items:center; gap:6px; }
-  #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { order:9; grid-column:span 5; flex-direction:row; align-items:center; gap:6px; }
-  #outPlanBody tr.out-grp td:nth-child(10), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { order:10; grid-column:span 2; flex-direction:row; align-items:center; justify-content:flex-end; gap:4px; }
-  #outPlanBody tr.out-line td:nth-child(10)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4)::before { display:none; }
+  /* 출고: 납품 1건 = 2줄 (납품일·부대·품명·수량·본품·샘플 / 소비기한·출고수량·출고일·상태), 소비기한 추가 시 아래 줄이 더해짐 */
+  [data-subpane="out"] .m-card thead tr, #outPlanBody tr.out-line { grid-template-columns:30px 46px 54px minmax(0,1fr) 38px 46px 42px; }
+  [data-subpane="out"] .m-led thead { display:block; }
+  [data-subpane="out"] .m-card thead th:nth-child(-n+10) { display:block; }
+  [data-subpane="out"] .m-card thead th:nth-child(1) { grid-column:1 / 3; grid-row:1; } [data-subpane="out"] .m-card thead th:nth-child(2) { grid-column:3; grid-row:1; }
+  [data-subpane="out"] .m-card thead th:nth-child(3) { grid-column:4; grid-row:1; text-align:left; } [data-subpane="out"] .m-card thead th:nth-child(4) { grid-column:5; grid-row:1; }
+  [data-subpane="out"] .m-card thead th:nth-child(5) { grid-column:6; grid-row:1; } [data-subpane="out"] .m-card thead th:nth-child(6) { grid-column:7; grid-row:1; }
+  [data-subpane="out"] .m-card thead th:nth-child(10) { grid-column:1; grid-row:2; font-size:0; } [data-subpane="out"] .m-card thead th:nth-child(7) { grid-column:2 / 5; grid-row:2; text-align:left; }
+  [data-subpane="out"] .m-card thead th:nth-child(8) { grid-column:5 / 7; grid-row:2; } [data-subpane="out"] .m-card thead th:nth-child(9) { grid-column:7; grid-row:2; }
+  #outPlanBody tr.out-line { display:grid; gap:4px 3px; align-items:center; margin:0; padding:6px 4px; border:0; border-radius:0; background:var(--surface); }
+  #outPlanBody tr.out-grp { border-top:2px solid #BDB6A6; padding-top:8px; }
+  #outPlanBody tr.out-line:not(.out-grp) { padding-top:0; }
+  #outPlanBody tr.out-line td { grid-column:auto; }
+  #outPlanBody tr.out-line:not(.out-grp) td { grid-row:1; }
+  #outPlanBody tr.out-grp td:nth-child(1) { grid-column:1 / 3; grid-row:1; flex-direction:row; align-items:center; gap:3px; }
+  #outPlanBody tr.out-grp td:nth-child(1) input.dinput { font-size:11.5px; padding:0 2px; }
+  #outPlanBody tr.out-grp td:nth-child(2) { grid-column:3; grid-row:1; font-size:13px; font-weight:800; text-align:left !important; overflow-wrap:anywhere; line-height:1.2; }
+  #outPlanBody tr.out-grp td:nth-child(3) { grid-column:4; grid-row:1; display:block; font-size:13px; font-weight:800; line-height:1.2; overflow-wrap:anywhere; }
+  #outPlanBody tr.out-grp td:nth-child(3) .hint { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:block; margin:1px 0 0; font-size:10.5px; font-weight:700; color:var(--accent); }
+  #outPlanBody tr.out-grp td:nth-child(4) { grid-column:5; grid-row:1; font-size:13px; font-weight:800; text-align:right !important; }
+  #outPlanBody tr.out-grp td:nth-child(5) { grid-column:6; grid-row:1; } #outPlanBody tr.out-grp td:nth-child(6) { grid-column:7; grid-row:1; }
+  #outPlanBody tr.out-grp td:nth-child(10) { grid-column:1; grid-row:2; } #outPlanBody tr.out-grp td:nth-child(7) { grid-column:2 / 5; grid-row:2; }
+  #outPlanBody tr.out-grp td:nth-child(8) { grid-column:5 / 7; grid-row:2; } #outPlanBody tr.out-grp td:nth-child(9) { grid-column:7; grid-row:2; }
+  #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { grid-column:1; } #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { grid-column:2 / 5; }
+  #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { grid-column:5 / 7; } #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { grid-column:7; }
+  #outPlanBody tr.out-line td:nth-child(10) , #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { flex-direction:row; justify-content:center; align-items:center; }
+  #outPlanBody tr.out-line td select { font-size:11.5px; padding:0 1px; }
+  #outPlanBody tr.out-line td:nth-child(9) input.dinput, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) input.dinput { font-size:11.5px; padding:0 2px; }
   #outPlanBody tr.out-line .tag.plan { display:none; }
-  #outPlanBody tr.out-line td .btn.sm { padding:0; width:30px; height:30px; min-height:0; flex:none; }
-  #outPlanBody tr.out-line td select { font-size:15px; }
-  #outPlanBody tr.out-act { margin:0; padding:2px 4px 10px; background:var(--surface) !important; border:0; border-bottom:1px solid var(--border); }
-  #outPlanBody tr.out-act .btn { min-height:38px; font-size:14px; }
+  #outPlanBody tr.out-line .tag { font-size:10px; padding:1px 3px; }
+  #outPlanBody tr.out-line td .btn.sm { padding:0; width:28px; height:28px; min-height:0; }
+  #outPlanBody tr.out-act { margin:0; padding:2px 4px 8px; background:var(--surface) !important; border:0; border-bottom:1px solid var(--border); }
+  #outPlanBody tr.out-act .btn { min-height:34px; font-size:13px; }
   #outPlanBody tr.out-line.dirty, #outPlanBody tr.out-line.dirty td { background:#fffbeb !important; }
 
   /* 재고수불대장 상세: 카드 대신 PC와 같은 표 (한 화면 폭에 맞춰 열을 줄이고 글자를 작게) */
@@ -3741,7 +3751,7 @@ const Logi = {
     if (!Logi.stale.delete(sub)) return;
     if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') { Logi.renderJournal(); Estate.render(); }
   },
-  deadlineHtml: dl => dl ? `${D.short(dl)}${D.diff(dl, D.today()) < 0 ? ' <span class="tag danger">경과</span>' : ''}` : '-',
+  deadlineHtml: dl => dl ? `${D.short(dl).replace(/\(.\)/, '<span class="m-wk">$&</span>')}${D.diff(dl, D.today()) < 0 ? ' <span class="tag danger">경과</span>' : ''}` : '-',
   async send(kind, ops, entries) {
     try {
       ops = fixLots(ops);
@@ -4006,7 +4016,7 @@ const Logi = {
       const cQty = lots ? stack('qty', (l, k, x) => `<input type="text" data-num class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="text" data-num class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
       const cExp = lots ? stack('exp', (l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
       const cDl = lots ? stack('dl', (l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
-      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}<span class="m-only"> · ${esc(info?.storage || '-')}</span></div></td>
+      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${cDate}</td><td class="num">${cPlan}</td>
         <td>${cQty}</td><td>${cExp}</td><td>${cDl}</td>
         <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x, d)).join('');
