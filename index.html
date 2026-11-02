@@ -4550,11 +4550,27 @@ document.addEventListener('DOMContentLoaded', () => App.init());
     const ah = t.closest('#alertBar > :first-child, #alertBar2 > :first-child'); if (ah) return ah.parentElement.classList.toggle('m-open');
     if (t.classList.contains('list-box')) t.classList.toggle('m-open');
   });
-  // 입고·출고 필터 막대(휴대폰): 걸려 있는 조건이 있으면 '적용 중'을 보여 준다
-  const fbar = () => document.querySelectorAll('[data-subpane="in"] > .controls, [data-subpane="out"] > .controls').forEach(c => {
-    if (!c._tg) { const b = document.createElement('button'); b.type = 'button'; b.className = 'm-ftoggle'; b.innerHTML = '<span>🔍 필터</span>'; c.classList.add('m-fbox'); c.before(b); c._tg = b; b.addEventListener('click', () => { b.classList.toggle('m-open'); c.classList.toggle('m-open'); }); }
-    const on = [...c.querySelectorAll('input[type=text],select')].some(i => i.value && !i.closest('.dfield')) || [...c.querySelectorAll('.dinput')].some(i => i.value) || [...c.querySelectorAll('input[type=checkbox]')].some(i => i.checked);
-    let t = c._tg.querySelector('.m-fon'); if (on && !t) { t = document.createElement('span'); t.className = 'm-fon'; t.textContent = '· 적용 중'; c._tg.firstChild.after(t); } else if (!on && t) t.remove();
+  // 필터 막대(휴대폰): 입고·출고·확정량·권역별출고·예정량 저장분 찾기·재고수불대장의 조회 조건을 접어 두고, 걸려 있는 조건이 있으면 '적용 중'을 보여 준다
+  const FGROUPS = [
+    { boxes: '[data-subpane="in"] > .controls, [data-subpane="out"] > .controls, #confirmMain > .controls, #confirmZone > .controls, #plgBox', label: '필터', each: true },
+    { boxes: '#tab-ledger > .panel:first-child > .row.between > .row, #ledgerSearch', label: '연도·기간·품명 검색', anchor: '#ledgerYearBanner', skip: '#ledgerYear' }
+  ];
+  const fbar = () => FGROUPS.forEach(g => {
+    const all = [...document.querySelectorAll(g.boxes)].map(e => e.id === 'ledgerSearch' ? e.closest('.ac-wrap') : e);
+    (g.each ? all.map(e => [e]) : [all]).forEach(boxes => {
+      if (!boxes.length) return;
+      const first = boxes[0];
+      if (!first._tg) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'm-ftoggle'; b.innerHTML = `<span>🔍 ${g.label}</span>`;
+        boxes.forEach(c => { c.classList.add('m-fbox'); c._tg = b; });
+        (g.anchor ? document.querySelector(g.anchor) : first).before(b);
+        b.addEventListener('click', () => { b.classList.toggle('m-open'); boxes.forEach(c => c.classList.toggle('m-open')); });
+      }
+      const skip = g.skip ? boxes.flatMap(c => [...c.querySelectorAll(g.skip)]) : [];
+      const on = boxes.some(c => [...c.querySelectorAll('input[type=text],select')].some(i => i.value && !skip.includes(i) && !i.closest('.dfield')) || (c.matches('input') && c.value) || [...c.querySelectorAll('.dinput')].some(i => i.value) || [...c.querySelectorAll('input[type=checkbox]')].some(i => i.checked));
+      const t = first._tg; let tag = t.querySelector('.m-fon');
+      if (on && !tag) { tag = document.createElement('span'); tag.className = 'm-fon'; tag.textContent = '· 적용 중'; t.firstChild.after(tag); } else if (!on && tag) tag.remove();
+    });
   });
   document.addEventListener('DOMContentLoaded', () => { fbar(); ['input', 'change', 'click', 'datechange'].forEach(ev => document.addEventListener(ev, () => setTimeout(fbar, 60), true)); });
   const run = () => document.querySelectorAll('table.m-card').forEach(t => { if (t._mo) return; t._mo = new MutationObserver(() => { cancelAnimationFrame(t._raf); t._raf = requestAnimationFrame(() => { label(t); heads(t); }); }); t._mo.observe(t.tBodies[0], { childList: true }); label(t); heads(t); });
