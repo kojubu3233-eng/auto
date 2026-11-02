@@ -372,6 +372,31 @@ tr.edit-row td { background:#FFFBEB !important; }
   #inPlanBody tr.plan-main td:nth-child(3) { order:8; } #inPlanBody tr.plan-main td:nth-child(4) { order:9; } #inPlanBody tr.plan-main td:nth-child(10) { order:10; }
   #inPlanBody tr.plan-main td:nth-child(10)::before { display:none; }
 
+  /* 재고수불대장 상세: 카드 대신 PC와 같은 표 (한 화면 폭에 맞춰 열을 줄이고 글자를 작게) */
+  .table-wrap:has(> .ld-t) { overflow:visible; border:0; }
+  .ld-t.m-card, .ld-t.m-card tbody { width:100% !important; }
+  .ld-t thead { display:block !important; position:sticky; top:var(--ldst,56px); z-index:14; }
+  .ld-t thead tr { display:none; }
+  .ld-t thead tr.ld-mh { display:grid; grid-template-columns:32px 36px 42px 32px 36px 24px minmax(0,1fr) 36px 40px; background:var(--surface-alt); border:1px solid var(--border); border-radius:6px 6px 0 0; padding:0; margin:0; }
+  .ld-t thead tr.ld-mh th { display:block !important; padding:5px 1px; font-size:10px; text-align:center; position:static; border:0; background:none; min-width:0; }
+  .ld-t.ld-simple thead tr.ld-mh { grid-template-columns:1.2fr 1fr 1fr 2fr; }
+  .ld-t #ldBody tr:not(.edit-row):not(.carry) { display:grid; grid-template-columns:32px 36px 42px 32px 36px 24px minmax(0,1fr) 36px 40px; gap:0; margin:0; padding:0; border:0; border-bottom:1px solid var(--border-soft); border-radius:0; align-items:stretch; }
+  .ld-t.ld-simple #ldBody tr:not(.edit-row):not(.carry) { grid-template-columns:1.2fr 1fr 1fr 2fr; }
+  .ld-t #ldBody tr:not(.edit-row):not(.carry) > td { display:block; padding:6px 1px; font-size:10.5px; line-height:1.25; text-align:center !important; min-width:0 !important; width:auto !important; word-break:break-all; border:0; }
+  .ld-t #ldBody tr:not(.edit-row):not(.carry) > td::before { display:none !important; }
+  .ld-t #ldBody tr:not(.edit-row):not(.carry) > td:nth-child(-n+2), .ld-t #ldBody tr:not(.edit-row):not(.carry) > td:nth-child(7), .ld-t #ldBody tr:not(.edit-row):not(.carry) > td:nth-child(12) { display:none; }
+  .ld-t.ld-simple #ldBody tr:not(.edit-row):not(.carry) > td { display:block !important; }
+  .ld-t #ldBody tr:not(.edit-row):not(.carry) > td { grid-column:auto !important; }
+  .ld-t thead tr.ld-mh th::after { content:none !important; }
+  .ld-t #ldBody td[data-soon] { color:var(--warn); }
+  .ld-t #ldBody tr.carry { display:block; margin:0; padding:5px 8px; border-radius:0; }
+  .ld-t #ldBody .lexp-edit { font-size:0 !important; padding:0 3px !important; line-height:1; } .ld-t #ldBody .lexp-edit::before { content:"✎"; font-size:11px; }
+  .ld-t #ldBody .lexp-wrap .dfield { display:none; } .ld-t #ldBody .lexp-wrap:has(.dfield)::after { content:"미입력"; color:var(--muted-2); }
+  .ld-t #ldBody .dec-cb { flex-direction:column; min-height:0; font-size:9px; gap:0; line-height:1.1; margin:0; }
+  .ld-t #ldBody .dec-cb input { width:16px; height:16px; }
+  .ld-t #ldBody .tag { font-size:9.5px; padding:1px 3px; }
+  .ld-t #ldBody .hint { font-size:9px; }
+
   /* 입고·출고 필터: 접어 두고 '필터' 막대를 눌러 펼친다 */
   .m-ftoggle { display:flex; align-items:center; justify-content:space-between; width:100%; padding:10px 12px; margin-bottom:8px; border:1px solid var(--accent); border-radius:8px; background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:14px; }
   .m-ftoggle .m-fon { font-size:12px; font-weight:600; color:var(--warn); margin-left:8px; }
@@ -666,7 +691,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <button class="btn sm" onclick="Ledger.addInbound()" title="납품 없이 입고만 있는 건을 입고예정(적색) 줄로 넣습니다">입고 추가</button>
     </div>
     <div class="table-wrap" style="max-height:560px">
-      <table class="m-card m-led" data-labels="업체,제품,입고일,입고수량,소비기한,납품일,소계,본품,샘플,부대,재고,납품기한 임박,납품기한 초과,상태"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
+      <table class="m-card m-led ld-t" id="ldTable" data-labels="업체,제품,입고일,입고수량,소비기한,납품일,소계,본품,샘플,부대,재고,납품기한 임박,납품기한 초과,상태"><thead id="ldHead"></thead><tbody id="ldBody"></tbody></table>
     </div>
     <div class="row mt8" style="justify-content:flex-end"><button class="btn light" onclick="Ledger.close()">상세 닫기</button></div>
     <div class="reco mt12" id="ldReco">
@@ -2955,7 +2980,7 @@ const Ledger = {
     $('ldReco').classList.toggle('hidden', p.type !== 'standard');
     if (p.type !== 'standard') {
       $('ldStats').innerHTML = ''; $('ldAlert').innerHTML = ''; $('ldSticky').innerHTML = '';
-      $('ldHead').innerHTML = '<tr><th>납품일</th><th>수량</th><th>샘플</th><th>부대</th></tr>';
+      $('ldTable').classList.add('ld-simple'); $('ldHead').innerHTML = '<tr class="ld-mh"><th>납품일</th><th>수량</th><th>샘플</th><th>부대</th></tr>';
       const rows = p.rows.filter(o => (!from || o.outDate >= from) && (!to || o.outDate <= to));
       $('ldBody').innerHTML = rows.map(o => `<tr><td>${D.short(o.outDate)}</td><td class="num">${fmtN(o.qty)}</td><td class="num">${fmtN(o.sample)}</td><td>${esc(o.unit)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">기간 내 내역 없음</td></tr>';
       return;
@@ -2969,7 +2994,8 @@ const Ledger = {
     const lack = p.planOut - p.stock - p.planIn, alerts = [];
     if (lack > 0) alerts.push(`<span class="tag danger">부족 ${fmtN(lack)}개</span> 발주(입고) 필요`);
     $('ldAlert').innerHTML = alerts.map(a => `<div>${a}</div>`).join('');
-    $('ldHead').innerHTML = '<tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="3">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th>납품기한 주의</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">소비기한</th><th style="top:33px">납품일</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th><th style="top:33px">임박</th></tr>';
+    $('ldTable').classList.remove('ld-simple');
+    $('ldHead').innerHTML = '<tr class="ld-mh"><th>입고일</th><th>입고</th><th>소비기한</th><th>납품일</th><th>본품</th><th>샘플</th><th>부대</th><th>재고</th><th>상태</th></tr><tr><th rowspan="2">업체</th><th rowspan="2">제품</th><th colspan="3">발주 및 입고</th><th colspan="5">출고</th><th rowspan="2">재고</th><th>납품기한 주의</th><th rowspan="2">상태</th></tr><tr><th style="top:33px">입고일</th><th style="top:33px">수량</th><th style="top:33px">소비기한</th><th style="top:33px">납품일</th><th style="top:33px">소계</th><th style="top:33px">본품</th><th style="top:33px">샘플</th><th style="top:33px">부대</th><th style="top:33px">임박</th></tr>';
     const shown = [];
     const dateOf = o => o.inDate || o.outDate || '';
     let carry = '';
@@ -2979,7 +3005,9 @@ const Ledger = {
       if (to && d && d > to) return;
       shown.push({ o, run: o.stock, counted: o.stock !== '' });
     });
-    const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
+    const ph = window.matchMedia('(max-width:760px)').matches;   // 휴대폰: 날짜를 짧게 (년도는 '2026년' 구분 줄에 나온다)
+    const md = iso => iso ? (ph ? `${iso.slice(5, 7)}.${iso.slice(8)}` : `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일`) : '';
+    const xs = iso => ph ? `${iso.slice(2, 4)}.${iso.slice(5, 7)}.${iso.slice(8)}` : D.short(iso);
     const statusCell = o => {
       if (o.unit === EXPIRED_UNIT) return '<span class="tag danger">초과처리</span> <button type="button" class="btn sm light" data-undo="1">되돌리기</button>';
       const s = (!PEND_OUT.has(o.status) && o.inSt && o.inSt !== o.status ? o.inSt : o.status) || (o.inQty ? '입고완료' : '');
@@ -2993,8 +3021,8 @@ const Ledger = {
       const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + (p.expired.has(o) ? ' row-grey' : '');
       const inNote = o.note ? `<div class="hint">${esc(o.note)}</div>` : '';
       const html = `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${md(l.d)}</div>`).join('') : ''}${inNote}</td><td class="num ${o.inQty && PLAN_IN.has(o.inSt) ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${fmtN(l.q)}</div>`).join('') : ''}</td>
-        <td class="lexp-wrap">${!o.inQty ? '' : (o.expiry ? `<span class="lexp-view">${D.short(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')) + (o.lotsArr ? o.lotsArr.slice(1).map((l, k) => `<div class="lexp-lot" data-k="${k}">${l.e ? `<span class="lexp-view">${D.short(l.e)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</div>`).join('') : '')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
-        <td>${esc(o.unit)}</td><td class="num"><b>${counted ? fmtN(run) : ''}</b></td>
+        <td class="lexp-wrap">${!o.inQty ? '' : (o.expiry ? `<span class="lexp-view">${xs(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')) + (o.lotsArr ? o.lotsArr.slice(1).map((l, k) => `<div class="lexp-lot" data-k="${k}">${l.e ? `<span class="lexp-view">${xs(l.e)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</div>`).join('') : '')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
+        <td>${esc(o.unit)}</td><td class="num"${soon ? ' data-soon="1"' : ''}><b>${counted ? fmtN(run) : ''}</b></td>
         <td class="num ${soon ? 'warn-cell' : ''}">${soon ? fmtN(soon) : ''}</td><td>${statusCell(o)}</td></tr>`;
       // 수정 중인 줄은 원래 줄을 그대로 두고 바로 아래에 입력 줄을 붙인다
       return Ledger.editing === o ? html + Ledger.editRow(item, i) : html;
@@ -3006,6 +3034,7 @@ const Ledger = {
         return head + rowHtml(x, i);
       }).join('') || '<tr><td colspan="14" class="empty">기간 내 내역 없음</td></tr>');
     Ledger.renderReco();
+    requestAnimationFrame(() => document.documentElement.style.setProperty('--ldst', ($('ldSticky').offsetHeight + 10) + 'px'));   // 휴대폰: 표 머리글이 보유고 막대 바로 아래에 붙게
     const er = $('ldBody').querySelector('tr.edit-row'), tw = er && er.closest('.table-wrap');   // 표 안에서만 스크롤(화면 전체는 움직이지 않음)
     if (tw && er.offsetTop + er.offsetHeight > tw.scrollTop + tw.clientHeight) tw.scrollTop = er.offsetTop + er.offsetHeight - tw.clientHeight;
   },
