@@ -1487,7 +1487,7 @@ const App = {
     App.boot = boot;
     Holidays.map = boot.holidays || {};
     Names.load(boot.products, boot.units);
-    Cost.load(boot.costs); Sell.load(boot.sells);
+    Cost.load(boot.costs); Sell.load(boot.sells); Zone.load(boot.zones);
     Hist.load(boot);
     if (!fromCache) Store.setSoon('boot', boot);
   },
@@ -1523,20 +1523,22 @@ const App = {
     if (!errs.length && !Sync.autoDone) { Sync.autoDone = true; Sync.run(true).catch(() => {}); }   // 불러온 직후 두 시트를 자동으로 맞춘다 (화면을 연 뒤 1회)
   },
   async fetchBoot(y, force) {
-    App._pricesP = Promise.all([Api.get('hist', { action: 'read', sheet: '매입가' }).catch(() => null), Api.get('hist', { action: 'read', sheet: '단가이력' }).catch(() => null)]);   // 매입가·단가이력은 기다리지 않고 따로 받는다 (탭이 없거나 실패해도 나머지는 정상 동작)
+    App._pricesP = Promise.all([Api.get('hist', { action: 'read', sheet: '매입가' }).catch(() => null), Api.get('hist', { action: 'read', sheet: '단가이력' }).catch(() => null), Api.get('hist', { action: 'read', sheet: '부대별정보' }).catch(() => null)]);   // 매입가·단가이력·부대별정보(지역·창고)는 기다리지 않고 따로 받는다 (탭이 없거나 실패해도 나머지는 정상 동작)
     const boot = await Api.get('hist', { action: 'bootstrap', years: [y - 1, y, y + 1].join(','), force: force ? '1' : '0' });
     if (!Array.isArray(boot.products) || !Array.isArray(boot.history)) throw new Error('자동화시스템 웹앱이 새 코드로 배포되지 않았습니다. Apps Script에서 배포 관리 → 연필 → 버전: 새 버전 → 배포를 해 주세요.');
     boot.costs = (App.boot && App.boot.costs) || null;   // 먼저 저장된 값으로 보여 주고, 최신 값은 applyPrices가 도착하는 대로 반영
     boot.sells = (App.boot && App.boot.sells) || null;
+    boot.zones = (App.boot && App.boot.zones) || null;
     return boot;
   },
   async applyPrices() {
-    const [cost, sell] = await (App._pricesP || Promise.resolve([null, null]));
-    const c = cost && Array.isArray(cost.values) ? cost.values : null, s = sell && Array.isArray(sell.values) ? sell.values : null;
-    if (!App.boot || (!c && !s)) return;
+    const [cost, sell, zone] = await (App._pricesP || Promise.resolve([null, null, null]));
+    const c = cost && Array.isArray(cost.values) ? cost.values : null, s = sell && Array.isArray(sell.values) ? sell.values : null, z = zone && Array.isArray(zone.values) ? zone.values : null;
+    if (!App.boot || (!c && !s && !z)) return;
     let changed = false;
     if (c && JSON.stringify(c) !== JSON.stringify(App.boot.costs)) { App.boot.costs = c; Cost.load(c); changed = true; }
     if (s && JSON.stringify(s) !== JSON.stringify(App.boot.sells)) { App.boot.sells = s; Sell.load(s); changed = true; }
+    if (z && JSON.stringify(z) !== JSON.stringify(App.boot.zones)) { App.boot.zones = z; Zone.load(z); changed = true; }
     if (changed) { Store.setSoon('boot', App.boot); App.refreshViews(); }
   },
   async reloadBoot() {
@@ -2613,7 +2615,14 @@ const Zone = {
     $('confirmMain').classList.toggle('hidden', on); $('confirmZone').classList.toggle('hidden', !on);
     if (on) { Zone.auto = Confirm.auto; $('zoneMonth').value = $('confirmMonth').value; DF.set(document.querySelector('.z-from'), DF.get(document.querySelector('.cf-from')), true); DF.set(document.querySelector('.z-to'), DF.get(document.querySelector('.cf-to')), true); Zone.sel.del.clear(); Zone.render(); }
   },
-  info(r) { const u = Names.unitMap.get(r.unit) || {}; return { reg: u.region || '', wh: u.warehouse || '' }; },
+  // 부대별정보 시트 D열(지역)·E열(창고)을 부대명으로 찾아 둔다
+  map: new Map(),
+  load(v) {
+    Zone.map = new Map(); if (!Array.isArray(v) || !v.length) return;
+    const h = v[0].map(x => String(x).trim()), iN = h.indexOf('부대명'), iR = h.indexOf('지역'), iW = h.indexOf('창고');
+    v.slice(1).forEach(r => { const n = normUnit(String(r[iN < 0 ? 0 : iN] || '').trim()); if (n) Zone.map.set(n, { reg: String(r[iR < 0 ? 3 : iR] || '').trim(), wh: String(r[iW < 0 ? 4 : iW] || '').trim() }); });
+  },
+  info(r) { const z = Zone.map.get(normUnit(r.unit)) || Zone.map.get(r.unit) || {}; return { reg: z.reg || '', wh: z.wh || '' }; },
   rec(r) {   // 확정량 화면과 같은 저장 데이터에서 한 줄을 만든다 (미저장 입력값은 반영하지 않는다)
     const i = Zone.info(r), p = Names.product(r.name);
     return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
