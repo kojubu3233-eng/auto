@@ -855,10 +855,12 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* ---------- 가격표: 매입가·단가이력 탭 (제품명 · 1개당 가격 VAT별도 · 적용시작일) ---------- */
 // 같은 제품을 여러 줄 적어 두면 납품일에 맞는 줄을 쓴다: 적용시작일이 납품일 이전인 줄 중 가장 늦은 줄, 시작일이 비어 있으면 '처음부터의 가격'
 const PriceBook = () => ({
-  map: new Map(), label: new Map(),
+  map: new Map(), label: new Map(), names: [],
   load(rows) {
-    const b = this; b.map = new Map(); b.label = new Map();
+    const b = this; b.map = new Map(); b.label = new Map(); b.names = [];
+    const seen = new Set();
     (rows || []).slice(1).forEach(r => {
+      const nm = String(r[0] || '').trim(); if (nm && !seen.has(Names.norm(nm))) { seen.add(Names.norm(nm)); b.names.push(nm); }   // 탭에 적힌 품목(가격이 비어 있어도) 순서대로
       const v = num(r[1]), raw = String(r[2] || '').trim(); if (!r[0] || !(v > 0)) return;
       // 날짜 형식: 2026-10-20 / 2026.10.20 / 26.10.20 / 2026/10/20 / 10/20 모두 인정, 못 읽는 날짜는 줄을 무시(전체 적용 방지)
       let d = '';
@@ -1499,8 +1501,10 @@ const CostMgr = {
   RECENT: 30, sort: { k: 'cat', d: 1 }, bound: false,
   rows() {
     const t = D.today(), q = Names.norm($('costQ').value), cat = $('costCat').value, onlyMiss = $('costMissing').checked;
-    return Names.products.filter(p => (!cat || p.category === cat) && (!q || Names.norm(p.name).includes(q) || (p.aliases || []).some(a => Names.norm(a).includes(q)))).map(p => {
-      const hist = Cost.find(p.name) || [], cost = Cost.of(p.name, t), sell = Sell.of(p.name, t) ?? p.price ?? null;
+    // 목록은 자동화시스템 시트 '매입가' 탭에 적힌 품목 그대로 (구분·판매가만 품목정보에서 찾아 붙인다)
+    return Cost.names.map(nm => { const pr = Names.product(nm) || (Names.resolve(nm) || {}).product; return { name: nm, category: pr ? pr.category || '' : '', price: pr ? pr.price : null, aliases: pr ? pr.aliases || [] : [] }; })
+      .filter(p => (!cat || p.category === cat) && (!q || Names.norm(p.name).includes(q) || p.aliases.some(a => Names.norm(a).includes(q)))).map(p => {
+      const hist = Cost.map.get(Names.norm(p.name)) || [], cost = Cost.of(p.name, t), sell = Sell.of(p.name, t) ?? p.price ?? null;
       const cur = hist.filter(x => !x.from || x.from <= t).pop();
       const margin = cost != null && sell != null ? sell - cost : null, rate = margin != null && sell ? margin / sell * 100 : null;
       return { p, hist, cost, sell, margin, rate, from: cur ? cur.from : '', recent: !!(cur && cur.from && hist.length > 1 && D.diff(t, cur.from) <= CostMgr.RECENT) };
@@ -1513,7 +1517,7 @@ const CostMgr = {
       $('costBody').addEventListener('click', e => { const b = e.target.closest('[data-act="hist"]'); if (b) CostMgr.history(b.closest('tr').dataset.n); });
       document.querySelector('#costTable thead').addEventListener('click', e => { const th = e.target.closest('[data-cs]'); if (!th) return; const k = th.dataset.cs; CostMgr.sort = { k, d: CostMgr.sort.k === k ? -CostMgr.sort.d : 1 }; CostMgr.render(); });
     }
-    const sel = $('costCat'), cats = [...new Set(Names.products.map(p => p.category).filter(Boolean))].sort();
+    const sel = $('costCat'), cats = [...new Set(Cost.names.map(nm => ((Names.product(nm) || (Names.resolve(nm) || {}).product) || {}).category).filter(Boolean))].sort();
     if (sel.options.length !== cats.length + 1) { const v = sel.value; sel.innerHTML = '<option value="">전체 구분</option>' + cats.map(c => `<option>${esc(c)}</option>`).join(''); sel.value = v; }
     const { k, d } = CostMgr.sort, val = r => k === 'cat' ? (r.p.category || '') + '\u0000' + r.p.name : k === 'name' ? r.p.name : r[k];
     const rows = CostMgr.rows().sort((a, b) => { const x = val(a), y = val(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (typeof x === 'string' ? x.localeCompare(y) : x - y) * d; });
@@ -1527,7 +1531,7 @@ const CostMgr = {
     const t = D.today(), cur = Cost.of(name, t);
     if (!(v > 0)) { toast('매입가는 0보다 큰 숫자로 입력하세요'); input.value = cur ?? ''; return; }
     if (v === cur) return;
-    const label = Cost.label.get(Cost.keyOf(name)) || name;
+    const label = name;   // 목록이 매입가 탭 이름 그대로이므로 그 이름으로 저장
     if (cur != null && !confirm(`${name} 매입가를 ${fmtN(cur)}원 → ${fmtN(v)}원으로 바꿉니다.\n오늘(${D.short(t)})부터 적용되고, 이전 매입가는 이력으로 남습니다.`)) { input.value = cur; return; }
     Busy.start('매입가 저장 중입니다');
     try {
