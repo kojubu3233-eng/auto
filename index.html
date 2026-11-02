@@ -346,53 +346,75 @@ tr.edit-row td { background:#FFFBEB !important; }
   #confirmTable tbody tr.editing td:nth-child(2), #confirmTable tbody tr.editing td:nth-child(4) { grid-column:span 6; }
   #confirmTable tbody td.empty { grid-column:1/-1; }
 
-  /* 물류관리 입고·출고: 카드 하나에 한 가지 일만 — 글자는 크게, 칸은 줄마다 묶어서 */
-  #inPlanBody td, #outPlanBody td { font-size:14px; }
-  #inPlanBody td[data-label]::before, #outPlanBody td[data-label]::before { font-size:12px; margin-bottom:2px; color:var(--muted); }
+  /* 물류관리 입고·출고: 카드 대신 구분선만 있는 촘촘한 줄 (한 줄에 한 가지씩, 글자는 읽기 좋게) */
   .m-actbar { display:flex; position:sticky; bottom:58px; z-index:35; gap:8px; margin:10px -4px 0; padding:8px; background:var(--surface); border-top:1px solid var(--border); box-shadow:0 -4px 10px rgba(29,27,24,.08); }
   .m-actbar .btn { flex:1; min-height:46px; font-size:16px; font-weight:700; }
   .m-actbar .btn[data-n]::after { content:" (" attr(data-n) "건)"; }
   .m-nobar { display:none !important; }
   .m-actbar.m-only-bar { display:flex; }
+  #inPlanBody td, #outPlanBody td { font-size:14px; padding:0; }
+  #inPlanBody td[data-label]::before, #outPlanBody td[data-label]::before { display:none; }
+  #inPlanBody .dpick, #outPlanBody .dpick { display:none; }
+  #inPlanBody input[type=text], #outPlanBody input[type=text], #outPlanBody select { min-height:34px; padding:0 6px; }
+  #inPlanBody .dfield, #outPlanBody .dfield { width:100%; }
+  #inPlanBody input.num, #outPlanBody input.num { text-align:right; }
 
-  /* 출고: 납품 1건 = 카드 — 1줄 부대·납품일 / 2줄 품명 / 3줄 수량 / 이하 소비기한별 출고 */
-  #outPlanBody tr.out-line { grid-template-columns:repeat(12,minmax(0,1fr)); gap:8px 8px; padding:12px; margin:8px 2px 0; }
-  #outPlanBody tr.out-line:not(.out-grp) { margin-top:0; border-top-style:dashed; border-top-left-radius:0; border-top-right-radius:0; }
-  #outPlanBody tr.out-grp { border-bottom-left-radius:0; border-bottom-right-radius:0; }
-  #outPlanBody tr.out-line td { grid-column:span 4; }
-  #outPlanBody tr.out-grp td:nth-child(2) { order:1; grid-column:1/-1; font-size:18px; font-weight:800; text-align:left !important; }
-  #outPlanBody tr.out-grp td:nth-child(2)::before { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(1) { order:2; grid-column:1/-1; }
-  #outPlanBody tr.out-grp td:nth-child(3) { order:3; grid-column:1/-1; display:block; line-height:1.4; font-size:16px; font-weight:700; padding-top:2px; border-top:1px solid var(--border); }
-  #outPlanBody tr.out-grp td:nth-child(3)::before { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(3) .hint, #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:inline; margin:0; font-size:12.5px; font-weight:400; }
-  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { margin-left:8px; color:var(--accent); font-weight:700; }
-  #outPlanBody tr.out-grp td:nth-child(4) { order:4; } #outPlanBody tr.out-grp td:nth-child(4) b { font-size:20px; }
-  #outPlanBody tr.out-grp td:nth-child(5) { order:5; } #outPlanBody tr.out-grp td:nth-child(6) { order:6; }
-  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { order:7; grid-column:1/-1; padding-top:8px; border-top:1px dashed var(--border); }
-  #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { order:8; grid-column:span 4; }
-  #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { order:9; grid-column:span 5; }
-  #outPlanBody tr.out-grp td:nth-child(10), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { order:10; grid-column:span 3; }
-  #outPlanBody tr.out-line td select { font-size:16px; }
-  #outPlanBody tr.out-act { margin:0 2px 14px; padding:8px 12px; background:var(--surface-alt) !important; border:1px solid var(--border); border-top:0; border-radius:0 0 10px 10px; }
-  #outPlanBody tr.out-act .btn { min-height:42px; font-size:14px; }
-
-  /* 입고: 입고 1건 = 카드 — 1줄 품명(+한 줄 추가) / 2줄 입고일·예정 / 3줄 입고 수량·소비기한 */
-  #inPlanBody tr.plan-main { grid-template-columns:repeat(12,minmax(0,1fr)); gap:8px 8px; padding:12px; margin:8px 2px; position:relative; }
-  #inPlanBody tr.plan-main td { grid-column:span 4; }
-  #inPlanBody tr.plan-main td:nth-child(1) { order:1; grid-column:span 1; }
-  #inPlanBody tr.plan-main td:nth-child(2) { order:2; grid-column:span 11; font-size:17px; font-weight:800; padding-right:84px; line-height:1.3; }
-  #inPlanBody tr.plan-main td:nth-child(2)::before { display:none; }
-  #inPlanBody tr.plan-main td:nth-child(2) .hint { font-size:12.5px; font-weight:400; }
+  /* 입고: 1건 = 2줄 (품명·예정·입고수량·소비기한 / 입고일·납품기한) */
+  [data-subpane="in"] .m-card thead tr { display:grid; grid-template-columns:30px minmax(0,1fr) 40px 62px 70px; gap:0 4px; padding:6px 4px; background:var(--surface-alt); border-bottom:1px solid var(--border); }
+  [data-subpane="in"] .m-card thead th { display:none; }
+  [data-subpane="in"] .m-card thead th:nth-child(1), [data-subpane="in"] .m-card thead th:nth-child(2), [data-subpane="in"] .m-card thead th:nth-child(6), [data-subpane="in"] .m-card thead th:nth-child(7), [data-subpane="in"] .m-card thead th:nth-child(8) { display:block; padding:0; font-size:12px; font-weight:700; color:var(--muted); text-align:center; }
+  [data-subpane="in"] .m-card thead th:nth-child(6) { font-size:0; } [data-subpane="in"] .m-card thead th:nth-child(6)::after { content:"예정"; font-size:12px; }
+  [data-subpane="in"] .m-card thead th:nth-child(1) { grid-column:1; } [data-subpane="in"] .m-card thead th:nth-child(1)::after { content:none; }
+  [data-subpane="in"] .m-card thead th:nth-child(2) { grid-column:2; text-align:left; } [data-subpane="in"] .m-card thead th:nth-child(6) { grid-column:3; }
+  [data-subpane="in"] .m-card thead th:nth-child(7) { grid-column:4; } [data-subpane="in"] .m-card thead th:nth-child(8) { grid-column:5; }
+  #inPlanBody tr.plan-main, #inPlanBody tr.plan-extra { display:grid; grid-template-columns:30px minmax(0,1fr) 40px 62px 70px; gap:2px 4px; align-items:center; margin:0; padding:7px 4px; border:0; border-bottom:1px solid var(--border); border-radius:0; background:var(--surface); }
+  #inPlanBody tr.plan-main td, #inPlanBody tr.plan-extra td { grid-column:auto; min-width:0; }
+  #inPlanBody tr.plan-main td:nth-child(1) { grid-column:1; }
+  #inPlanBody tr.plan-main td:nth-child(2) { grid-column:2; font-size:15px; font-weight:800; line-height:1.25; text-align:left; }
+  #inPlanBody tr.plan-main td:nth-child(2) .hint { font-size:12px; font-weight:400; }
   #inPlanBody tr.plan-main td:nth-child(3), #inPlanBody tr.plan-main td:nth-child(4) { display:none; }
   .m-only { display:inline; }
-  #inPlanBody tr.plan-main td:nth-child(5) { order:3; grid-column:span 7; } #inPlanBody tr.plan-main td:nth-child(6) { order:4; grid-column:span 5; }
-  #inPlanBody tr.plan-main td:nth-child(6) { font-size:17px; font-weight:800; }
-  #inPlanBody tr.plan-main td:nth-child(7) { order:5; grid-column:span 5; } #inPlanBody tr.plan-main td:nth-child(8) { order:6; grid-column:span 7; }
-  #inPlanBody tr.plan-main td:nth-child(9) { order:7; grid-column:1/-1; flex-direction:row; align-items:baseline; gap:8px; }
-  #inPlanBody tr.plan-main td:nth-child(10) { position:absolute; top:10px; right:10px; display:block; width:auto; }
-  #inPlanBody tr.plan-main td:nth-child(10)::before { display:none; }
-  #inPlanBody tr.plan-main td:nth-child(10) .btn { padding:4px 10px; font-size:12px; min-height:30px; }
+  #inPlanBody tr.plan-main td:nth-child(6) { grid-column:3; font-weight:700; align-items:center; }
+  #inPlanBody tr.plan-main td:nth-child(7) { grid-column:4; } #inPlanBody tr.plan-main td:nth-child(8) { grid-column:5; }
+  #inPlanBody tr.plan-main td:nth-child(10) { grid-column:1; grid-row:2; }
+  #inPlanBody tr.plan-main td:nth-child(5) { grid-column:2 / 4; grid-row:2; flex-direction:row; align-items:center; gap:6px; }
+  #inPlanBody tr.plan-main td:nth-child(5)::before { display:inline !important; content:"입고일"; font-size:12px; color:var(--muted); }
+  #inPlanBody tr.plan-main td:nth-child(5) .dfield { width:104px; }
+  #inPlanBody tr.plan-main td:nth-child(9) { grid-column:4 / 6; grid-row:2; flex-direction:row; gap:4px; font-size:12px; color:var(--muted); align-items:center; }
+  #inPlanBody tr.plan-main td:nth-child(9)::before { display:inline !important; content:"납품기한"; font-size:12px; color:var(--muted); margin:0; }
+  #inPlanBody tr.plan-main td:nth-child(10) .btn { padding:0; width:28px; height:28px; min-height:0; font-size:0; }
+  #inPlanBody tr.plan-main td:nth-child(10) .btn::before { content:"＋"; font-size:16px; font-weight:700; }
+  #inPlanBody tr.plan-extra td:nth-child(1) { display:none; }
+  #inPlanBody tr.plan-extra td:nth-child(2) { grid-column:1 / 3; font-size:12px; text-align:left !important; }
+  #inPlanBody tr.plan-extra td:nth-child(3) { grid-column:3 / 5; } #inPlanBody tr.plan-extra td:nth-child(5) { grid-column:3 / 5; }
+
+  /* 출고: 납품 1건 = 구분선 있는 줄 묶음 (부대·납품일·수량 / 품명 / 본품·샘플 / 소비기한 / 출고수량·출고일) */
+  #outPlanBody tr.out-line { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:6px 8px; align-items:center; margin:0; padding:7px 4px; border:0; border-radius:0; background:var(--surface); }
+  #outPlanBody tr.out-grp { border-top:2px solid var(--border-strong, #BDB6A6); padding-top:10px; }
+  #outPlanBody tr.out-line:not(.out-grp) { border-top:1px dashed var(--border); }
+  #outPlanBody tr.out-line td { grid-column:span 4; min-width:0; }
+  #outPlanBody tr.out-grp td:nth-child(1) { order:1; grid-column:span 6; flex-direction:row; align-items:center; gap:6px; }
+  #outPlanBody tr.out-grp td:nth-child(2) { order:2; grid-column:span 4; font-size:17px; font-weight:800; text-align:left !important; }
+  #outPlanBody tr.out-grp td:nth-child(4) { order:3; grid-column:span 2; font-size:17px; font-weight:800; text-align:right !important; }
+  #outPlanBody tr.out-grp td:nth-child(3) { order:4; grid-column:1/-1; display:block; line-height:1.4; font-size:15px; font-weight:700; }
+  #outPlanBody tr.out-grp td:nth-child(3) .hint, #outPlanBody tr.out-grp td:nth-child(3) .stock-now { display:inline; margin:0; font-size:12px; font-weight:400; }
+  #outPlanBody tr.out-grp td:nth-child(3) .stock-now { margin-left:8px; color:var(--accent); font-weight:700; }
+  #outPlanBody tr.out-grp td:nth-child(5), #outPlanBody tr.out-grp td:nth-child(6) { order:5; grid-column:span 6; flex-direction:row; align-items:center; gap:6px; }
+  #outPlanBody tr.out-grp td:nth-child(6) { order:6; }
+  #outPlanBody tr.out-grp td:nth-child(5)::before, #outPlanBody tr.out-grp td:nth-child(6)::before, #outPlanBody tr.out-grp td:nth-child(8)::before, #outPlanBody tr.out-grp td:nth-child(9)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3)::before { display:inline !important; font-size:12px; color:var(--muted); margin:0; flex:none; }
+  #outPlanBody tr.out-line td input[type=text], #outPlanBody tr.out-line td .dfield { min-width:0; flex:1; }
+  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { order:7; grid-column:1/-1; }
+  #outPlanBody tr.out-grp td:nth-child(7)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1)::before { display:none; }
+  #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { order:8; grid-column:span 5; flex-direction:row; align-items:center; gap:6px; }
+  #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { order:9; grid-column:span 5; flex-direction:row; align-items:center; gap:6px; }
+  #outPlanBody tr.out-grp td:nth-child(10), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { order:10; grid-column:span 2; flex-direction:row; align-items:center; justify-content:flex-end; gap:4px; }
+  #outPlanBody tr.out-line td:nth-child(10)::before, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4)::before { display:none; }
+  #outPlanBody tr.out-line .tag.plan { display:none; }
+  #outPlanBody tr.out-line td .btn.sm { padding:0; width:30px; height:30px; min-height:0; flex:none; }
+  #outPlanBody tr.out-line td select { font-size:15px; }
+  #outPlanBody tr.out-act { margin:0; padding:2px 4px 10px; background:var(--surface) !important; border:0; border-bottom:1px solid var(--border); }
+  #outPlanBody tr.out-act .btn { min-height:38px; font-size:14px; }
+  #outPlanBody tr.out-line.dirty, #outPlanBody tr.out-line.dirty td { background:#fffbeb !important; }
 
   /* 재고수불대장 상세: 카드 대신 PC와 같은 표 (한 화면 폭에 맞춰 열을 줄이고 글자를 작게) */
   .table-wrap:has(> .ld-t) { overflow:visible; border:0; }
@@ -3984,7 +4006,7 @@ const Logi = {
       const cQty = lots ? stack('qty', (l, k, x) => `<input type="text" data-num class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="text" data-num class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
       const cExp = lots ? stack('exp', (l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
       const cDl = lots ? stack('dl', (l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
-      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}<span class="m-only"> · ${esc(info?.storage || '-')} · ${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</span></div></td>
+      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}<span class="m-only"> · ${esc(info?.storage || '-')}</span></div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${cDate}</td><td class="num">${cPlan}</td>
         <td>${cQty}</td><td>${cExp}</td><td>${cDl}</td>
         <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x, d)).join('');
