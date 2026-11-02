@@ -29,6 +29,7 @@ h3 { font-size:13px; font-weight:700; }
 .zone-total { display:flex; gap:18px; flex-wrap:wrap; align-items:baseline; padding:8px 12px; margin-bottom:10px; background:var(--accent-soft); border-radius:8px; font-size:13px; }
 .zone-total b { font-size:16px; color:var(--accent); }
 .hidden { display:none !important; }
+.m-ftoggle { display:none; }
 
 .btn { padding:8px 14px; border:none; border-radius:8px; font-weight:600; cursor:pointer; color:#fff; background:var(--accent); font-size:13px; }
 .btn:hover { opacity:.88; }
@@ -148,6 +149,7 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 .out-grp td{border-top:2px solid var(--border)}
 .out-act{display:none}
 #costBody td.cost-recent{background:#FEF9C3}
+#costBody td.cost-from{cursor:pointer;text-decoration:underline dotted var(--muted-2);text-underline-offset:3px}
 #costTable th[data-cs]{cursor:pointer}
 .out-grp.dirty td,.out-line.dirty td{background:#fffbeb}
 @media (min-width:761px){
@@ -370,6 +372,13 @@ tr.edit-row td { background:#FFFBEB !important; }
   #inPlanBody tr.plan-main td:nth-child(3) { order:8; } #inPlanBody tr.plan-main td:nth-child(4) { order:9; } #inPlanBody tr.plan-main td:nth-child(10) { order:10; }
   #inPlanBody tr.plan-main td:nth-child(10)::before { display:none; }
 
+  /* 입고·출고 필터: 접어 두고 '필터' 막대를 눌러 펼친다 */
+  .m-ftoggle { display:flex; align-items:center; justify-content:space-between; width:100%; padding:10px 12px; margin-bottom:8px; border:1px solid var(--accent); border-radius:8px; background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:14px; }
+  .m-ftoggle .m-fon { font-size:12px; font-weight:600; color:var(--warn); margin-left:8px; }
+  .m-ftoggle::after { content:"▾"; margin-left:auto; padding-left:8px; }
+  .m-ftoggle.m-open::after { content:"▴"; }
+  .m-fbox:not(.m-open) { display:none !important; }
+
   /* ===== 휴대폰 2단계: 날짜 묶음 제목 · 한 줄 목록 · 눌러서 펼치기 ===== */
   /* 날짜가 바뀌는 첫 건 위에 '11/02(월) · 5건' 제목 */
   .m-card tbody tr.m-dfirst { position:relative; margin-top:34px !important; }
@@ -493,7 +502,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <div class="buckets" id="dueBuckets"></div>
       <div class="mt12 hidden" id="dueDetailWrap">
         <div class="row between mb8"><h3 id="dueDetailTitle"></h3><button class="btn light sm" onclick="Home.closeDetail('due')">닫기</button></div>
-        <div class="table-wrap" style="max-height:300px"><table><thead><tr><th>품명</th><th>잔여 납품기한</th><th>수량</th><th>소비기한</th></tr></thead><tbody id="dueDetailBody"></tbody></table></div>
+        <div class="table-wrap" style="max-height:300px"><table><thead><tr><th>품명</th><th>잔여 일수</th><th>납품기한</th><th>수량</th><th>소비기한</th></tr></thead><tbody id="dueDetailBody"></tbody></table></div>
       </div>
     </div>
     <div class="panel">
@@ -1663,7 +1672,7 @@ const CostMgr = {
     $('costSummary').textContent = `${rows.length}개 품목${Cost.off.size ? ` (단종 ${Cost.off.size}개${$('costOff').checked ? ' 포함' : ' 숨김'})` : ''} · 매입가 없음 ${miss}개${rs.length ? ` · 평균 마진율 ${(rs.reduce((a, r) => a + r.rate, 0) / rs.length).toFixed(1)}%` : ''}`;
     $('costBody').innerHTML = rows.map(r => `<tr data-n="${esc(r.p.name)}"><td>${esc(r.p.category || '')}</td><td style="text-align:left">${esc(r.p.name)} ${r.off ? '<span class="tag">단종</span> <button type="button" class="btn sm light" data-act="restore">복구</button>' : '<button type="button" class="btn sm light" data-act="del" title="기록이 없으면 완전 삭제, 있으면 단종 처리" style="padding:0 6px">✕</button>'}</td>
       <td class="num ${r.recent ? 'cost-recent' : ''}"${r.recent ? ` title="${D.short(r.from)}에 변경"` : ''}><input type="text" data-num class="cost-in num" value="${r.cost ?? ''}" placeholder="미입력" style="width:90px">${r.hist.length > 1 ? ` <button type="button" class="btn sm light" data-act="hist">이력 ${r.hist.length}</button>` : ''}</td>
-      <td class="num ${r.srecent ? 'cost-recent' : ''}">${r.p.pr ? `<input type="text" data-num class="sell-in num" value="${r.sell == null ? '' : Math.round(r.sell)}" placeholder="미입력" style="width:90px">${r.sh.length > 1 ? ` <button type="button" class="btn sm light" data-act="shist">이력 ${r.sh.length}</button>` : ''}` : '<span class="hint" title="품목정보에 같은 이름의 품목이 없어 판매가를 정할 수 없습니다">품목정보 없음</span>'}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td>${r.from ? D.short(r.from) : (r.cost != null ? '처음부터' : '')}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
+      <td class="num ${r.srecent ? 'cost-recent' : ''}">${r.p.pr ? `<input type="text" data-num class="sell-in num" value="${r.sell == null ? '' : Math.round(r.sell)}" placeholder="미입력" style="width:90px">${r.sh.length > 1 ? ` <button type="button" class="btn sm light" data-act="shist">이력 ${r.sh.length}</button>` : ''}` : '<span class="hint" title="품목정보에 같은 이름의 품목이 없어 판매가를 정할 수 없습니다">품목정보 없음</span>'}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td data-act="hist" class="cost-from" title="누르면 변경 이력(년·월·일)이 보입니다">${r.from ? r.from.replace(/-/g, '.') : (r.cost != null ? '처음부터' : '')}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
   },
   // 금액을 바꾸면 적용시작일을 고르는 창을 띄운다 (기본 오늘). 그 날짜 납품분부터 새 금액, 그 전은 기존 금액
   ask(title, change, note, cb) {
@@ -1771,7 +1780,7 @@ const CostMgr = {
     $('modalRoot').innerHTML = `<div class="overlay" onclick="if(event.target===this)Confirm.closeModal()"><div class="modal" style="max-width:480px">
       <div class="row between mb12"><h2>${esc(name)} ${sell ? '판매가' : '매입가'} 이력</h2><button class="btn light sm" onclick="Confirm.closeModal()">닫기</button></div>
       <table><thead><tr><th>적용시작일</th><th>${sell ? '판매가' : '매입가'}</th><th>변동</th><th>비고</th></tr></thead><tbody>${l.map((x, i) => { const pv = i ? l[i - 1].v : null, cur = x === l.filter(y => !y.from || y.from <= t).pop();
-        return `<tr${cur ? ' style="font-weight:700"' : ''}><td>${x.from ? D.short(x.from) : '처음부터'}</td><td class="num">${fmtN(x.v)}원</td><td class="num">${pv == null ? '' : (x.v > pv ? '+' : '') + fmtN(x.v - pv)}</td><td style="text-align:left">${esc(x.note || '')}${cur ? ' <span class="tag conf">현재</span>' : ''}</td></tr>`; }).reverse().join('')}</tbody></table></div></div>`;
+        return `<tr${cur ? ' style="font-weight:700"' : ''}><td>${x.from ? x.from.replace(/-/g, '.') : '처음부터'}</td><td class="num">${fmtN(x.v)}원</td><td class="num">${pv == null ? '' : (x.v > pv ? '+' : '') + fmtN(x.v - pv)}</td><td style="text-align:left">${esc(x.note || '')}${cur ? ' <span class="tag conf">현재</span>' : ''}</td></tr>`; }).reverse().join('')}</tbody></table></div></div>`;
   }
 };
 
@@ -1840,7 +1849,7 @@ const Home = {
       $('ageDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td>${x.l.inDate ? D.short(x.l.inDate) : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td class="num">${x.age !== null ? x.age + '일' : '-'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
     } else {
       items.sort((a, c) => String(a.l.deadline || '9').localeCompare(String(c.l.deadline || '9')));
-      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left === null ? '-' : !x.l.deadline ? '초과 처리' : x.left < 0 ? -x.left + '일 초과' : x.left + '일'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">없음</td></tr>';
+      $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left === null ? '-' : !x.l.deadline ? '초과 처리' : x.left < 0 ? -x.left + '일 초과' : x.left + '일'}</td><td>${x.l.deadline ? `${x.l.deadline.slice(2, 4)}년 ${x.l.deadline.slice(5, 7)}월 ${x.l.deadline.slice(8, 10)}일` : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">없음</td></tr>';
     }
   },
   closeDetail(kind) {
@@ -2622,7 +2631,7 @@ const Zone = {
     const h = v[0].map(x => String(x).trim()), iN = h.indexOf('부대명'), iR = h.indexOf('지역'), iW = h.indexOf('창고');
     v.slice(1).forEach(r => { const n = normUnit(String(r[iN < 0 ? 0 : iN] || '').trim()); if (n) Zone.map.set(n, { reg: String(r[iR < 0 ? 3 : iR] || '').trim(), wh: String(r[iW < 0 ? 4 : iW] || '').trim() }); });
   },
-  info(r) { const z = Zone.map.get(normUnit(r.unit)) || Zone.map.get(r.unit) || {}; return { reg: z.reg || '', wh: z.wh || '' }; },
+  info(r) { const z = Zone.map.get(normUnit(r.unit)) || Zone.map.get(r.unit) || Zone.map.get(normUnit(String(r.unit).replace(/\(.*\)/, '').trim())) || {}; return { reg: z.reg || '', wh: z.wh || '' }; },
   rec(r) {   // 확정량 화면과 같은 저장 데이터에서 한 줄을 만든다 (미저장 입력값은 반영하지 않는다)
     const i = Zone.info(r), p = Names.product(r.name);
     return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
@@ -2658,18 +2667,25 @@ const Zone = {
     const miss = all.filter(x => x.wh === '미지정'); const un = new Set(miss.map(x => x.r.unit));
     $('zoneSummary').textContent = `${list.length.toLocaleString()}건${list.length > 800 ? ' (화면에는 800건까지 표시, 엑셀에는 전부 담깁니다)' : ''}${Confirm.dirty.size ? ` · 확정량 미저장 ${Confirm.dirty.size}건은 저장 후 반영됩니다` : ''}${un.size ? ` · 지역·창고 미지정 부대: ${[...un].slice(0, 5).join(', ')}${un.size > 5 ? ' 외' : ''} (부대별정보 시트 D·E열에 입력)` : ''}`;
   },
-  // 물류사 거래명세서(월 물류비): 부대별 출고 kg × 단가(일반 300원, 두부 350원) + 세액 10%. 양식은 JIB 거래명세서와 같다
-  fee: { gen: 300, tofu: 350 },
+  // 물류사 거래명세서(월 물류비): 부대별 출고 kg × 단가(일반 300원, 두부 350원) + 식용유는 캔 수 × 900원 + 세액 10%. 양식은 JIB 거래명세서와 같다
+  // 부대별정보에 없는 곳(아인병원·프레쉬쿡 등)과 비고에 '용차'가 있는 건은 넣지 않고, '7급양대(품평회)'처럼 괄호가 붙은 이름은 본 부대에 합친다
+  fee: { gen: 300, tofu: 350, oil: 900 },
   supplier: { regNo: '5 6 0 - 3 1 - 0 0 5 4 4 ', name: 'J.I.B물류', ceo: '백종인', addr: '경기도 양주시 옥정서로 130 902동 1402호', kind: '운수업', item: '화물운송', tel: '010-6345-8712', buyer: '㈜코주부씨엔에프' },
   async exportInvoice() {
-    const list = Zone.filtered(Zone.base()); if (!list.length) return toast('내보낼 데이터가 없습니다');
+    const all = Zone.filtered(Zone.base()), key = u => String(u).replace(/\(.*\)/, '').trim(), list = all.filter(x => Zone.map.has(normUnit(key(x.r.unit))) && !/용차/.test(x.r.note || ''));
+    if (!list.length) return toast('내보낼 데이터가 없습니다');
+    const skipped = all.length - list.length;
     await loadExcel();
     const ym = $('zoneMonth').value || list[0].r.delDate.slice(0, 7), yy = ym.slice(2, 4), mon = +ym.slice(5, 7), F = Zone.fee, S = Zone.supplier;
     // 부대별 kg 합계 (확정 kg가 있으면 확정, 없으면 계획 kg). 두부류는 따로 묶는다
-    const gen = new Map(), tofu = new Map();
-    list.forEach(x => { const kg = x.r.confKg !== null && x.r.confKg !== undefined ? x.r.confKg : (x.r.planKg || 0), m = /두부/.test(x.r.name) ? tofu : gen; m.set(x.r.unit, (m.get(x.r.unit) || 0) + kg); });
+    const gen = new Map(), tofu = new Map(), oil = new Map();
+    list.forEach(x => {
+      const isOil = /식용유/.test(x.r.name) || x.r.cat === '식용유' || (Names.product(x.r.name) || {}).category === '식용유', ea = x.r.confEa !== null && x.r.confEa !== undefined ? x.r.confEa : (x.r.planEa || 0);
+      const q = isOil ? ea : (x.r.confKg !== null && x.r.confKg !== undefined ? x.r.confKg : (x.r.planKg || 0)), m = isOil ? oil : /두부/.test(x.r.name) ? tofu : gen, u = key(x.r.unit);
+      m.set(u, (m.get(u) || 0) + q);
+    });
     const sorted = m => [...m.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
-    const rows = [...sorted(gen).map(([u, kg]) => ({ label: u, kg, price: F.gen })), ...sorted(tofu).map(([u, kg]) => ({ label: '두부/' + u, kg, price: F.tofu }))];
+    const rows = [...sorted(gen).map(([u, kg]) => ({ label: u, kg, price: F.gen })), ...sorted(tofu).map(([u, kg]) => ({ label: '두부/' + u, kg, price: F.tofu })), ...sorted(oil).map(([u, kg]) => ({ label: '식용유(캔)/' + u, kg, price: F.oil }))];
     rows.forEach(r => { r.kg = Math.round(r.kg * 100) / 100; r.sup = r.kg * r.price; r.tax = r.sup * 0.1; });
     const NC = 42, first = 13, tot = first + rows.length, lastRow = tot + 2;   // 0부터 센 행 번호 (lastRow = 맨 아래 빈 칸 2줄 중 끝)
     const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet(`${mon}월`);
@@ -2729,6 +2745,7 @@ const Zone = {
     for (let c = 0; c < NC; c++) { const k = cell(0, c); k.border = { ...k.border, bottom: med }; const z = cell(tot + 2, c); z.border = { ...z.border, bottom: med }; }
     ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } };
     await downloadWorkbook(wb, `JIB물류비_거래명세서_${ym}.xlsx`);
+    if (skipped) toast(`거래명세서에서 ${skipped}건 제외 (부대별정보에 없는 곳, 비고에 용차배송이 있는 건)`, 6000);
   },
   async exportExcel() {
     const list = Zone.filtered(Zone.base()); if (!list.length) return toast('내보낼 데이터가 없습니다');
@@ -4504,6 +4521,13 @@ document.addEventListener('DOMContentLoaded', () => App.init());
     const ah = t.closest('#alertBar > :first-child, #alertBar2 > :first-child'); if (ah) return ah.parentElement.classList.toggle('m-open');
     if (t.classList.contains('list-box')) t.classList.toggle('m-open');
   });
+  // 입고·출고 필터 막대(휴대폰): 걸려 있는 조건이 있으면 '적용 중'을 보여 준다
+  const fbar = () => document.querySelectorAll('[data-subpane="in"] > .controls, [data-subpane="out"] > .controls').forEach(c => {
+    if (!c._tg) { const b = document.createElement('button'); b.type = 'button'; b.className = 'm-ftoggle'; b.innerHTML = '<span>🔍 필터</span>'; c.classList.add('m-fbox'); c.before(b); c._tg = b; b.addEventListener('click', () => { b.classList.toggle('m-open'); c.classList.toggle('m-open'); }); }
+    const on = [...c.querySelectorAll('input[type=text],select')].some(i => i.value && !i.closest('.dfield')) || [...c.querySelectorAll('.dinput')].some(i => i.value) || [...c.querySelectorAll('input[type=checkbox]')].some(i => i.checked);
+    let t = c._tg.querySelector('.m-fon'); if (on && !t) { t = document.createElement('span'); t.className = 'm-fon'; t.textContent = '· 적용 중'; c._tg.firstChild.after(t); } else if (!on && t) t.remove();
+  });
+  document.addEventListener('DOMContentLoaded', () => { fbar(); ['input', 'change', 'click', 'datechange'].forEach(ev => document.addEventListener(ev, () => setTimeout(fbar, 60), true)); });
   const run = () => document.querySelectorAll('table.m-card').forEach(t => { if (t._mo) return; t._mo = new MutationObserver(() => { cancelAnimationFrame(t._raf); t._raf = requestAnimationFrame(() => { label(t); heads(t); }); }); t._mo.observe(t.tBodies[0], { childList: true }); label(t); heads(t); });
   document.addEventListener('DOMContentLoaded', run);
   mq.addEventListener('change', () => document.querySelectorAll('table.m-card tbody tr').forEach(tr => delete tr.dataset.m) || run());
