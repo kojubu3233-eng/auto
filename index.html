@@ -164,6 +164,31 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
   #outPlanBody tr.out-line:not(.out-grp) td{border-top:1px dashed #BDB6A6}
   #outPlanBody td input[type=text]:not([readonly]),#outPlanBody td select{border:1px solid #8E8778;background:#fff}
   #outPlanBody td .hint{margin-top:2px}
+  /* UI 개선: 글씨 키우고 칸 경계 진하게 */
+  table{font-size:13px}
+  #confirmTable td,#confirmTable th,#zoneTable td,#zoneTable th,#ldTable td,#ldTable th,#costTable td,#costTable th,#predictTable td,#predictTable th{border:1px solid #BDB6A6}
+  #confirmTable th,#zoneTable th,#ldTable th,#costTable th{color:#4A4538;background:#EFEBE0}
+  #confirmBody tr:nth-child(even) td,#zoneBody tr:nth-child(even) td{background:#FAF8F3}
+  #zoneBody td:nth-child(2),#zoneBody td:nth-child(11){background:#FEF9C3 !important}
+  #confirmBody td.c-plan{color:#111}
+  #confirmBody input.c-confEa,#confirmBody input.c-confKg,#confirmBody td.o-sales{color:#DC2626;font-weight:800}
+  #ldBody td:nth-child(4){font-weight:800}
+  #ldBody tr:not(.carry):nth-child(even) td{background:#FAF8F3}
+  #ldBody tr.row-grey td{background:#EEEDEA}
+  .list-row{padding:10px 12px;border-bottom:1px solid #CFC9BA;font-size:14px}
+  .list-row .l-name{font-size:14.5px}
+  .list-row .l-sub{font-size:12.5px}
+  .list-box{border-color:#BDB6A6}
+  .stat-box{border-color:#BDB6A6}
+  .sch-date{display:inline-block;font-size:15px;font-weight:800;color:var(--accent);background:#E8EDF7;border:1px solid #B9C5E0;border-radius:6px;padding:2px 8px;margin-top:3px}
+  .sch-date.over{color:var(--danger);background:#FDECEA;border-color:#F1B8B3}
+  #tab-predict .controls{min-height:56px;box-sizing:border-box}
+  #inPlanBody td{border:1px solid #BDB6A6;padding:6px}
+  #inPlanBody tr.g1 td{background:#F5F2EA}
+  #inPlanBody tr.g0 td{background:#fff}
+  #inPlanBody tr.plan-main td{border-top:3px solid #5F584A}
+  #costBody td{border-color:#BDB6A6}
+  .lexp-click{cursor:pointer;color:var(--muted-2);text-decoration:underline dotted;text-underline-offset:3px}
 }
 #estateTable .sub td{background:var(--surface-alt);font-weight:700}
 #estateTable .dl-over{color:#c0392b;font-weight:600}.dl-soon{color:#b45309;font-weight:600}
@@ -626,7 +651,6 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <label class="lbl" for="pickedUnit">체크한 행에 부대 적용</label>
       <span class="ac-wrap"><input type="text" id="pickedUnit" autocomplete="off" placeholder="부대명" style="width:160px"><span class="ac-list"></span></span>
       <button class="btn sm" onclick="Predict.applyUnitToPicked()">적용</button>
-      <span class="hint">날짜는 숫자만 입력: 1007 → 10월 7일, 7 → 이번 달 7일</span>
     </div>
     <div class="controls" id="plgBox">
       <label class="lbl">저장한 예정량 찾기</label>
@@ -861,6 +885,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <select id="costCat" onchange="CostMgr.render()"><option value="">전체 구분</option></select>
       <label class="row muted"><input type="checkbox" id="costMissing" onchange="CostMgr.render()"> 매입가 없는 품목만</label>
       <label class="row muted"><input type="checkbox" id="costOff" onchange="CostMgr.render()"> 단종 품목 보기</label>
+      <button type="button" class="btn sm danger" onclick="CostMgr.removeSel()">선택 행 삭제/단종</button>
       <span class="hint">매입가·판매가 칸에 바로 입력하면 저장됩니다 (금액은 모두 VAT 별도, 판매가는 품목정보 단가(Vat별도)에도 반영). 최근 30일 안에 바뀐 칸은 노란색, [이력]을 누르면 변경 내역이 보입니다</span>
     </div>
     <div class="table-wrap" style="max-height:640px"><table class="m-card" id="costTable"><thead><tr>
@@ -1745,7 +1770,7 @@ const CostMgr = {
     if (!CostMgr.bound) {
       CostMgr.bound = true;
       $('costBody').addEventListener('change', e => { const n = e.target.closest('tr') && e.target.closest('tr').dataset.n; if (e.target.classList.contains('cost-in')) CostMgr.save(n, num(e.target.value), e.target); else if (e.target.classList.contains('sell-in')) CostMgr.saveSell(n, num(e.target.value), e.target); });
-      $('costBody').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; const n = b.closest('tr').dataset.n; if (b.dataset.act === 'hist') CostMgr.history(n); else if (b.dataset.act === 'shist') CostMgr.history(n, true); else if (b.dataset.act === 'del') CostMgr.remove(n); else if (b.dataset.act === 'restore') CostMgr.setOff(n, false); });
+      $('costBody').addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return; const n = b.closest('tr').dataset.n; if (b.dataset.act === 'hist') CostMgr.history(n); else if (b.dataset.act === 'shist') CostMgr.history(n, true); else if (b.dataset.act === 'restore') CostMgr.setOff(n, false); });
       document.querySelector('#costTable thead').addEventListener('click', e => { const th = e.target.closest('[data-cs]'); if (!th) return; const k = th.dataset.cs; CostMgr.sort = { k, d: CostMgr.sort.k === k ? -CostMgr.sort.d : 1 }; CostMgr.render(); });
     }
     const sel = $('costCat'), cats = [...new Set(Cost.names.map(nm => ((Names.product(nm) || (Names.resolve(nm) || {}).product) || {}).category).filter(Boolean))].sort();
@@ -1754,9 +1779,9 @@ const CostMgr = {
     const rows = CostMgr.rows().sort((a, b) => { const x = val(a), y = val(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (typeof x === 'string' ? x.localeCompare(y) : x - y) * d; });
     const miss = rows.filter(r => r.cost == null).length, rs = rows.filter(r => r.rate != null);
     $('costSummary').textContent = `${rows.length}개 품목${Cost.off.size ? ` (단종 ${Cost.off.size}개${$('costOff').checked ? ' 포함' : ' 숨김'})` : ''} · 매입가 없음 ${miss}개${rs.length ? ` · 평균 마진율 ${(rs.reduce((a, r) => a + r.rate, 0) / rs.length).toFixed(1)}%` : ''}`;
-    $('costBody').innerHTML = rows.map(r => `<tr data-n="${esc(r.p.name)}"><td>${esc(r.p.category || '')}</td><td style="text-align:left">${esc(r.p.name)} ${r.off ? '<span class="tag">단종</span> <button type="button" class="btn sm light" data-act="restore">복구</button>' : '<button type="button" class="btn sm light" data-act="del" title="기록이 없으면 완전 삭제, 있으면 단종 처리" style="padding:0 6px">✕</button>'}</td>
-      <td class="num ${r.recent ? 'cost-recent' : ''}"${r.recent ? ` title="${D.short(r.from)}에 변경"` : ''}><input type="text" data-num class="cost-in num" value="${r.cost ?? ''}" placeholder="미입력" style="width:90px">${r.hist.length > 1 ? ` <button type="button" class="btn sm light" data-act="hist">이력 ${r.hist.length}</button>` : ''}</td>
-      <td class="num ${r.srecent ? 'cost-recent' : ''}">${r.p.pr ? `<input type="text" data-num class="sell-in num" value="${r.sell == null ? '' : Math.round(r.sell)}" placeholder="미입력" style="width:90px">${r.sh.length > 1 ? ` <button type="button" class="btn sm light" data-act="shist">이력 ${r.sh.length}</button>` : ''}` : '<span class="hint" title="품목정보에 같은 이름의 품목이 없어 판매가를 정할 수 없습니다">품목정보 없음</span>'}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td data-act="hist" class="cost-from" title="누르면 변경 이력(년·월·일)이 보입니다">${r.from ? r.from.replace(/-/g, '.') : (r.cost != null ? '처음부터' : '')}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
+    $('costBody').innerHTML = rows.map(r => `<tr data-n="${esc(r.p.name)}"><td><label style="display:inline-flex;align-items:center;gap:5px"><input type="checkbox" class="cost-pk"> ${esc(r.p.category || '')}</label></td><td style="text-align:left">${esc(r.p.name)}${r.off ? ' <span class="tag">단종</span> <button type="button" class="btn sm light" data-act="restore">복구</button>' : ''}</td>
+      <td class="num ${r.recent ? 'cost-recent' : ''}"${r.recent ? ` title="${D.short(r.from)}에 변경"` : ''}><input type="text" data-num class="cost-in num" value="${r.cost ?? ''}" placeholder="미입력" style="width:90px"></td>
+      <td class="num ${r.srecent ? 'cost-recent' : ''}">${r.p.pr ? `<input type="text" data-num class="sell-in num" value="${r.sell == null ? '' : Math.round(r.sell)}" placeholder="미입력" style="width:90px">${r.sh.length > 1 ? ` <button type="button" class="btn sm light" data-act="shist">이력 ${r.sh.length}</button>` : ''}` : '<span class="hint" title="품목정보에 같은 이름의 품목이 없어 판매가를 정할 수 없습니다">품목정보 없음</span>'}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td data-act="hist" class="cost-from" title="누르면 변경 이력(년·월·일)이 보입니다">${r.from ? r.from.replace(/-/g, '.') : (r.cost != null ? '처음부터' : '')}${r.hist.length > 1 ? ` <button type="button" class="btn sm light" data-act="hist">이력 ${r.hist.length}</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
   },
   // 금액을 바꾸면 적용시작일을 고르는 창을 띄운다 (기본 오늘). 그 날짜 납품분부터 새 금액, 그 전은 기존 금액
   ask(title, change, note, cb) {
@@ -1807,15 +1832,21 @@ const CostMgr = {
     finally { Busy.end(); }
   },
   // 품목 삭제(✕): 납품·재고 기록이 없으면 완전 삭제(매입가 탭·품목정보·단가이력), 기록이 있으면 단종 처리(목록에서 숨김, 기록·이력 유지)
-  async remove(name) {
+  async removeSel() {
+    const ns = [...document.querySelectorAll('#costBody .cost-pk:checked')].map(c => c.closest('tr').dataset.n);
+    if (!ns.length) return toast('삭제할 행을 먼저 체크하세요');
+    if (!confirm(`체크한 ${ns.length}개 품목을 정리합니다.\n\n· 납품·재고 기록이 없는 품목: 완전 삭제 (되돌릴 수 없음)\n· 기록이 있는 품목: 단종 처리 (복구 가능)\n\n계속할까요?`)) return;
+    for (const n of ns) await CostMgr.remove(n, true);
+  },
+  async remove(name, quiet) {
     const pr = Names.product(name) || (Names.resolve(name) || {}).product;
     const same = n => { const q = Names.product(n) || (Names.resolve(n) || {}).product; return pr ? q === pr : Names.norm(n) === Names.norm(name); };
     const recs = Hist.records.filter(r => same(r.name)).length, led = LedgerData.products.filter(p => pr ? p.product === pr : Names.norm(p.name) === Names.norm(name)).reduce((a, p) => a + p.rows.length, 0);
     if (recs || led) {
-      if (!confirm(`'${name}'은(는) 납품·재고 기록이 있어 삭제하지 않고 단종 처리합니다.\n(확정량 입력 ${recs}건, 재고수불대장 ${led}줄)\n\n· 원가관리 목록에서 숨겨집니다 ('단종 품목 보기'에서 복구 가능)\n· 기록·매입가 이력·판매가는 모두 그대로 남습니다\n\n계속할까요?`)) return;
+      if (!quiet && !confirm(`'${name}'은(는) 납품·재고 기록이 있어 삭제하지 않고 단종 처리합니다.\n(확정량 입력 ${recs}건, 재고수불대장 ${led}줄)\n\n· 원가관리 목록에서 숨겨집니다 ('단종 품목 보기'에서 복구 가능)\n· 기록·매입가 이력·판매가는 모두 그대로 남습니다\n\n계속할까요?`)) return;
       return CostMgr.setOff(name, true);
     }
-    if (!confirm(`'${name}'은(는) 납품·재고 기록이 없어 완전히 삭제합니다.\n\n· 매입가 탭${pr ? '·품목정보' : ''}·단가이력에서 이 품목 줄이 모두 지워집니다\n· 되돌릴 수 없습니다\n\n계속할까요?`)) return;
+    if (!quiet && !confirm(`'${name}'은(는) 납품·재고 기록이 없어 완전히 삭제합니다.\n\n· 매입가 탭${pr ? '·품목정보' : ''}·단가이력에서 이 품목 줄이 모두 지워집니다\n· 되돌릴 수 없습니다\n\n계속할까요?`)) return;
     Busy.start('품목 삭제 중입니다');
     try {
       const res = await Api.post('ledger', { action: 'costDelete', name, all: true, infoName: pr ? pr.name : '' });
@@ -1906,7 +1937,7 @@ const Home = {
     const inSch = []; LedgerData.standard().forEach(p => inRowsOf(p).forEach(o => { if (o.inSt === '입고결정' && o.inQty) inSch.push({ p, o }); }));
     inSch.sort((a, b) => String(a.o.inDate).localeCompare(String(b.o.inDate)));
     $('inSchedule').innerHTML = inSch.length ? inSch.map(({ p, o }) => `<div class="list-row"><div><div class="l-name">${esc(p.name)}</div><div class="l-sub">${esc(p.sheet)} ${esc(p.company)}</div></div>
-      <div class="num"><b>${fmtN(o.inQty)}</b><div class="l-sub">${o.inDate ? D.short(o.inDate) : '일자 미정'} ${o.inDate && o.inDate < t ? '<span class="tag danger">입고일 경과 · 입고 완료 처리 필요</span>' : ''}</div></div></div>`).join('') : '<div class="empty">결정된 입고 예정이 없습니다</div>';
+      <div class="num" style="text-align:right"><b style="font-size:16px">${fmtN(o.inQty)}</b><div><span class="sch-date${o.inDate && o.inDate < t ? ' over' : ''}">${o.inDate ? D.short(o.inDate) : '일자 미정'}</span></div>${o.inDate && o.inDate < t ? '<div><span class="tag danger">입고일 경과 · 입고 완료 처리 필요</span></div>' : ''}</div></div>`).join('') : '<div class="empty">결정된 입고 예정이 없습니다</div>';
 
     const outRows = LedgerData.products.flatMap(p => p.rows.filter(o => o.outDate === t && o.outTotal).map(o => ({ p, o })));
     const tagOf = s => s === '출고예정' ? '<span class="tag plan">예정</span>' : s === '출고확정' ? '<span class="tag conf">확정</span>' : '<span class="tag done">완료</span>';
@@ -2890,6 +2921,8 @@ const Ledger = {
     $('ldAddExp').querySelector('input').placeholder = '소비기한';
     $('ldBody').addEventListener('click', Ledger.onRowClick);
     $('ldBody').addEventListener('click', e => {   // 소비기한이 있으면 글자로만 보여주고 [수정]을 눌렀을 때만 고칠 수 있다 (비어 있으면 바로 입력칸)
+      const g = e.target.closest('.lexp-gone');
+      if (g) { if (!confirm('이 입고분은 재고가 모두 나간 건입니다.\n소비기한을 수정하면 출고 배분(FIFO)이 달라질 수 있습니다.\n\n그래도 수정할까요?')) return; const t = g.closest('tr[data-i]'), it = t && Ledger.shown[+t.dataset.i]; if (it) g.parentNode.innerHTML = DF.html('lexp', it.o.expiry || '', 'future'); return; }
       const b = e.target.closest('.lexp-edit'); if (!b) return;
       const tr = b.closest('tr[data-i]'), it = tr && Ledger.shown[+tr.dataset.i]; if (!it) return;
       const lot = b.closest('.lexp-lot'), w = lot || b.closest('.lexp-wrap');   // 입고일이 나뉜 줄은 둘째 이후 소비기한도 각각 수정
@@ -3077,10 +3110,11 @@ const Ledger = {
     const rowHtml = (item, i) => {
       const { o, run, counted } = item;
       const { soon } = Ledger.lotInfo(p, o, today, days);
+      const gone = !!o.inQty && ACTUAL_IN.has(o.inSt) && !(p.lots || []).some(l => l.row === o);   // 입고 후 재고가 모두 나간 줄
       const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + (p.expired.has(o) ? ' row-grey' : '');
       const inNote = o.note ? `<div class="hint">${esc(o.note)}</div>` : '';
       const html = `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${md(l.d)}</div>`).join('') : ''}${inNote}</td><td class="num ${o.inQty && PLAN_IN.has(o.inSt) ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${fmtN(l.q)}</div>`).join('') : ''}</td>
-        <td class="lexp-wrap">${!o.inQty ? '' : (o.expiry ? `<span class="lexp-view">${xs(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')) + (o.lotsArr ? o.lotsArr.slice(1).map((l, k) => `<div class="lexp-lot" data-k="${k}">${l.e ? `<span class="lexp-view">${xs(l.e)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</div>`).join('') : '')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
+        <td class="lexp-wrap">${!o.inQty ? '' : (gone ? `<span class="lexp-gone lexp-click" title="재고가 모두 나간 건입니다. 누르면 소비기한을 수정할 수 있습니다">${o.expiry ? xs(o.expiry) : '미입력'}</span>` : o.expiry ? `<span class="lexp-view">${xs(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')) + (o.lotsArr ? o.lotsArr.slice(1).map((l, k) => `<div class="lexp-lot" data-k="${k}">${l.e ? `<span class="lexp-view">${xs(l.e)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</div>`).join('') : '')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
         <td>${esc(o.unit)}</td><td class="num"${soon ? ' data-soon="1"' : ''}><b>${counted ? fmtN(run) : ''}</b></td>
         <td class="num ${soon ? 'warn-cell' : ''}">${soon ? fmtN(soon) : ''}</td><td>${statusCell(o)}</td></tr>`;
       // 수정 중인 줄은 원래 줄을 그대로 두고 바로 아래에 입력 줄을 붙인다
@@ -3976,7 +4010,7 @@ const Logi = {
     });
   },
   inLineHtml(i, p, x = {}, d = '') {
-    return `<tr class="plan-extra" data-i="${i}"><td></td><td colspan="3"></td>
+    return `<tr class="plan-extra g${i % 2}" data-i="${i}"><td></td><td colspan="3"></td>
       <td>${DF.html('pdate2', x.date || d || '')}</td><td></td>
       <td><input type="text" data-num class="pq num" value="${x.qty || ''}" style="width:80px"></td><td>${DF.html('pexp', x.exp || '', 'future')}</td><td class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp, p.product))}</td><td><button type="button" class="btn sm light" data-act="delline">삭제</button></td></tr>`;
   },
@@ -4019,7 +4053,7 @@ const Logi = {
       const cQty = lots ? stack('qty', (l, k, x) => `<input type="text" data-num class="pq num" value="${x.qty !== undefined ? x.qty : l.q}" style="width:80px">`) : `<input type="text" data-num class="pq num" value="${dr.qty !== undefined ? dr.qty : (o.inQty || '')}" style="width:80px">`;
       const cExp = lots ? stack('exp', (l, k, x) => DF.html('pexp', x.exp !== undefined ? x.exp : (l.e || ''), 'future')) : DF.html('pexp', exp, 'future');
       const cDl = lots ? stack('dl', (l, k, x) => `<span class="pdl">${Logi.deadlineHtml(Names.deadline(x.exp !== undefined ? x.exp : (l.e || ''), info))}</span>`) : `<span class="pdl">${Logi.deadlineHtml(Names.deadline(exp, info))}</span>`;
-      return `<tr class="plan-main" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
+      return `<tr class="plan-main g${i % 2}" data-i="${i}"><td class="sel-col"><input type="checkbox" class="pk"${dr.checked ? ' checked' : ''}></td><td style="text-align:left">${esc(p.name)}${und ? ' <span class="tag danger">입고결정 전</span>' : ''}${lots ? ` <span class="tag plan">${lots.length}회 나눠 입고</span>` : ''}<div class="hint">${esc(p.sheet)}</div></td>
         <td>${esc(info?.storage || '-')}</td><td>${info?.shelfMonths ? info.shelfMonths + '개월' : '-'}</td><td>${cDate}</td><td class="num">${cPlan}</td>
         <td>${cQty}</td><td>${cExp}</td><td>${cDl}</td>
         <td><button type="button" class="btn sm light" data-act="addline">+ 한 줄 추가</button></td></tr>` + (dr.extras || []).map(x => Logi.inLineHtml(i, p, x, d)).join('');
