@@ -177,7 +177,7 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
   .list-row .l-sub{font-size:12.5px}
   .list-box{border-color:#BDB6A6}
   .stat-box{border-color:#BDB6A6}
-  .sch-date{display:inline-block;font-size:15px;font-weight:800;color:var(--ink);margin-top:3px}
+  .sch-date{display:inline-block;font-size:13.5px;font-weight:600;color:var(--ink);margin-top:2px}
   .sch-date.over{color:var(--danger)}
   #tab-predict .controls{min-height:56px;box-sizing:border-box}
   #inPlanBody td{border:1px solid #BDB6A6;padding:6px}
@@ -1937,7 +1937,7 @@ const Home = {
     const inSch = []; LedgerData.standard().forEach(p => inRowsOf(p).forEach(o => { if (o.inSt === '입고결정' && o.inQty) inSch.push({ p, o }); }));
     inSch.sort((a, b) => String(a.o.inDate).localeCompare(String(b.o.inDate)));
     $('inSchedule').innerHTML = inSch.length ? inSch.map(({ p, o }) => `<div class="list-row"><div><div class="l-name">${esc(p.name)}</div><div class="l-sub">${esc(p.sheet)} ${esc(p.company)}</div></div>
-      <div class="num" style="text-align:right"><b style="font-size:16px">${fmtN(o.inQty)}</b><div><span class="sch-date${o.inDate && o.inDate < t ? ' over' : ''}">${o.inDate ? D.short(o.inDate) : '일자 미정'}</span></div>${o.inDate && o.inDate < t ? '<div><span class="tag danger">입고일 경과 · 입고 완료 처리 필요</span></div>' : ''}</div></div>`).join('') : '<div class="empty">결정된 입고 예정이 없습니다</div>';
+      <div class="num" style="text-align:right"><b>${fmtN(o.inQty)}</b><div><span class="sch-date${o.inDate && o.inDate < t ? ' over' : ''}">${o.inDate ? D.short(o.inDate) : '일자 미정'}</span></div>${o.inDate && o.inDate < t ? '<div><span class="tag danger">입고일 경과 · 입고 완료 처리 필요</span></div>' : ''}</div></div>`).join('') : '<div class="empty">결정된 입고 예정이 없습니다</div>';
 
     const outRows = LedgerData.products.flatMap(p => p.rows.filter(o => o.outDate === t && o.outTotal).map(o => ({ p, o })));
     const tagOf = s => s === '출고예정' ? '<span class="tag plan">예정</span>' : s === '출고확정' ? '<span class="tag conf">확정</span>' : '<span class="tag done">완료</span>';
