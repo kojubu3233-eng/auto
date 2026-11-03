@@ -166,28 +166,28 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
   #outPlanBody td .hint{margin-top:2px}
   /* UI 개선: 글씨 키우고 칸 경계 진하게 */
   table{font-size:13px}
-  #confirmTable td,#confirmTable th,#zoneTable td,#zoneTable th,#ldTable td,#ldTable th,#costTable td,#costTable th,#predictTable td,#predictTable th{border:1px solid #BDB6A6}
+  #confirmTable td,#confirmTable th,#zoneTable td,#zoneTable th,#ldTable td,#ldTable th,#costTable td,#costTable th,#predictTable td,#predictTable th{border:1px solid #9C9484}
   #confirmTable th,#zoneTable th,#ldTable th,#costTable th{color:#4A4538;background:#EFEBE0}
-  #confirmBody tr:nth-child(even) td,#zoneBody tr:nth-child(even) td{background:#FAF8F3}
-  #zoneBody td:nth-child(2),#zoneBody td:nth-child(11){background:#FEF9C3 !important}
   #confirmBody td.c-plan{color:#111}
   #confirmBody input.c-confEa,#confirmBody input.c-confKg,#confirmBody td.o-sales{color:#DC2626;font-weight:800}
   #ldBody td:nth-child(4){font-weight:800}
-  #ldBody tr:not(.carry):nth-child(even) td{background:#FAF8F3}
   #ldBody tr.row-grey td{background:#EEEDEA}
   .list-row{padding:10px 12px;border-bottom:1px solid #CFC9BA;font-size:14px}
   .list-row .l-name{font-size:14.5px}
   .list-row .l-sub{font-size:12.5px}
   .list-box{border-color:#BDB6A6}
   .stat-box{border-color:#BDB6A6}
-  .sch-date{display:inline-block;font-size:15px;font-weight:800;color:var(--accent);background:#E8EDF7;border:1px solid #B9C5E0;border-radius:6px;padding:2px 8px;margin-top:3px}
-  .sch-date.over{color:var(--danger);background:#FDECEA;border-color:#F1B8B3}
+  .sch-date{display:inline-block;font-size:15px;font-weight:800;color:var(--ink);margin-top:3px}
+  .sch-date.over{color:var(--danger)}
   #tab-predict .controls{min-height:56px;box-sizing:border-box}
   #inPlanBody td{border:1px solid #BDB6A6;padding:6px}
   #inPlanBody tr.g1 td{background:#F5F2EA}
   #inPlanBody tr.g0 td{background:#fff}
   #inPlanBody tr.plan-main td{border-top:3px solid #5F584A}
-  #costBody td{border-color:#BDB6A6}
+  #costBody td{border-color:#9C9484}
+  #predictTable tbody input[type=text],#predictTable tbody select{height:34px;box-sizing:border-box}
+  #predictTable .meal-col .meal-list,#predictTable .meal-col .g-addmeal{display:inline-block;vertical-align:middle}
+  #predictTable .meal-col{white-space:nowrap}
   .lexp-click{cursor:pointer;color:var(--muted-2);text-decoration:underline dotted;text-underline-offset:3px}
 }
 #estateTable .sub td{background:var(--surface-alt);font-weight:700}
@@ -1781,7 +1781,7 @@ const CostMgr = {
     $('costSummary').textContent = `${rows.length}개 품목${Cost.off.size ? ` (단종 ${Cost.off.size}개${$('costOff').checked ? ' 포함' : ' 숨김'})` : ''} · 매입가 없음 ${miss}개${rs.length ? ` · 평균 마진율 ${(rs.reduce((a, r) => a + r.rate, 0) / rs.length).toFixed(1)}%` : ''}`;
     $('costBody').innerHTML = rows.map(r => `<tr data-n="${esc(r.p.name)}"><td><label style="display:inline-flex;align-items:center;gap:5px"><input type="checkbox" class="cost-pk"> ${esc(r.p.category || '')}</label></td><td style="text-align:left">${esc(r.p.name)}${r.off ? ' <span class="tag">단종</span> <button type="button" class="btn sm light" data-act="restore">복구</button>' : ''}</td>
       <td class="num ${r.recent ? 'cost-recent' : ''}"${r.recent ? ` title="${D.short(r.from)}에 변경"` : ''}><input type="text" data-num class="cost-in num" value="${r.cost ?? ''}" placeholder="미입력" style="width:90px"></td>
-      <td class="num ${r.srecent ? 'cost-recent' : ''}">${r.p.pr ? `<input type="text" data-num class="sell-in num" value="${r.sell == null ? '' : Math.round(r.sell)}" placeholder="미입력" style="width:90px">${r.sh.length > 1 ? ` <button type="button" class="btn sm light" data-act="shist">이력 ${r.sh.length}</button>` : ''}` : '<span class="hint" title="품목정보에 같은 이름의 품목이 없어 판매가를 정할 수 없습니다">품목정보 없음</span>'}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td data-act="hist" class="cost-from" title="누르면 변경 이력(년·월·일)이 보입니다">${r.from ? r.from.replace(/-/g, '.') : (r.cost != null ? '처음부터' : '')}${r.hist.length > 1 ? ` <button type="button" class="btn sm light" data-act="hist">이력 ${r.hist.length}</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
+      <td class="num ${r.srecent ? 'cost-recent' : ''}">${r.p.pr ? `<input type="text" data-num class="sell-in num" value="${r.sell == null ? '' : Math.round(r.sell)}" placeholder="미입력" style="width:90px">` : '<span class="hint" title="품목정보에 같은 이름의 품목이 없어 판매가를 정할 수 없습니다">품목정보 없음</span>'}</td><td class="num ${r.margin < 0 ? 'warn-cell' : ''}">${fmtN(r.margin)}</td><td class="num ${r.rate != null && r.rate < 0 ? 'warn-cell' : ''}">${r.rate == null ? '-' : r.rate.toFixed(1) + '%'}</td><td data-act="hist" class="cost-from" title="누르면 변경 이력(년·월·일)이 보입니다">${r.from ? r.from.replace(/-/g, '.') : (r.cost != null ? '처음부터' : '')}${r.hist.length > 1 ? ` <button type="button" class="btn sm light" data-act="hist">매입 이력 ${r.hist.length}</button>` : ''}${r.p.pr && r.sh.length > 1 ? ` <button type="button" class="btn sm light" data-act="shist">판매 이력 ${r.sh.length}</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 품목이 없습니다</td></tr>';
   },
   // 금액을 바꾸면 적용시작일을 고르는 창을 띄운다 (기본 오늘). 그 날짜 납품분부터 새 금액, 그 전은 기존 금액
   ask(title, change, note, cb) {
