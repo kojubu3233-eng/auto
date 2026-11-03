@@ -1903,11 +1903,9 @@ const CostMgr = {
 const Home = {
   open: { age: null, due: null },
   lots() {
-    const out = [], t = D.today();   // 보관일수(age)·납품기한까지 남은 일수(left)는 한 번만 계산해 둔다
+    const out = [], t = D.today();   // 보관일수(age)·납품기한까지 남은 일수(left)는 재고수불대장의 실제 재고(p.lots)와 소비기한만으로 한 번만 계산해 둔다 (두 카드의 총계가 항상 같다)
     LedgerData.standard().forEach(p => {
       p.lots.forEach(l => out.push({ p, l, age: l.inDate ? D.diff(t, l.inDate) : null, left: l.deadline ? D.diff(l.deadline, t) : null }));
-      // '납품기한 초과'로 처리해 둔 수량은 아직 창고에 있는 초과 재고로 보고 초과 카드에만 넣는다(보관일수에는 넣지 않음). 소비기한이 없어 기한을 계산할 수 없는 건은 제외
-      p.expired.forEach((q, row) => { const dl = Names.deadline(row.expiry, p.product); if (!dl) return; out.push({ p, l: { inDate: row.inDate, expiry: row.expiry, deadline: dl, remain: q }, age: null, left: dl ? Math.min(D.diff(dl, t), -1) : -1, exp: true }); });
     });
     return out;
   },
@@ -1927,7 +1925,7 @@ const Home = {
 
     const dueDefs = [['4개월 이상', 91, 1e9, ''], ['3개월', 61, 90, ''], ['2개월', 31, 60, ''], ['1개월', 0, 30, 'warn'], ['납품기한 초과', -1e9, -1, 'danger']];
     Home.due = dueDefs.map(([label, lo, hi, cls]) => ({ label, cls, items: lots.filter(x => x.left !== null && x.left >= lo && x.left <= hi) }));
-    const unknown = lots.filter(x => !x.exp && !x.l.deadline && !(x.l.inDate && x.l.inDate > t));   // 입고일이 아직 안 온 입고 예정분은 소비기한을 모를 수밖에 없으므로 제외
+    const unknown = lots.filter(x => !x.l.deadline && !(x.l.inDate && x.l.inDate > t));   // 입고일이 아직 안 온 입고 예정분은 소비기한을 모를 수밖에 없으므로 제외
     if (unknown.length) Home.due.push({ label: '정보 없음', cls: '', items: unknown, note: '소비기한 또는 품목정보(보관방법·소비기한) 미입력' });
     $('dueBuckets').innerHTML = Home.due.map((b, i) => `<button class="bucket ${b.cls} ${Home.open.due === i ? 'on' : ''}" onclick="Home.detail('due',${i})" title="${esc(b.note || '')}">
       <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div>${won(b.items)}</button>`).join('');
