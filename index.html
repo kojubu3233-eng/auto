@@ -621,14 +621,6 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       <div class="row between mb12"><h2>오늘 출고</h2><span class="hint" id="todayLabel"></span></div>
       <div class="list-box" id="outToday"><div class="empty">불러오는 중</div></div>
     </div>
-    <div class="panel">
-      <div class="row between mb12"><h2>납품기한 임박</h2></div>
-      <div class="list-box" id="dueSoon"><div class="empty">불러오는 중</div></div>
-    </div>
-    <div class="panel">
-      <div class="row between mb12"><h2>납품기한 초과</h2></div>
-      <div class="list-box" id="dueOver"><div class="empty">불러오는 중</div></div>
-    </div>
   </div>
 </section>
 
@@ -1941,13 +1933,6 @@ const Home = {
     const tagOf = s => s === '출고예정' ? '<span class="tag plan">예정</span>' : s === '출고확정' ? '<span class="tag conf">확정</span>' : '<span class="tag done">완료</span>';
     $('outToday').innerHTML = outRows.length ? outRows.map(({ p, o }) => `<div class="list-row"><div><div class="l-name">${esc(p.name)}</div><div class="l-sub">${esc(o.unit || '')}</div></div>
       <div class="num"><b>${fmtN(o.outTotal)}</b><div class="l-sub">${tagOf(o.status)}</div></div></div>`).join('') : '<div class="empty">오늘 출고가 없습니다</div>';
-
-    const soon = lots.filter(x => x.left !== null && x.left >= 0 && x.left <= dueDays()).sort((a, b) => a.l.deadline.localeCompare(b.l.deadline));
-    const dueRow = (x, cls) => `<div class="list-row"><div><div class="l-name">${esc(x.p.name)}</div><div class="l-sub">${x.l.expiry ? '소비기한 ' + D.short(x.l.expiry) + ' · 납품기한 ' + D.short(x.l.deadline) : '소비기한 미입력'}</div></div>
-      <div class="num"><b>${fmtN(x.l.remain)}</b><div class="l-sub"><span class="tag ${cls}">${!x.l.deadline ? '초과 처리' : x.left < 0 ? -x.left + '일 초과' : x.left + '일 남음'}</span></div></div></div>`;
-    $('dueSoon').innerHTML = soon.length ? soon.map(x => dueRow(x, 'warn')).join('') : `<div class="empty">${dueDays()}일 이내 납품기한 재고가 없습니다</div>`;
-    const over = lots.filter(x => x.left !== null && x.left < 0).sort((a, b) => String(a.l.deadline || '9').localeCompare(String(b.l.deadline || '9')));
-    $('dueOver').innerHTML = over.length ? over.map(x => dueRow(x, 'danger')).join('') : '<div class="empty">납품기한이 초과된 재고가 없습니다</div>';
   },
   detail(kind, i, keep) {
     if (!keep && Home.open[kind] === i) return Home.closeDetail(kind);
