@@ -3133,6 +3133,7 @@ const Ledger = {
     }).join('') || '<div class="empty" style="grid-column:1/-1">조건에 맞는 품목이 없습니다</div>';
   },
   openProduct(key) { if (Ledger.key === key && !$('ledgerDetail').classList.contains('hidden')) return Ledger.close(); Ledger.key = key; Ledger.editing = null; Ledger.renderList(); Ledger.renderDetail(); $('ledgerDetail').classList.remove('hidden'); $('ledgerDetail').scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+  sortBy(c) { const S = Ledger.sort || (Ledger.sort = { col: 'outDate', dir: 1 }); if (S.col === c) S.dir = -S.dir; else { S.col = c; S.dir = 1; } Ledger.renderDetail(); },
   close() { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); },
   renderDetail() {
     const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
@@ -3144,8 +3145,10 @@ const Ledger = {
     $('ldReco').classList.toggle('hidden', p.type !== 'standard');
     if (p.type !== 'standard') {
       $('ldStats').innerHTML = ''; $('ldAlert').innerHTML = ''; $('ldSticky').innerHTML = '';
-      $('ldTable').classList.add('ld-simple'); $('ldHead').innerHTML = '<tr class="ld-mh"><th>납품일</th><th>수량</th><th>샘플</th><th>부대</th></tr>';
-      const rows = p.rows.filter(o => (!from || o.outDate >= from) && (!to || o.outDate <= to));
+      // 열 제목을 누르면 그 열 기준으로 정렬 (한 번 더 누르면 오름차순 ↔ 내림차순). 처음에는 납품일 오름차순
+      const S = Ledger.sort || (Ledger.sort = { col: 'outDate', dir: 1 }), ar = () => '';
+      $('ldTable').classList.add('ld-simple'); $('ldHead').innerHTML = `<tr class="ld-mh">${[['outDate', '납품일'], ['qty', '수량'], ['sample', '샘플'], ['unit', '부대']].map(([c, l]) => `<th style="cursor:pointer" onclick="Ledger.sortBy('${c}')">${l}${ar(c)}</th>`).join('')}</tr>`;
+      const rows = p.rows.filter(o => (!from || o.outDate >= from) && (!to || o.outDate <= to)).map((o, i) => [o, i]).sort((a, b) => { const x = a[0][S.col], y = b[0][S.col]; const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x || '').localeCompare(String(y || ''), 'ko'); return (c || a[1] - b[1]) * S.dir; }).map(a => a[0]);
       $('ldBody').innerHTML = rows.map(o => `<tr><td>${D.short(o.outDate)}</td><td class="num">${fmtN(o.qty)}</td><td class="num">${fmtN(o.sample)}</td><td>${esc(o.unit)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">기간 내 내역 없음</td></tr>';
       return;
     }
