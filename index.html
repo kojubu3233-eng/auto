@@ -606,7 +606,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
   <div class="home-grid">
     <div class="panel fin-panel" style="grid-column:1/-1">
       <div class="fin-kpis" id="finKpis"></div>
-      <div class="row between mb8 mt12"><h2 id="finTitle">월별 손익</h2><span class="hint">매출 = 확정매출 · 재고(기초·기말)는 재고수불대장의 기준일 재고 × 매입단가 · 두부·양념육·어묵 등 주문생산 품목은 매입 = 출고(확정)수량 × 매입가(재고 없음) · 총 이익 = 매출 − 원가(기초 + 매입 − 기말)</span></div>
+      <div class="row between mb8 mt12"><h2 id="finTitle">월별 손익</h2><span class="hint">매출 = 확정매출 · 재고(기초·기말)는 재고수불대장의 기준일 재고 × 매입단가 · 두부·양념육·어묵 등 주문생산 품목은 매입 = 출고(확정)수량 × 매입가(재고 없음) · 총 이익 = 매출 − 원가(기초 + 매입 − 기말) · 로스(금액 처리 없이 나간 기한 경과·재고처리·파손·재출고·아인병원 등)와 샘플(샘플·품평회로 금액 처리된 출고)은 원가에 이미 들어 있는 내역을 따로 보여 주는 참고 줄</span></div>
       <div class="table-wrap"><table id="finTable"></table></div>
     </div>
     <div class="panel">
@@ -1168,8 +1168,20 @@ const Api = {
     if (json.error) throw new Error(json.error);
     return json;
   },
+  // 매출이 생기지 않는 출고(부대별정보에 없는 이름이거나 파손·재고처리 같은 로스 단어)는 시트 부대칸 끝에 (로스)를 자동으로 붙인다 → 월별 손익에서 로스로 처리
+  markLoss(ops) {
+    if (!Array.isArray(ops) || !Names.unitMap || !Names.unitMap.size) return;
+    const WORDS = /(납품기한|소비기한)\s*(초과|경과)|재고처리|폐기|이유불명|파손|터짐|재출고|재납품|납품실수|진공풀림|납품불가|홍보|영업기타|영업출고|과납품|아인병원|구내식당|케이스타|서울우유|지원물량|미생물검사|실험용|학교|반품|누락/;
+    ops.forEach(op => {
+      const f = op && op.fields; if (!f || !f.unit || !(f.outMain || f.outSample)) return;
+      const u = String(f.unit).trim(); if (!u || /\(로스\)\s*$/.test(u) || u === EXPIRED_UNIT) return;
+      const base = normUnit(u.replace(/\(.*$/, '').trim()), known = Names.unitMap.has(base) || !!(op.id && Hist.byId.has(op.id)) || /샘플|품평회/.test(u);
+      if (WORDS.test(u) || !known) f.unit = u + '(로스)';
+    });
+  },
   async post(kind, body) {
     const u = Api.url(kind); if (!u) throw new Error('config.js에 웹앱 주소가 없습니다.');
+    if (kind === 'ledger') { Api.markLoss(body.ops); Api.markLoss(body.ledgerOps); }
     const res = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
@@ -1966,28 +1978,42 @@ const Home = {
   },
   // 맨 위 요약: 2026년 10월부터의 월별 손익표(매출 · 원가[기초·매입·로스·기말·계] · 매출 총 이익 · 이익률)와 재고 카드. 금액은 억·만 단위로 줄여 보여준다
   fin(lots, won0) {
-    const t = D.today(), START = '2026-10', cmk = t.slice(0, 7);
+    const t = D.today(), START = '2026-07', cmk = t.slice(0, 7);
     const u = n => { const a = Math.abs(n), g = n < 0 ? '−' : ''; if (!a) return '0'; if (a >= 1e8) return g + (Math.floor(a / 1e6) / 100).toFixed(2) + '억'; if (a >= 1e4) return g + Math.round(a / 1e4).toLocaleString() + '만'; return g + Math.round(a).toLocaleString(); };
     const addM = (k, n) => { const d = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1 + n, 1); return d.getFullYear() + '-' + D.pad(d.getMonth() + 1); };
-    const last = cmk > '2026-12' ? cmk : '2026-12';
-    const months = []; for (let k = START; k <= last && months.length < 12; k = addM(k, 1)) months.push(k);
+    // 월말 마감이 끝난 달만 보여준다(진행 중인 이번 달은 제외)
+    const months = []; for (let k = START; k < cmk && months.length < 36; k = addM(k, 1)) months.push(k);
     const prods = LedgerData.products, nmOf = p => p.product ? p.product.name : p.name;
     const cst = (nm, d) => Cost.of(nm, d) ?? Cost.of(nm, t);   // 그 날짜의 매입가가 아직 없으면 지금 매입가로 본다
-    const R = {}; months.forEach(k => R[k] = { sales: 0, buy: 0, loss: 0 });
+    const R = {}; months.forEach(k => R[k] = { sales: 0, buy: 0, loss: 0, samp: 0, sold: 0 });
     // 재고수불대장에 없는 품목(어묵류 등 직접 제조)은 확정량만큼 생산하므로 매입 = 확정수량 × 매입가, 재고는 없다. 이름은 글자 포함 여부로 대장 품목과 연결(예: 계란말이(맛살) ↔ 맛살계란말이)
     const sq = (a, b) => { let i = 0; for (const c of b) { if (c === a[i]) i++; if (i === a.length) return true; } return !a.length; };
     const nz = s => String(s).replace(/\s/g, '').replace(/바비큐/g, '바베큐');
     const inLed = new Map();
-    const onLedger = n => { if (inLed.has(n)) return inLed.get(n); const m = nz(n).match(/^([^()]*)(?:\(([^)]*)\))?/), base = m[1], par = (m[2] || '').replace(/알찬식품|푸드라인|냉동|\d+g|kg/g, '');
-      const v = LedgerData.products.some(p => { if (nz(p.name) === nz(n)) return true; const L = nz(p.name).replace(/\(.*?\)/g, ''); return base && sq(base, L) && (!par || sq(par, L)); }); inLed.set(n, v); return v; };
-    Hist.records.forEach(r => { const k = r.delDate && r.delDate.slice(0, 7); if (!R[k] || r.confEa == null) return; const pr = Confirm.price(r); if (pr) R[k].sales += pr * r.confEa;
-      if (!onLedger(r.name)) { const c = cst(r.name, r.delDate); if (c) R[k].buy += c * r.confEa; } });
+    const ledgerOf = n => { if (inLed.has(n)) return inLed.get(n); const m = nz(n).match(/^([^()]*)(?:\(([^)]*)\))?/), base = m[1], par = (m[2] || '').replace(/알찬식품|푸드라인|냉동|\d+g|kg/g, '');
+      const v = LedgerData.products.find(p => nz(p.name) === nz(n)) || LedgerData.products.find(p => { const L = nz(p.name).replace(/\(.*?\)/g, ''); return base && sq(base, L) && (!par || sq(par, L)); }) || null; inLed.set(n, v); return v; };
+    // 어묵(대장에 없음)·범용제품·자사양념육은 확정량만큼 생산·납품하므로 매입 = 확정수량 × 매입가 (재고 없음)
+    const byConf = p => !p || p.sheet === '범용제품' || p.sheet === '자사양념육';
+    Hist.records.forEach(r => { const k = r.delDate && r.delDate.slice(0, 7); if (!R[k] || r.confEa == null) return; const pr = Confirm.price(r); if (pr) R[k].sales += pr * r.confEa; const c0 = cst(r.name, r.delDate); if (c0) R[k].sold += c0 * r.confEa;   // 판매한 물건의 원가(확정수량 × 매입가)
+      if (byConf(ledgerOf(r.name))) { const c = cst(r.name, r.delDate); if (c) R[k].buy += c * r.confEa; } });
     // 두부·양념육 같은 주문생산 품목(입고 없이 출고만 적는 탭)은 출고수량만큼 생산하므로 매입 = 출고수량 × 매입가, 재고는 없다(기초·기말 0)
     const made = p => p.type !== 'standard';
+    const SAMP = /샘플|품평회/;   // 샘플·품평회로 따로 줄이 만들어진 출고는 금액 처리된 것: 원가에는 이미 들어 있고, 어느 항목에 얼마가 들어갔는지 '샘플' 줄로 따로 보여 준다
+    const LOSS = /(납품기한|소비기한)\s*(초과|경과)|재고처리|폐기|이유불명|파손|터짐|재출고|재납품|납품실수|진공풀림|납품불가|홍보|영업기타|영업출고|과납품|아인병원|구내식당|케이스타|서울우유|지원물량|미생물검사|실험용|학교/;   // 금액 처리 없이 나간 출고(로스). 시트 부대칸 끝에 (로스)를 적어 두면 무조건 로스
+    const US = new Set(); Hist.records.forEach(r => { if (r.unit) { const u = normUnit(String(r.unit).replace(/\(.*$/, '').trim()); US.add(u); US.add(u.split('/')[0]); } });   // 확정량에 있는 부대 = 매출이 발생하는 납품처
+    // 출고 한 줄을 [로스 수량, 샘플 수량]으로 나눈다. 부대 납품 줄에 괄호 메모(예: 5사단(14팩 파손 재납품))가 있으면 메모의 수량만 로스, 나머지는 매출
+    const cls = o => { const u = String(o.unit || '').trim(), tot = o.outTotal || 0; if (!u) return [0, o.outSample || 0];
+      if (/\(로스\)\s*$/.test(u)) return [tot, 0];
+      const m = u.match(/^([^(]*)\((.*)\)/), base = (m ? m[1] : u).trim(), note = m ? m[2] : '', bu = normUnit(base), sale = (US.has(bu) || US.has(bu.split('/')[0])) && !LOSS.test(base);
+      if (!sale) return SAMP.test(u) && !LOSS.test(u) ? [0, tot] : [tot, 0];
+      if (LOSS.test(note)) { const n = note.match(/(\d+)\s*(팩|개|ea|EA|박스)/); return [n ? Math.min(+n[1], tot) : tot, 0]; }
+      if (SAMP.test(note)) return [0, o.outSample || (tot <= 20 ? tot : 0)];
+      return [0, o.outSample || 0]; };
     prods.forEach(p => { const nm = nmOf(p);
-      if (made(p)) p.rows.forEach(o => { const k = o.outDate && o.outDate.slice(0, 7); if (!R[k] || !o.outTotal || o.status === '출고예정') return; const c = cst(nm, o.outDate); if (c) R[k].buy += c * o.outTotal; });   // 확정·완료된 출고만 (매출도 확정량 기준)
+      if (byConf(p)) { /* 확정량 기준으로 위에서 이미 계산 */ }
+      else if (made(p)) p.rows.forEach(o => { const k = o.outDate && o.outDate.slice(0, 7); if (!R[k] || !o.outTotal || o.status === '출고예정') return; const c = cst(nm, o.outDate); if (c) R[k].buy += c * o.outTotal; });   // 확정·완료된 출고만 (매출도 확정량 기준)
       else inEntries(p).forEach(o => { const k = o.inDate && o.inDate.slice(0, 7); if (!R[k] || o.inSt === '이월') return; const c = cst(nm, o.inDate); if (c) R[k].buy += c * o.inQty; });
-      p.rows.forEach(o => { const k = o.outDate && o.outDate.slice(0, 7); if (R[k] && o.unit === EXPIRED_UNIT && o.outTotal) { const c = cst(nm, o.outDate); if (c) R[k].loss += c * o.outTotal; } }); });
+      p.rows.forEach(o => { const k = o.outDate && o.outDate.slice(0, 7); if (!R[k] || !o.outTotal || o.status === '출고예정') return; const [lq, sq2] = cls(o), c = cst(nm, o.outDate); if (!c) return; R[k].loss += c * lq; if (!byConf(p)) R[k].samp += c * sq2; }); });
     // 기준일 재고: 재고수불대장에 적힌 재고(J열) 중 그 날짜 이전 가장 마지막 거래 뒤의 재고. 그 뒤 J열이 비어 있는 줄은 입·출고만큼 더하고 뺀다. 오늘 이후는 현재고
     // 줄의 날짜: 출고가 있으면 출고일, 아니면 입고일. 날짜 없는 줄(샘플·재고 정정 등)은 바로 위 줄의 날짜를 따른다
     const dayMap = new Map();
@@ -2009,21 +2035,21 @@ const Home = {
     };
     const stockAt = (E, price) => { let v = 0; prods.forEach(p => { if (p.stock === undefined || made(p)) return; const q = qtyAt(p, E); if (q > 0) v += q * (price(nmOf(p), p, E < t ? E : t) || 0); }); return v; };
     const byCost = (nm, p, d) => cst(nm, d);
-    months.forEach((k, i) => { const m = R[k]; m.show = k <= cmk;
+    months.forEach((k, i) => { const m = R[k]; m.show = true;
       m.open = i === 0 ? stockAt(addM(k, 0) + '-01' > t ? t : new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 0).getFullYear() + '-' + D.pad(new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 0).getMonth() + 1) + '-' + D.pad(new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 0).getDate()), byCost) : R[months[i - 1]].close;
       if (m.show) { m.close = stockAt(k === cmk ? t : new Date(+k.slice(0, 4), +k.slice(5, 7), 0).getFullYear() + '-' + k.slice(5, 7) + '-' + D.pad(new Date(+k.slice(0, 4), +k.slice(5, 7), 0).getDate()), byCost);
-        m.cost = m.open + m.buy - m.close; m.gp = m.sales - m.cost; m.rate = m.sales ? m.gp / m.sales * 100 : null; } });
+        m.cost = m.open + m.buy - m.close; m.loss = m.cost - m.sold - m.samp; m.gp = m.sales - m.cost; m.rate = m.sales ? m.gp / m.sales * 100 : null; } });
     const stock = won0(lots), over = lots.filter(x => x.left !== null && x.left < 0), soon = lots.filter(x => x.left !== null && x.left >= 0 && x.left <= dueDays());
     const k3 = (cls, l, v) => `<div class="fin-k ${cls}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
     $('finKpis').innerHTML = k3('', '재고 잔액', u(stock)) + k3('bad', '납품기한 초과 재고', u(won0(over))) + k3('warn', `납품기한 임박 재고 (${dueDays()}일)`, u(won0(soon)));
-    $('finTitle').textContent = `월별 손익 (${+START.slice(5)}월 시작)`;
+    $('finTitle').textContent = `월별 손익 (${START.slice(0, 4)}년 ${+START.slice(5)}월부터 · 마감된 달만)`;
     const td = (m, k, v, cls) => `<td class="${k === cmk ? 'cur ' : ''}${v < 0 ? 'neg ' : ''}${cls || ''}">${m.show ? v === null ? '-' : typeof v === 'string' ? v : u(v) : ''}</td>`;
     const line = (head, f, cls) => `<tr class="${cls || ''}">${head}${months.map(k => td(R[k], k, R[k].show ? f(R[k]) : 0)).join('')}</tr>`;
     $('finTable').style.width = (150 + months.length * 140) + 'px';
     $('finTable').innerHTML = `<colgroup><col style="width:80px"><col style="width:70px">${months.map(() => '<col style="width:140px">').join('')}</colgroup><thead><tr><th colspan="2"></th>${months.map(k => `<th class="${k === cmk ? 'cur' : ''}">${+k.slice(5)}월</th>`).join('')}</tr></thead><tbody>`
       + line('<td class="n" colspan="2">매출</td>', m => m.sales, 'b')
-      + line('<td class="n g" rowspan="5">원가</td><td class="n">기초</td>', m => m.open, 'm')
-      + line('<td class="n">매입</td>', m => m.buy, 'm') + line('<td class="n">로스</td>', m => m.loss, 'm') + line('<td class="n">기말</td>', m => m.close, 'm')
+      + line('<td class="n g" rowspan="6">원가</td><td class="n">기초</td>', m => m.open, 'm')
+      + line('<td class="n">매입</td>', m => m.buy, 'm') + line('<td class="n">로스</td>', m => m.loss, 'm') + line('<td class="n">샘플</td>', m => m.samp, 'm') + line('<td class="n">기말</td>', m => m.close, 'm')
       + line('<td class="n">계</td>', m => m.cost, 'b')
       + line('<td class="n" colspan="2">매출 총 이익</td>', m => m.gp, 'hl')
       + line('<td class="n" colspan="2">이익률</td>', m => m.rate === null ? null : m.rate.toFixed(1) + '%', 'b') + '</tbody>';
@@ -3222,14 +3248,14 @@ const Ledger = {
     return `<tr class="edit-row" data-i="${i}" data-edit="1"><td>${esc(o.company || '')}</td><td style="text-align:left">${esc(o.name)}</td>
       <td>${inEd ? DF.html('e-inDate', o.inDate || '') + `<span class="in2-d">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotD(k, l.d)).join('') : ''}</span>` + `<div class="mt8">${Ledger.LOT_ADD}</div>` : ''}</td><td>${inEd ? `<input type="text" data-num class="e-inQty num" value="${o.inQty || ''}" style="width:80px">` + `<span class="in2-q">${o.lotsArr ? o.lotsArr.slice(1).map((l, k) => Ledger.lotQ(k, l.q, l.e)).join('') : ''}</span>` : ''}</td><td>${inEd ? DF.html('e-expiry', o.expiry || '', 'future') : ''}</td>
       <td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td>${outEd ? `<input type="text" data-num class="e-outSample num" value="${o.outSample || ''}" style="width:56px">` : ''}</td>
-      <td>${esc(o.unit || '')}</td><td class="num"><b>${item.counted ? fmtN(item.run) : ''}</b></td><td></td><td></td>
-      <td>${decide}<div class="row mt8" style="flex-wrap:nowrap"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="cancel">취소</button><button type="button" class="btn sm danger" data-act="delete">삭제</button></div>${outEd ? '<div class="hint mt8">출고 날짜·수량은 예정량·확정량 입력에서 수정</div>' : ''}</td></tr>`;
+      <td>${outEd ? `<input type="text" class="e-unit" value="${esc(o.unit || '')}" style="width:120px" placeholder="부대 (로스는 끝에 (로스))">` : esc(o.unit || '')}</td><td class="num"><input type="text" data-num class="e-stock num" value="${o.stock === '' || o.stock == null ? '' : o.stock}" style="width:64px"></td><td></td><td></td>
+      <td>${decide}<div class="row mt8" style="flex-wrap:nowrap"><button type="button" class="btn sm ok" data-act="save">저장</button><button type="button" class="btn sm light" data-act="cancel">취소</button><button type="button" class="btn sm danger" data-act="delete">삭제</button></div>${outEd ? '<div class="hint mt8">샘플·부대·재고를 직접 고칠 수 있습니다 (재고수불대장만 바뀌고 확정량 입력은 그대로입니다). 납품일·본품은 예정량·확정량 입력에서 수정</div>' : ''}</td></tr>`;
   },
   // 입고일 추가: 수정 줄에서 둘째 이후 입고일·수량을 넣는다 (시트에는 수량 합계와 날짜들이 저장되고, 입고 처리는 날짜별로 따로 한다)
   LOT_ADD: '<button type="button" class="btn sm light" data-act="addin2">+ 입고일 추가</button>',
   lotD: (k, iso) => `<div class="mt8 in2-i" data-k="${k}">${DF.html('e-inDateX', iso)} <button type="button" class="btn sm light" data-act="delin2" data-k="${k}">삭제</button></div>`,
   lotQ: (k, q, e) => `<div class="mt8 in2-i" data-k="${k}"><input type="text" data-num class="e-inQtyX num" value="${q || ''}" data-e="${esc(e || '')}" placeholder="수량" style="width:80px"></div>`,
-  onRowClick(e) {
+  async onRowClick(e) {
     if (e.target.closest('.lexp-wrap')) return;   // 소비기한 입력칸을 누를 때는 줄 수정 창을 열지 않는다
     const tr = e.target.closest('tr[data-i]'); if (!tr) return;
     const item = Ledger.shown[+tr.dataset.i]; if (!item) return;
@@ -3255,7 +3281,17 @@ const Ledger = {
         const q = c => tr.querySelector('.' + c), fields = {};
         if (q('e-inQty')) { Object.assign(fields, Ledger.readIn(tr, item.o)); if (PEND_OUT.has(item.o.status) && fields.inQty && !item.o.inState && (!item.o.inQty || PLAN_IN.has(item.o.inSt) || fields.inDate >= D.today())) fields.inState = '입고예정'; }   // 납품 줄에 새로 적은 입고는 날짜와 상관없이 입고예정 → 입고결정 → 물류 입고처리 순서를 거친다
         if (q('e-outSample')) fields.outSample = num(q('e-outSample').value) ?? '';
-        return Ledger.saveOps([{ ...Ledger.ref(item.o), op: 'update', fields }], '저장했습니다');
+        const o = item.o, want = {};   // 부대·재고도 고친다 (줄 위치는 그대로 두고 값만 바꾼다 → 납품일 정렬이 바뀌지 않는다)
+        if (q('e-unit')) { const nu = q('e-unit').value.trim(); if (nu !== (o.unit || '')) { if (!nu) return toast('부대를 비울 수 없습니다'); fields.unit = want.unit = nu; } }
+        if (q('e-stock')) { const ns = num(q('e-stock').value) ?? ''; if (ns !== (o.stock ?? '')) fields.stock = want.stock = ns; }
+        const res = await Ledger.saveOps([{ ...Ledger.ref(o), op: 'update', fields }], '저장했습니다');
+        if (res && !Ledger.year && (want.unit !== undefined || want.stock !== undefined)) {   // 서버가 부대·재고 수정을 받았는지 확인
+          const now = LedgerData.products.flatMap(x => x.rows).find(r => r.sheet === o.sheet && r.row === o.row), bad = [];
+          if (!now) return;
+          if (want.unit !== undefined && String(now.unit).replace(/\(로스\)$/, '') !== want.unit.replace(/\(로스\)$/, '')) bad.push('부대'); if (want.stock !== undefined && (now.stock ?? '') !== want.stock) bad.push('재고');
+          if (bad.length) toast(`${bad.join('·')}은(는) 시트에 반영되지 않았습니다. Apps Script에 수정 기능이 필요합니다`, 9000);
+        }
+        return;
       }
       return;
     }
