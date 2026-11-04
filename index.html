@@ -190,6 +190,13 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
   #predictTable .meal-col{white-space:nowrap}
   .lexp-click{cursor:pointer;color:var(--muted-2);text-decoration:underline dotted;text-underline-offset:3px}
 }
+.fin-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.fin-k{border:1px solid #BDB6A6;border-radius:10px;padding:12px 14px;background:var(--surface)}
+.fin-k .l{font-size:12.5px;color:var(--muted);font-weight:600}.fin-k .v{font-size:26px;font-weight:800;margin-top:4px}
+.fin-k.bad .v,.fin-k .v.neg{color:var(--danger)}.fin-k.warn .v{color:#B45309}
+#finTable{table-layout:fixed;width:auto}#finTable th,#finTable td.n{text-align:center}#finTable td.g{vertical-align:middle}#finTable td{text-align:right;padding:7px 10px}#finTable td.n{font-weight:700;background:var(--surface-alt);white-space:nowrap}
+#finTable td.cur,#finTable th.cur{background:#EAF0FB}#finTable tr.hl td{font-weight:800;border-top:3px solid #5F584A}#finTable tr.b td{font-weight:700}#finTable tr.m td{color:var(--muted)}#finTable td.neg{color:var(--danger)}
+@media (max-width:760px){.fin-kpis{grid-template-columns:1fr}.fin-k .v{font-size:20px}}
 #estateTable .sub td{background:var(--surface-alt);font-weight:700}
 #estateTable .dl-over{color:#c0392b;font-weight:600}.dl-soon{color:#b45309;font-weight:600}
 .alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
@@ -597,6 +604,11 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 <!-- 홈 -->
 <section id="tab-home">
   <div class="home-grid">
+    <div class="panel fin-panel" style="grid-column:1/-1">
+      <div class="fin-kpis" id="finKpis"></div>
+      <div class="row between mb8 mt12"><h2 id="finTitle">월별 손익</h2><span class="hint">매출 = 확정매출 · 재고(기초·기말)는 재고수불대장의 기준일 재고 × 매입단가 · 두부·양념육·어묵 등 주문생산 품목은 매입 = 출고(확정)수량 × 매입가(재고 없음) · 총 이익 = 매출 − 원가(기초 + 매입 − 기말)</span></div>
+      <div class="table-wrap"><table id="finTable"></table></div>
+    </div>
     <div class="panel">
       <div class="row between mb12"><h2>보관일수 현황</h2></div>
       <div class="buckets" id="ageBuckets"></div>
@@ -1905,6 +1917,7 @@ const Home = {
     const t = D.today();
     $('todayLabel').textContent = D.short(t);
     const lots = Home.lots();
+    const won0 = items => items.reduce((a, x) => a + (Cost.of(x.p.product ? x.p.product.name : x.p.name, t) || 0) * x.l.remain, 0);
     // 카드별 매입가 합계 (수량 × 오늘 기준 매입가). 매입가가 없는 품목 수량은 빼고 *로 표시
     const won = items => { let s = 0, miss = 0; items.forEach(x => { const c = Cost.of(x.p.product ? x.p.product.name : x.p.name, t); if (c == null) miss += x.l.remain; else s += c * x.l.remain; }); return `<div class="b-won"${miss ? ` title="매입가가 없는 ${fmtN(miss)}개는 금액에서 빠졌습니다"` : ''}>${fmtN(Math.round(s))}원${miss ? ' *' : ''}</div>`; };
 
@@ -1921,6 +1934,7 @@ const Home = {
     if (unknown.length) Home.due.push({ label: '정보 없음', cls: '', items: unknown, note: '소비기한 또는 품목정보(보관방법·소비기한) 미입력' });
     $('dueBuckets').innerHTML = Home.due.map((b, i) => `<button class="bucket ${b.cls} ${Home.open.due === i ? 'on' : ''}" onclick="Home.detail('due',${i})" title="${esc(b.note || '')}">
       <div class="b-label">${b.label}</div><div class="b-val">${b.items.length}</div><div class="b-sub">${fmtN(b.items.reduce((a, x) => a + x.l.remain, 0))}개</div>${won(b.items)}</button>`).join('');
+    Home.fin(lots, won0);
     if (Home.open.age !== null) Home.detail('age', Home.open.age, true);
     if (Home.open.due !== null) Home.detail('due', Home.open.due, true);
 
@@ -1949,6 +1963,70 @@ const Home = {
       items.sort((a, c) => String(a.l.deadline || '9').localeCompare(String(c.l.deadline || '9')));
       $('dueDetailBody').innerHTML = items.map(x => `<tr><td style="text-align:left">${esc(x.p.name)}</td><td class="num">${x.left === null ? '-' : !x.l.deadline ? '초과 처리' : x.left < 0 ? -x.left + '일 초과' : x.left + '일'}</td><td>${x.l.deadline ? `${x.l.deadline.slice(2, 4)}년 ${x.l.deadline.slice(5, 7)}월 ${x.l.deadline.slice(8, 10)}일` : '-'}</td><td class="num">${fmtN(x.l.remain)}</td><td>${x.l.expiry ? D.short(x.l.expiry) : '미입력'}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">없음</td></tr>';
     }
+  },
+  // 맨 위 요약: 2026년 10월부터의 월별 손익표(매출 · 원가[기초·매입·로스·기말·계] · 매출 총 이익 · 이익률)와 재고 카드. 금액은 억·만 단위로 줄여 보여준다
+  fin(lots, won0) {
+    const t = D.today(), START = '2026-10', cmk = t.slice(0, 7);
+    const u = n => { const a = Math.abs(n), g = n < 0 ? '−' : ''; if (!a) return '0'; if (a >= 1e8) return g + (Math.floor(a / 1e6) / 100).toFixed(2) + '억'; if (a >= 1e4) return g + Math.round(a / 1e4).toLocaleString() + '만'; return g + Math.round(a).toLocaleString(); };
+    const addM = (k, n) => { const d = new Date(+k.slice(0, 4), +k.slice(5, 7) - 1 + n, 1); return d.getFullYear() + '-' + D.pad(d.getMonth() + 1); };
+    const last = cmk > '2026-12' ? cmk : '2026-12';
+    const months = []; for (let k = START; k <= last && months.length < 12; k = addM(k, 1)) months.push(k);
+    const prods = LedgerData.products, nmOf = p => p.product ? p.product.name : p.name;
+    const cst = (nm, d) => Cost.of(nm, d) ?? Cost.of(nm, t);   // 그 날짜의 매입가가 아직 없으면 지금 매입가로 본다
+    const R = {}; months.forEach(k => R[k] = { sales: 0, buy: 0, loss: 0 });
+    // 재고수불대장에 없는 품목(어묵류 등 직접 제조)은 확정량만큼 생산하므로 매입 = 확정수량 × 매입가, 재고는 없다. 이름은 글자 포함 여부로 대장 품목과 연결(예: 계란말이(맛살) ↔ 맛살계란말이)
+    const sq = (a, b) => { let i = 0; for (const c of b) { if (c === a[i]) i++; if (i === a.length) return true; } return !a.length; };
+    const nz = s => String(s).replace(/\s/g, '').replace(/바비큐/g, '바베큐');
+    const inLed = new Map();
+    const onLedger = n => { if (inLed.has(n)) return inLed.get(n); const m = nz(n).match(/^([^()]*)(?:\(([^)]*)\))?/), base = m[1], par = (m[2] || '').replace(/알찬식품|푸드라인|냉동|\d+g|kg/g, '');
+      const v = LedgerData.products.some(p => { if (nz(p.name) === nz(n)) return true; const L = nz(p.name).replace(/\(.*?\)/g, ''); return base && sq(base, L) && (!par || sq(par, L)); }); inLed.set(n, v); return v; };
+    Hist.records.forEach(r => { const k = r.delDate && r.delDate.slice(0, 7); if (!R[k] || r.confEa == null) return; const pr = Confirm.price(r); if (pr) R[k].sales += pr * r.confEa;
+      if (!onLedger(r.name)) { const c = cst(r.name, r.delDate); if (c) R[k].buy += c * r.confEa; } });
+    // 두부·양념육 같은 주문생산 품목(입고 없이 출고만 적는 탭)은 출고수량만큼 생산하므로 매입 = 출고수량 × 매입가, 재고는 없다(기초·기말 0)
+    const made = p => p.type !== 'standard';
+    prods.forEach(p => { const nm = nmOf(p);
+      if (made(p)) p.rows.forEach(o => { const k = o.outDate && o.outDate.slice(0, 7); if (!R[k] || !o.outTotal || o.status === '출고예정') return; const c = cst(nm, o.outDate); if (c) R[k].buy += c * o.outTotal; });   // 확정·완료된 출고만 (매출도 확정량 기준)
+      else inEntries(p).forEach(o => { const k = o.inDate && o.inDate.slice(0, 7); if (!R[k] || o.inSt === '이월') return; const c = cst(nm, o.inDate); if (c) R[k].buy += c * o.inQty; });
+      p.rows.forEach(o => { const k = o.outDate && o.outDate.slice(0, 7); if (R[k] && o.unit === EXPIRED_UNIT && o.outTotal) { const c = cst(nm, o.outDate); if (c) R[k].loss += c * o.outTotal; } }); });
+    // 기준일 재고: 재고수불대장에 적힌 재고(J열) 중 그 날짜 이전 가장 마지막 거래 뒤의 재고. 그 뒤 J열이 비어 있는 줄은 입·출고만큼 더하고 뺀다. 오늘 이후는 현재고
+    // 줄의 날짜: 출고가 있으면 출고일, 아니면 입고일. 날짜 없는 줄(샘플·재고 정정 등)은 바로 위 줄의 날짜를 따른다
+    const dayMap = new Map();
+    prods.forEach(p => { let prev = ''; p.rows.forEach(o => { const d = (o.outTotal ? o.outDate : o.inDate) || prev; dayMap.set(o, d); prev = d; }); });
+    const rowDay = o => dayMap.get(o) || '';
+    const qtyAt = (p, E) => {
+      if (E >= t) return p.stock;
+      let base = 0, bd = '';
+      p.rows.forEach(o => { const d = rowDay(o); if (d && d <= E && o.stock !== '' && o.stock !== null && o.stock !== undefined && d >= bd) { base = +o.stock || 0; bd = d; } });
+      p.rows.forEach(o => {
+        if (o.stock !== '' && o.stock !== null && o.stock !== undefined) {   // 입고는 납품 줄에 함께 적혀 있어 줄의 날짜(출고일)와 실제 입고일이 다를 수 있다: 입고일이 기준일 이전이면 포함, 이후면 제외
+          if (o.inQty && ACTUAL_IN.has(o.inSt) && o.inDate) { const d = rowDay(o); if (d > E && o.inDate <= E) base += o.inQty; else if (d <= E && o.inDate > E) base -= o.inQty; }
+          return;
+        }
+        if (o.inQty && ACTUAL_IN.has(o.inSt) && o.inDate && o.inDate <= E && o.inDate > bd) base += o.inQty;
+        if (o.outTotal && rowDay(o) && rowDay(o) <= E && rowDay(o) > bd && (!PEND_OUT.has(o.status) || rowDay(o) <= t)) base -= o.outTotal;
+      });
+      return base;
+    };
+    const stockAt = (E, price) => { let v = 0; prods.forEach(p => { if (p.stock === undefined || made(p)) return; const q = qtyAt(p, E); if (q > 0) v += q * (price(nmOf(p), p, E < t ? E : t) || 0); }); return v; };
+    const byCost = (nm, p, d) => cst(nm, d);
+    months.forEach((k, i) => { const m = R[k]; m.show = k <= cmk;
+      m.open = i === 0 ? stockAt(addM(k, 0) + '-01' > t ? t : new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 0).getFullYear() + '-' + D.pad(new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 0).getMonth() + 1) + '-' + D.pad(new Date(+k.slice(0, 4), +k.slice(5, 7) - 1, 0).getDate()), byCost) : R[months[i - 1]].close;
+      if (m.show) { m.close = stockAt(k === cmk ? t : new Date(+k.slice(0, 4), +k.slice(5, 7), 0).getFullYear() + '-' + k.slice(5, 7) + '-' + D.pad(new Date(+k.slice(0, 4), +k.slice(5, 7), 0).getDate()), byCost);
+        m.cost = m.open + m.buy - m.close; m.gp = m.sales - m.cost; m.rate = m.sales ? m.gp / m.sales * 100 : null; } });
+    const stock = won0(lots), over = lots.filter(x => x.left !== null && x.left < 0), soon = lots.filter(x => x.left !== null && x.left >= 0 && x.left <= dueDays());
+    const k3 = (cls, l, v) => `<div class="fin-k ${cls}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+    $('finKpis').innerHTML = k3('', '재고 잔액', u(stock)) + k3('bad', '납품기한 초과 재고', u(won0(over))) + k3('warn', `납품기한 임박 재고 (${dueDays()}일)`, u(won0(soon)));
+    $('finTitle').textContent = `월별 손익 (${+START.slice(5)}월 시작)`;
+    const td = (m, k, v, cls) => `<td class="${k === cmk ? 'cur ' : ''}${v < 0 ? 'neg ' : ''}${cls || ''}">${m.show ? v === null ? '-' : typeof v === 'string' ? v : u(v) : ''}</td>`;
+    const line = (head, f, cls) => `<tr class="${cls || ''}">${head}${months.map(k => td(R[k], k, R[k].show ? f(R[k]) : 0)).join('')}</tr>`;
+    $('finTable').style.width = (150 + months.length * 140) + 'px';
+    $('finTable').innerHTML = `<colgroup><col style="width:80px"><col style="width:70px">${months.map(() => '<col style="width:140px">').join('')}</colgroup><thead><tr><th colspan="2"></th>${months.map(k => `<th class="${k === cmk ? 'cur' : ''}">${+k.slice(5)}월</th>`).join('')}</tr></thead><tbody>`
+      + line('<td class="n" colspan="2">매출</td>', m => m.sales, 'b')
+      + line('<td class="n g" rowspan="5">원가</td><td class="n">기초</td>', m => m.open, 'm')
+      + line('<td class="n">매입</td>', m => m.buy, 'm') + line('<td class="n">로스</td>', m => m.loss, 'm') + line('<td class="n">기말</td>', m => m.close, 'm')
+      + line('<td class="n">계</td>', m => m.cost, 'b')
+      + line('<td class="n" colspan="2">매출 총 이익</td>', m => m.gp, 'hl')
+      + line('<td class="n" colspan="2">이익률</td>', m => m.rate === null ? null : m.rate.toFixed(1) + '%', 'b') + '</tbody>';
   },
   exportDetail(kind) {
     const b = Home[kind][Home.open[kind]]; if (!b) return;
