@@ -789,9 +789,11 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 <section id="tab-logistics" class="hidden">
   <div class="panel">
     <div class="sub-tabs" id="logiTabs">
-      <button class="tab-btn active" data-sub="in">입고</button>
-      <button class="tab-btn" data-sub="out">출고</button>
-      <button class="tab-btn" data-sub="print">일지 출력</button>
+      <button class="tab-btn active" data-sub="in">입고처리</button>
+      <button class="tab-btn" data-sub="out">출고처리</button>
+      <button class="tab-btn" data-sub="print">입출고 처리현황</button>
+      <button class="tab-btn" data-sub="estate">재산대장</button>
+      <button class="tab-btn" data-sub="expired">납품기한 초과</button>
       <button class="tab-btn" data-sub="backup">백업·복원</button>
     </div>
 
@@ -821,20 +823,22 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
         <label class="row muted"><input type="checkbox" id="outShowDone"> 출고처리 완료 건도 표시</label>
       </div>
       <div class="row mb8"><label class="row"><input type="checkbox" id="outPickAll"> 전체 선택</label><button type="button" class="btn ok sm m-nobar" onclick="Logi.bulkOut()">선택 건 일괄 출고처리</button><span class="hint">출고일을 비워 둔 줄은 오늘 출고로 처리됩니다</span></div>
-      <div class="table-wrap" style="max-height:none"><table class="grid m-card m-led" data-labels="11:납품일,부대,품명,수량(계),본품,샘플,소비기한,출고수량,출고일,상태,;4:소비기한,출고수량,출고일,상태"><thead><tr>
-        <th>납품일</th><th>부대</th><th style="min-width:140px">품명</th><th>수량(계)</th><th>본품</th><th>샘플</th><th style="min-width:170px">소비기한</th><th>출고수량</th><th>출고일</th><th>상태</th><th></th>
+      <div class="table-wrap" style="max-height:none"><table class="grid m-card m-led" data-labels="10:납품일,부대,품명,수량(계),본품,샘플,소비기한,출고수량,출고일,;4:소비기한,출고수량,출고일"><thead><tr>
+        <th>납품일</th><th>부대</th><th style="min-width:140px">품명</th><th>수량(계)</th><th>본품</th><th>샘플</th><th style="min-width:170px">소비기한</th><th>출고수량</th><th>출고일</th><th></th>
       </tr></thead><tbody id="outPlanBody"></tbody></table></div>
       <div class="m-actbar m-only-bar"><button type="button" class="btn ok" id="outDoneBtn" onclick="Logi.bulkOut()">선택 건 일괄 출고처리</button></div>
     </div>
 
     <div data-subpane="print" class="hidden">
-      <div class="row mb12"><h2>입출고 일지</h2><label class="lbl muted">월</label><input type="month" id="printMonth">
+      <div class="row mb12"><h2>입출고 처리현황</h2><label class="lbl muted">월</label><input type="month" id="printMonth">
         <label class="lbl muted">일·기간</label><span id="printFrom"></span><span>~</span><span id="printTo"></span>
         <span class="hint">월만 고르면 그 달 전체, 시작일만 적으면 하루, 시작·종료를 적으면 그 기간입니다</span>
         <span style="flex:1"></span><label class="lbl muted">엑셀 일자</label><span id="printDate"></span><button class="btn light" onclick="Logi.printJournal()">입출고 일지 엑셀</button></div>
       <div id="journalView" class="mb12"></div>
+    </div>
 
-      <div class="mt12">
+    <div data-subpane="estate" class="hidden">
+      <div>
         <div class="row between mb12">
           <div class="row"><h2>재산대장</h2><label class="row muted"><input type="checkbox" id="estateHideZero" checked> 재고·출고예정 없는 품목 숨기기</label></div>
           <button class="btn light" onclick="Estate.exportExcel()">엑셀 다운로드</button>
@@ -851,6 +855,13 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
           <tr><th style="top:33px">출고일</th><th style="top:33px">수량</th></tr>
         </thead><tbody id="estateBody"></tbody></table></div>
       </div>
+    </div>
+
+    <div data-subpane="expired" class="hidden">
+      <div class="row between mb8"><h2>납품기한 초과</h2><span class="hint">납품기한이 지난 재고입니다. 출고수량·출고처·출고자를 적고 [출고처리]를 누르면 해당 소비기한의 수량만 줄어듭니다 (다른 소비기한 수량은 변동 없음)</span></div>
+      <div class="table-wrap" style="max-height:none"><table class="grid m-card"><thead><tr>
+        <th style="min-width:150px">품명</th><th>소비기한</th><th>원가 (단가 / 금액)</th><th>잔량</th><th>출고수량</th><th>출고액 (단가 / 금액)</th><th>출고처</th><th>출고자</th><th></th>
+      </tr></thead><tbody id="expBody"></tbody></table></div>
     </div>
 
     <div data-subpane="backup" class="hidden">
@@ -1172,7 +1183,7 @@ const Api = {
     const WORDS = /(납품기한|소비기한)\s*(초과|경과)|재고처리|폐기|이유불명|파손|터짐|재출고|재납품|납품실수|진공풀림|납품불가|홍보|영업기타|영업출고|과납품|지원물량|미생물검사|실험용|학교|반품|누락/;
     ops.forEach(op => {
       const f = op && op.fields; if (!f || !f.unit || !(f.outMain || f.outSample)) return;
-      const u = String(f.unit).trim(); if (!u || /\(로스\)\s*$/.test(u) || u === EXPIRED_UNIT || /^재고조정\(/.test(u) || /아인병원|서울우유|프레쉬쿡|대원제약|구내식당|케이스타/.test(u)) return;
+      const u = String(f.unit).trim(); if (!u || /\(로스\)\s*$/.test(u) || u.startsWith(EXPIRED_UNIT) || /^재고조정\(/.test(u) || /아인병원|서울우유|프레쉬쿡|대원제약|구내식당|케이스타/.test(u)) return;
       const base = normUnit(u.replace(/\(.*$/, '').trim()), known = Names.unitMap.has(base) || !!(op.id && Hist.byId.has(op.id)) || /샘플|품평회/.test(u);
       if (WORDS.test(u) || !known) f.unit = u + '(로스)';
     });
@@ -1443,7 +1454,8 @@ const inRowsOf = p => p.lotRows && p.lotRows.length ? p.rows.concat(p.lotRows) :
 // 이미 들어온 입고분을 입고 순서대로: 입고일이 나뉜 줄은 둘째 이후 입고분(lotRows)을 첫 입고분 바로 뒤에 둔다 (재고 소비기한 배분·선입선출에 모두 쓴다)
 const inEntries = p => { const t = D.today(), out = []; p.rows.forEach(o => { if (o.inQty && ACTUAL_IN.has(o.inSt)) out.push(o); (p.lotRows || []).forEach(l => { if (l.synth === o && ACTUAL_IN.has(l.inSt) && !(l.inDate > t)) out.push(l); }); }); return out; };
 const ACTUAL_OUT = { has: () => true };
-const EXPIRED_UNIT = '납품기한 초과';   // 납품기한 초과 처리로 넣은 출고 줄의 부대칸 표시
+const EXPIRED_UNIT = '납품기한 초과';
+const isExp = o => String(o.unit || '').startsWith(EXPIRED_UNIT);   // 납품기한 초과 출고 줄: 부대칸이 '납품기한 초과' 또는 '납품기한 초과(출고처/출고자)'   // 납품기한 초과 처리로 넣은 출고 줄의 부대칸 표시
 const STATUS_CLASS = { '입고예정': 'c-plan', '출고예정': 'c-plan', '입고결정': 'c-conf', '출고확정': 'c-conf', '입고완료': 'c-done', '이월': 'c-done', '출고완료': 'c-done', '': 'c-done' };
 
 // 출고 배분(AA열): 'YYYY-MM-DD|수량|출고일;…' ↔ [{exp, qty, ship}]
@@ -1497,9 +1509,9 @@ function makeLedgerData() {
     // 납품 줄에 입고일과 수량을 모두 적으면 입고결정 체크박스가 뜬다(canDecide). 입고 없이 출고만 하는 줄에는 뜨지 않는다. 체크하면 별도 줄을 만들지 않고 같은 줄이 입고결정(inState)이 된다
     // 입고 줄의 상태 칸이 비어 있어도 입고일이 오늘 이후면 아직 받지 않은 입고예정으로 본다 (현재고는 실제로 들어온 수량만)
     p.rows.forEach(o => {
-      o.comb = !!(o.outTotal && PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT && (o.inQty || o.inDate));
+      o.comb = !!(o.outTotal && PEND_OUT.has(o.status) && !isExp(o) && (o.inQty || o.inDate));
       o.inSt = o.comb ? (o.inState === '입고완료' && o.inDate && o.inDate > today ? '입고예정' : o.inState || (o.inDate && o.inDate >= today ? '입고예정' : '입고완료')) : ((o.status === '입고완료' || !o.status) && o.inQty && o.inDate && o.inDate > today ? '입고예정' : o.status);   // 입고일이 오늘 이후면 '입고완료'라고 적혀 있어도 아직 받지 않은 것(오늘 기준 재고에 넣지 않는다)
-      o.canDecide = !!(o.outTotal && PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT && !(o.comb && o.inSt === '입고완료'));
+      o.canDecide = !!(o.outTotal && PEND_OUT.has(o.status) && !isExp(o) && !(o.comb && o.inSt === '입고완료'));
       o.pendingIn = !!(o.comb && o.inQty && PLAN_IN.has(o.inSt));
     });
     p.lotRows = [];
@@ -1509,11 +1521,11 @@ function makeLedgerData() {
     // 납품기한 초과 처리 줄: 위쪽 입고 줄 중 소비기한이 가장 빠른(=기한이 먼저 지난) 입고분에서 그 수량만큼 빠진 것으로 본다
     p.expired = new Map();
     p.rows.forEach((o, i) => {
-      if (o.unit !== EXPIRED_UNIT || !o.outTotal) return;
+      if (!isExp(o) || !o.outTotal) return;
       const ins = p.rows.slice(0, i).filter(r => r.inQty);
       if (!ins.length) return;
       const dated = ins.filter(r => D.isIso(r.expiry)).sort((a, b) => a.expiry.localeCompare(b.expiry));
-      const t = dated[0] || ins[ins.length - 1];
+      const t = (o.expiry && ins.find(r => r.expiry === o.expiry)) || dated[0] || ins[ins.length - 1];   // 출고 줄에 소비기한이 적혀 있으면 그 입고분에서 먼저 뺀다
       p.expired.set(t, (p.expired.get(t) || 0) + o.outTotal);
     });
     p.rows.forEach((o, i) => {
@@ -3213,7 +3225,7 @@ const Ledger = {
     const md = iso => iso ? (ph ? `${iso.slice(5, 7)}.${iso.slice(8)}` : `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일`) : '';
     const xs = iso => ph ? `${iso.slice(2, 4)}.${iso.slice(5, 7)}.${iso.slice(8)}` : D.short(iso);
     const statusCell = o => {
-      if (o.unit === EXPIRED_UNIT) return '<span class="tag danger">초과처리</span> <button type="button" class="btn sm light" data-undo="1">되돌리기</button>';
+      if (isExp(o)) return '<span class="tag danger">초과처리</span> <button type="button" class="btn sm light" data-undo="1">되돌리기</button>';
       const s = (!PEND_OUT.has(o.status) && o.inSt && o.inSt !== o.status ? o.inSt : o.status) || (o.inQty ? '입고완료' : '');
       const tag = s === '이월' ? 'carry' : s.endsWith('예정') ? (o.comb !== undefined && o.inSt === '입고결정' ? 'dec' : 'plan') : (s.endsWith('결정') || s.endsWith('확정')) ? 'conf' : 'done';
       const decide = (((PLAN_IN.has(o.inSt) && !PEND_OUT.has(o.status)) && o.inDate && o.inQty) || (o.canDecide && o.inDate && o.inQty)) ? ` <label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
@@ -3252,7 +3264,7 @@ const Ledger = {
   },
   // 수정 줄: 입고(발주)는 직접 수정, 출고는 예정량·확정량 입력과 연동되므로 샘플 수량만 수정할 수 있다
   editRow(item, i) {
-    const o = item.o, outEd = o.isOut, inEd = o.isIn || !o.isOut || (PEND_OUT.has(o.status) && o.unit !== EXPIRED_UNIT);
+    const o = item.o, outEd = o.isOut, inEd = o.isIn || !o.isOut || (PEND_OUT.has(o.status) && !isExp(o));
     const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
     const st = !PEND_OUT.has(o.status) && PLAN_IN.has(o.inSt), cmb = !st && inEd && outEd && o.inSt !== '입고완료' && !!(o.inDate && o.inQty);   // st: 입고 줄 / cmb: 납품 줄(입고일을 적으면 입고결정 가능)
     const decide = (st || cmb) ? `<label class="dec-cb"><input type="checkbox" data-dec="1"${o.inSt === '입고결정' ? ' checked' : ''}> 입고결정</label>` : '';
@@ -3365,15 +3377,14 @@ const Ledger = {
     } catch (e) { toast('저장 실패: ' + e.message, 6000); }
   },
   // 재고 조정 행: 불량 감소·회수 증가처럼 정상 납품·입고가 아닌 증감을 별도 행으로 넣는다. 부대칸에 '재고조정(사유)'로 적히고 확정량·출고 예정 계산에는 들어가지 않는다
+  adjOp(p, date, inc, qty, why, exp) { const unit = `재고조정(${why})`; return { op: 'insert', sheet: p.sheet, name: p.name, company: p.company, status: inc ? '입고완료' : '출고완료', sorted: true, fields: inc ? { inDate: date, inQty: qty, expiry: exp || '', unit } : { outDate: date, outMain: qty, unit } }; },
   toggleAdj(on) { const f = $('ldAdjForm'); f.classList.toggle('hidden', on === undefined ? !f.classList.contains('hidden') : !on); },
   async addAdjust() {
     const p = Ledger.d().byKey.get(Ledger.key); if (!p) return;
     const date = DF.get(document.querySelector('.ld-add-date')), inc = $('ldAdjDir').value === 'in', qty = num($('ldAddQty').value), why = $('ldAdjWhy').value, exp = DF.get(document.querySelector('.ld-add-exp'));
     if (!date) return toast('일자를 입력하세요');
     if (!qty) return toast('수량을 입력하세요');
-    const unit = `재고조정(${why})`;
-    const fields = inc ? { inDate: date, inQty: qty, expiry: exp, unit } : { outDate: date, outMain: qty, unit };
-    const res = await Ledger.saveOps([{ op: 'insert', sheet: p.sheet, name: p.name, company: p.company, status: inc ? '입고완료' : '출고완료', sorted: true, fields }], '재고 조정 행을 추가했습니다 (확정량에는 영향이 없습니다)');
+    const res = await Ledger.saveOps([Ledger.adjOp(p, date, inc, qty, why, exp)], '재고 조정 행을 추가했습니다 (확정량에는 영향이 없습니다)');
     if (res) { $('ldAddQty').value = ''; DF.set(document.querySelector('.ld-add-date'), '', true); DF.set(document.querySelector('.ld-add-exp'), '', true); Ledger.toggleAdj(false); }
   },
   /* --- 엑셀 다운로드 --- */
@@ -3411,7 +3422,7 @@ const Ledger = {
     const pname = p.product ? p.product.name : p.name, cat = p.product && p.product.category;
     const today = D.today(), rateOf = (plan, conf) => plan ? (conf - plan) / plan * 100 : null;
     const hasConf = r => r.confEa !== null && r.confEa !== undefined && r.planEa;
-    const row = Ledger.recoKey ? p.rows.find(o => Ledger.rowKey(o) === Ledger.recoKey && PEND_OUT.has(o.status) && o.outTotal && o.unit && o.unit !== EXPIRED_UNIT) : null;
+    const row = Ledger.recoKey ? p.rows.find(o => Ledger.rowKey(o) === Ledger.recoKey && PEND_OUT.has(o.status) && o.outTotal && o.unit && !isExp(o)) : null;
     const unit = row ? row.unit : '';
     const md = iso => iso ? `${iso.slice(2, 4)}년 ${+iso.slice(5, 7)}월 ${+iso.slice(8)}일` : '';
     // 예상 증감율: 해당 부대의 과거 확정/예정 비율. 1순위 이 부대의 같은 품목 2건 이상 → 2순위 이 부대의 같은 구분 2건 이상 → 없으면 예정량 그대로
@@ -3593,7 +3604,7 @@ const Alerts = {
     const t = D.today(), ins = [], outs = [];
     LedgerData.standard().forEach(p => inRowsOf(p).forEach(o => {
       if (o.inSt === '입고결정' && o.inQty && (o.inDate || t) <= t) ins.push({ p, o, d: o.inDate || t });
-      if (o.outTotal && (o.unit !== EXPIRED_UNIT && !o.adj) && o.outDate && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) outs.push({ p, o, d: o.outDate });
+      if (o.outTotal && (!isExp(o) && !o.adj) && o.outDate && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) outs.push({ p, o, d: o.outDate });
     }));
     const by = (a, b) => a.d.localeCompare(b.d) || a.p.name.localeCompare(b.p.name);
     return { ins: ins.sort(by), outs: outs.sort(by), nIn: ins.length, nOut: outs.length };
@@ -3648,7 +3659,7 @@ const Sync = {
     if (!h.delDate || h.delDate === o.outDate) return true;
     const q = [h.planEa, h.confEa].filter(x => x); if (!q.some(x => x === o.outMain || x === o.outTotal)) return false;
     const pn = Sync.prodName(h.name);
-    return !LedgerData.products.some(p => p.product && p.product.name === pn && p.rows.some(x => x !== o && x.outDate === h.delDate && (x.unit !== EXPIRED_UNIT && !x.adj) && Sync.unitEq(x.unit, h.unit)));
+    return !LedgerData.products.some(p => p.product && p.product.name === pn && p.rows.some(x => x !== o && x.outDate === h.delDate && (!isExp(x) && !x.adj) && Sync.unitEq(x.unit, h.unit)));
   },
   linked: o => !!(o.id && Hist.byId.has(o.id) && Sync.linkOk(o, Hist.byId.get(o.id))),   // 이 줄이 자동화시스템 건과 제대로 연결돼 있는지
   ledgerFor(r, used) {
@@ -3659,7 +3670,7 @@ const Sync = {
     LedgerData.products.forEach(p => {
       if (!p.product || p.product.name !== pn) return;
       p.rows.forEach(o => {
-        if (!o.isOut || o.outDate !== r.delDate || (o.unit === EXPIRED_UNIT || o.adj) || (used && used.has(o))) return;
+        if (!o.isOut || o.outDate !== r.delDate || (isExp(o) || o.adj) || (used && used.has(o))) return;
         if (o.id !== r.id && Sync.linked(o)) return;   // 이미 다른 자동화시스템 건과 연결된 줄
         if (!String(o.unit || '').trim()) { if (o.outMain === qty && !blank) blank = o; return; }
         if (!Sync.unitEq(o.unit, r.unit)) return;
@@ -3674,7 +3685,7 @@ const Sync = {
     LedgerData.products.forEach(p => {
       if (!p.product || p.product.name !== pn) return;
       p.rows.forEach(o => {
-        if (!o.isOut || !o.outDate || (o.unit === EXPIRED_UNIT || o.adj) || (used && used.has(o)) || (o.id && Hist.byId.has(o.id)) || !PEND_OUT.has(o.status) || (o.lines && o.lines.length)) return;   // 다른 건의 앱ID가 붙어 있는 줄은(밀린 ID라도) 날짜를 옮기지 않는다
+        if (!o.isOut || !o.outDate || (isExp(o) || o.adj) || (used && used.has(o)) || (o.id && Hist.byId.has(o.id)) || !PEND_OUT.has(o.status) || (o.lines && o.lines.length)) return;   // 다른 건의 앱ID가 붙어 있는 줄은(밀린 ID라도) 날짜를 옮기지 않는다
         if (!Sync.unitEq(o.unit, r.unit) || !qs.includes(o.outMain) || Math.abs(D.diff(o.outDate, r.delDate)) > 10) return;
         c.push(o);
       });
@@ -3691,7 +3702,7 @@ const Sync = {
   // 같은 품목·납품일인데 부대가 비어 있거나 달라서 같은 건인지 알 수 없는 줄이 있으면 새로 추가하지 않고 보류한다
   ambiguous(r, used) {
     const pn = Sync.prodName(r.name); let n = 0;
-    LedgerData.products.forEach(p => { if (p.product && p.product.name === pn) p.rows.forEach(o => { if (o.isOut && o.outDate === r.delDate && (o.unit !== EXPIRED_UNIT && !o.adj) && !(used && used.has(o)) && !Sync.linked(o)) n++; }); });
+    LedgerData.products.forEach(p => { if (p.product && p.product.name === pn) p.rows.forEach(o => { if (o.isOut && o.outDate === r.delDate && (!isExp(o) && !o.adj) && !(used && used.has(o)) && !Sync.linked(o)) n++; }); });
     return n > 0;
   },
   recFor(o) {
@@ -3716,7 +3727,7 @@ const Sync = {
         ops.push({ op: 'insert', sheet: lp.sheet, name: lp.name, id: r.id, status: '출고확정', sorted: true, fields: { outDate: r.delDate, outMain: conf, outSample: Predict.sample(lp, r.name), unit: r.unit } });
         return;
       }
-      if (used.has(lr) || !lr.isOut || (lr.unit === EXPIRED_UNIT || lr.adj)) return;
+      if (used.has(lr) || !lr.isOut || (isExp(lr) || lr.adj)) return;
       used.add(lr);
       if (lr.outDate !== r.delDate) { const mv = Sync.moveOps(lr, r, conf, '출고확정'); if (mv) ops.push(...mv); return; }
       if (lr.outMain === conf && lr.status === '출고확정' && lr.id === r.id) return;
@@ -3836,6 +3847,8 @@ const Logi = {
     DF.mount($('printFrom'), 'print-from', ''); DF.mount($('printTo'), 'print-to', '');
     $('printMonth').addEventListener('change', () => { ['print-from', 'print-to'].forEach(c => DF.set(document.querySelector('.' + c), '', true)); Logi.renderJournal(); });
     ['printFrom', 'printTo'].forEach(id => $(id).addEventListener('datechange', () => Logi.renderJournal()));
+    $('expBody').addEventListener('click', e => { const b = e.target.closest('[data-act=exp]'); if (b) Logi.doExpire(+b.closest('tr').dataset.e); });
+    $('expBody').addEventListener('input', e => { if (!e.target.classList.contains('eq')) return; const tr = e.target.closest('tr'), r = Logi.expRows[+tr.dataset.e]; if (r) tr.querySelector('.ev').textContent = r.c == null ? '-' : `${fmtN(r.c)} / ${fmtN(Math.round(r.c * num(e.target.value)))}`; });
     $('journalView').addEventListener('click', e => { const r = e.target.closest('[data-j]'); if (!r) return; const it = Logi.jr[+r.dataset.j]; if (it) RowEdit.open(`${it.kind === 'in' ? '입고' : '출고'} 수정 · ${it.p.name}`, [it.o], it.p); });
     document.querySelectorAll('[data-all]').forEach(c => c.addEventListener('change', () => $(c.dataset.all + 'Body').querySelectorAll('.pk').forEach(x => { x.checked = c.checked; })));
     // 출고 탭: 필터 · 수정 · 출고일 입력
@@ -3885,13 +3898,13 @@ const Logi = {
   },
   // 하위 탭(입고·출고·일지 출력·백업)은 보이는 것만 그리고, 나머지는 열 때 그린다 (저장·새로고침마다 모든 표를 다시 만들지 않는다)
   sub: 'in', stale: new Set(),
-  render() { Snap.auto(); Logi.renderToday(); Logi.stale = new Set(['in', 'out', 'print']); Logi.show(Logi.sub); },
+  render() { Snap.auto(); Logi.renderToday(); Logi.stale = new Set(['in', 'out', 'print', 'estate', 'expired']); Logi.show(Logi.sub); },
   show(sub) {
     Logi.sub = sub;
-    $('logiTodayWrapIn').classList.toggle('hidden', sub === 'out' || sub === 'print'); $('logiTodayWrapOut').classList.toggle('hidden', sub === 'in' || sub === 'print'); Logi.drawMissed();   // 입고 탭=오늘 입고, 출고 탭=오늘 출고, 일지 출력·백업=둘 다
+    const nt = sub === 'print' || sub === 'estate' || sub === 'expired'; $('logiTodayWrapIn').classList.toggle('hidden', sub === 'out' || nt); $('logiTodayWrapOut').classList.toggle('hidden', sub === 'in' || nt); Logi.drawMissed();   // 입고 탭=오늘 입고, 출고 탭=오늘 출고, 일지 출력·백업=둘 다
     if (sub === 'backup') { Logi.renderLog(); Snap.render(); return; }
     if (!Logi.stale.delete(sub)) return;
-    if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') { Logi.renderJournal(); Estate.render(); }
+    if (sub === 'in') Logi.renderInPlans(); else if (sub === 'out') Logi.renderOut(); else if (sub === 'print') Logi.renderJournal(); else if (sub === 'estate') Estate.render(); else if (sub === 'expired') Logi.renderExpired();
   },
   deadlineHtml: dl => dl ? `${D.short(dl).replace(/\(.\)/, '<span class="m-wk">$&</span>')}${D.diff(dl, D.today()) < 0 ? ' <span class="tag danger">경과</span>' : ''}` : '-',
   async send(kind, ops, entries) {
@@ -3982,7 +3995,7 @@ const Logi = {
     LedgerData.standard().forEach(p => {
       let sug = null;   // 소비기한 자동 배분은 이 품목에 표시할 건이 있을 때만 계산한다
       p.rows.forEach(o => {
-        if (!o.outTotal || !o.outDate || (o.outDate < today && !(PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= today)))) || (o.unit === EXPIRED_UNIT || o.adj) || !(PEND_OUT.has(o.status) || (o.status === '출고완료' && o.lines))) return;   // 확정량이 입력된 건 중 납품일이 지나지 않은 건과, 납품일이 지났는데 출고처리가 안 된 건이 나타난다
+        if (!o.outTotal || !o.outDate || (o.outDate < today && !(PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= today)))) || (isExp(o) || o.adj) || !(PEND_OUT.has(o.status) || (o.status === '출고완료' && o.lines))) return;   // 확정량이 입력된 건 중 납품일이 지나지 않은 건과, 납품일이 지났는데 출고처리가 안 된 건이 나타난다
         if (!showDone && !Logi.outDraft[Logi.outKey(o)] && o.lines && o.lines.every(l => l.ship && l.ship <= today)) return;   // 출고처리가 끝난 건은 '완료 건도 표시'를 켜야 보인다
         if ((un && !Names.norm(o.unit).includes(un)) || (nm && !Names.norm(p.name).includes(nm))) return;
         if (!inRange(o.outDate, dF, dT)) return;
@@ -3994,18 +4007,17 @@ const Logi = {
     });
     groups.sort((a, b) => a.o.outDate.localeCompare(b.o.outDate) || String(a.o.unit).localeCompare(String(b.o.unit)) || a.p.name.localeCompare(b.p.name));
     Logi.outGroups = groups;
-    if (!groups.length) { body.innerHTML = '<tr><td colspan="11" class="empty">출고할 건이 없습니다 (확정량을 입력한 건 중 납품일이 지나지 않은 건이 나타납니다)</td></tr>'; return; }
+    if (!groups.length) { body.innerHTML = '<tr><td colspan="10" class="empty">출고할 건이 없습니다 (확정량을 입력한 건 중 납품일이 지나지 않은 건이 나타납니다)</td></tr>'; return; }
     body.innerHTML = groups.map((g, gi) => {
       const { p, o, lines, dirty } = g, n = lines.length;
       const pendPast = PEND_OUT.has(o.status) && !o.lines && o.outDate <= today, baseOpts = (pendPast ? Logi.lotsBefore(p, today) : p.lots).filter(l => l.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(l => ({ v: l.expiry, t: `${D.short(l.expiry)} (잔량 ${fmtN(l.remain)})` }));
       const lotOpts = sel => { const opts = sel && !baseOpts.some(x => x.v === sel) ? baseOpts.concat({ v: sel, t: D.short(sel) }) : baseOpts; return '<option value="">미지정</option>' + opts.map(x => `<option value="${x.v}"${x.v === sel ? ' selected' : ''}>${esc(x.t)}</option>`).join(''); };
       const finished = !dirty && lines.every(l => l.ship && l.ship <= today), anyDone = !dirty && lines.some(l => l.ship && l.ship <= today), btns = `<button type="button" class="btn sm ok" data-act="save">출고처리</button>${anyDone ? '<button type="button" class="btn sm light mt8" data-act="cancel">처리 취소</button>' : ''}`;
       return lines.map((l, li) => {
-        const done = !dirty && l.ship && l.ship <= today, st = done ? '<span class="tag done">출고처리</span>' : `<span class="tag plan">${dirty ? '처리 전' : '예정'}</span>${l.ship && !dirty ? `<div class="hint">${D.short(l.ship)} 출고</div>` : ''}`;
-        const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now"><span class="sn-l">${pendPast ? '이 건 출고 반영 후 보유고' : '현재 보유고'}</span> ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
+                const head = li === 0 ? `<td rowspan="${n}">${finished ? '' : `<input type="checkbox" class="ogk" data-g="${gi}" title="일괄 출고처리 대상"> `}${D.short(o.outDate)}</td><td rowspan="${n}">${esc(o.unit)}</td><td rowspan="${n}" style="text-align:left">${esc(p.name)}${o.outDate < today && !anyDone ? ' <span class="tag danger">납품일 지남·미처리</span>' : ''}<div class="hint">${esc(p.sheet)}</div><div class="stock-now"><span class="sn-l">${pendPast ? '이 건 출고 반영 후 보유고' : '현재 보유고'}</span> ${fmtN(Math.max(p.stock, 0))}</div></td><td rowspan="${n}" class="num"><b>${fmtN(o.outTotal)}</b></td><td rowspan="${n}" class="num">${anyDone ? fmtN(o.outMain) : `<input type="text" data-num class="oconf num" value="${o.outMain ?? ''}" style="width:70px" title="확정량 수정 (자동화시스템·재고수불대장에 함께 반영)">`}</td><td rowspan="${n}" class="num">${anyDone ? (o.outSample ? fmtN(o.outSample) : '') : `<input type="text" data-num class="osamp num" value="${o.outSample || ''}" min="0" style="width:52px" title="샘플 수량 수정 (재고수불대장에 반영)">`}</td>` : '';
         const tail = li === 0 ? `<td rowspan="${n}" class="m-tail">${btns}<br><button type="button" class="btn sm light mt8" data-act="addline">+ 소비기한 추가</button>${o.shipsStale ? `<div class="hint">${o.shipsDone ? `출고처리 ${fmtN(o.shipsDone)}개 · 장부 ${fmtN(o.outTotal)}개로 수량이 다릅니다` : '확정 수량이 바뀌어 배분을 다시 계산했습니다'}</div>` : ''}</td>` : '';
-        return `<tr class="out-line g${gi % 2} ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}</td><td>${st}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
-      }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="11">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
+        return `<tr class="out-line g${gi % 2} ${li === 0 ? 'out-grp' : ''} ${dirty ? 'dirty' : ''}" data-g="${gi}" data-l="${li}">${head}<td><select class="osel">${lotOpts(l.exp)}</select>${l.short ? ` <span class="tag danger">재고 부족 ${fmtN(l.qty)}개</span>` : ''}</td><td><input type="text" data-num class="oq num" value="${l.qty || ''}" style="width:70px"></td><td>${DF.html('pship', l.ship || '')}${n > 1 ? ` <button type="button" class="btn sm light" data-act="delline" title="이 줄 삭제">✕</button>` : ''}</td>${tail}</tr>`;
+      }).join('') + `<tr class="out-act" data-g="${gi}"><td colspan="10">${btns.replace(' mt8', '')}<button type="button" class="btn sm light" data-act="addline">+ 소비기한 추가</button></td></tr>`;
     }).join('');
   },
   // 출고 탭에서 납품일·확정량(본품) 수정 → 자동화시스템 시트(확정량 입력)와 재고수불대장에 함께 반영하고 알림을 남긴다
@@ -4184,6 +4196,28 @@ const Logi = {
     const op = { op: 'insert', sheet: lp.sheet, name: lp.name, company: lp.company, id: 'L' + Date.now().toString(36).toUpperCase(), status: '입고완료', sorted: true, fields };
     if (await Logi.send('in', [op], [{ ts: new Date().toISOString(), kind: 'in', sheet: lp.sheet, name: lp.name, company: lp.company, date: d, qty, unit: '', expiry: exp, status: '입고완료', fields, id: op.id }])) { Confirm.closeModal(); Logi.renderInPlans(); Logi.renderToday(); }
   },
+  // 납품기한 초과 탭: 납품기한이 지난 재고를 소비기한별로 보여 주고, 바로 출고처리한다 (그 소비기한 수량만 줄어든다)
+  expRows: [],
+  renderExpired() {
+    const body = $('expBody'); if (!body) return;
+    const today = D.today(), rows = [];
+    LedgerData.standard().forEach(p => p.lots.forEach(l => { if (l.deadline && D.diff(l.deadline, today) < 0 && l.remain > 0) rows.push({ p, l, c: Cost.of(p.product ? p.product.name : p.name, today) }); }));
+    rows.sort((a, b) => String(a.l.expiry || '9').localeCompare(String(b.l.expiry || '9')) || a.p.name.localeCompare(b.p.name));
+    Logi.expRows = rows;
+    const money = (c, q) => c == null ? '-' : `${fmtN(c)} / ${fmtN(Math.round(c * q))}`;
+    body.innerHTML = rows.map((r, i) => `<tr data-e="${i}"><td style="text-align:left">${esc(r.p.name)}<div class="hint">${esc(r.p.sheet)}</div></td><td>${r.l.expiry ? D.short(r.l.expiry) : '미입력'}</td><td class="num">${money(r.c, r.l.remain)}</td><td class="num">${fmtN(r.l.remain)}</td>
+      <td><input type="text" data-num class="eq num" value="${r.l.remain}" style="width:80px"></td><td class="num ev">${money(r.c, r.l.remain)}</td><td><input type="text" class="ed" placeholder="출고처" style="width:110px"></td><td><input type="text" class="eb" placeholder="출고자" style="width:90px"></td>
+      <td><button type="button" class="btn sm ok" data-act="exp">출고처리</button></td></tr>`).join('') || '<tr><td colspan="9" class="empty">납품기한이 지난 재고가 없습니다</td></tr>';
+  },
+  async doExpire(i) {
+    const r = Logi.expRows[i], tr = document.querySelector(`#expBody tr[data-e="${i}"]`); if (!r || !tr) return;
+    const qty = num(tr.querySelector('.eq').value), dest = tr.querySelector('.ed').value.trim().replace(/[()]/g, ''), by = tr.querySelector('.eb').value.trim().replace(/[()]/g, '');
+    if (!(qty > 0)) return toast('출고수량을 입력하세요');
+    if (qty > r.l.remain) return toast(`출고수량이 잔량(${fmtN(r.l.remain)}개)보다 많습니다`);
+    const unit = dest || by ? `${EXPIRED_UNIT}(${[dest, by].filter(Boolean).join('/')})` : EXPIRED_UNIT;
+    const op = { op: 'insert', sheet: r.p.sheet, name: r.p.name, company: r.p.company, status: '출고완료', sorted: true, fields: { outDate: D.today(), outMain: qty, expiry: r.l.expiry || '', unit } };
+    if (await Logi.post([op], `${r.p.name} ${fmtN(qty)}개를 납품기한 초과로 출고처리했습니다`)) { Logi.renderExpired(); Logi.stale.add('estate'); }
+  },
   // 입고일만 바꾸는 경우: 입고결정 상태는 그대로 두고 날짜만 저장한다
   async changeInDate(i, iso, k = -1) {
     const it = Logi.plans.in[i]; if (!it || !iso) return;
@@ -4240,7 +4274,7 @@ const Logi = {
   // 미처리 예정 박스: 입고 탭=입고만, 출고 탭=출고만, 일지 출력·백업=둘 다
   drawMissed() {
     const m = Logi.missHtml; if (!m) return;
-    if (Logi.sub === 'print') { $('logiMissed').innerHTML = ''; return; }   // 일지 출력은 아래 일지 화면에서 처리·미처리를 함께 보여 준다
+    if (Logi.sub === 'print' || Logi.sub === 'estate' || Logi.sub === 'expired') { $('logiMissed').innerHTML = ''; return; }   // 일지 출력은 아래 일지 화면에서 처리·미처리를 함께 보여 준다
     const showIn = Logi.sub !== 'out', showOut = Logi.sub !== 'in', both = showIn && showOut, n = (showIn ? m.nIn : 0) + (showOut ? m.nOut : 0);
     const what = both ? '예정' : showIn ? '입고 예정' : '출고 예정', cnt = both ? `입고 ${m.nIn}건 · 출고 ${m.nOut}건` : `${showIn ? m.nIn : m.nOut}건`;
     $('logiMissed').innerHTML = n
@@ -4282,7 +4316,7 @@ const Logi = {
     const mi = [], mo = [];
     LedgerData.standard().forEach(p => inRowsOf(p).forEach(o => {
       if (o.inSt === '입고결정' && o.inQty && (o.inDate || t) <= t) mi.push({ p, o, d: o.inDate || t });
-      if (o.outTotal && (o.unit !== EXPIRED_UNIT && !o.adj) && o.outDate && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) mo.push({ p, o, d: o.outDate });
+      if (o.outTotal && (!isExp(o) && !o.adj) && o.outDate && o.outDate <= t && PEND_OUT.has(o.status) && !(o.lines && o.lines.some(l => l.ship && l.ship <= t))) mo.push({ p, o, d: o.outDate });
     }));
     mi.sort((a, b) => a.d.localeCompare(b.d)); mo.sort((a, b) => a.d.localeCompare(b.d));
     Logi.missedOut = mo;
@@ -4291,7 +4325,7 @@ const Logi = {
     Logi.drawMissed();
     const outs = [];
     LedgerData.standard().forEach(p => p.rows.forEach(o => {
-      if (!o.outTotal || (o.unit === EXPIRED_UNIT || o.adj)) return;
+      if (!o.outTotal || (isExp(o) || o.adj)) return;
       if (PEND_OUT.has(o.status) && !o.lines) return;   // 출고처리를 하지 않은 건은 오늘 납품일이어도 넣지 않는다
       shipParts(o).forEach(x => { if (x.date === t) outs.push({ p, o, x }); });
     }));
@@ -4498,7 +4532,25 @@ const Estate = {
     });
     return { day, past, items };
   },
-  refs: [], sel: new Set(), bound: false,
+  refs: [], items: [], sel: new Set(), bound: false,
+  // 재고 수정: 실제 수량과 사유를 입력하면 차이만큼 재고 조정 행(재고수불대장)이 추가된다. 확정량에는 영향이 없다
+  openEdit(k) {
+    const it = Estate.items[k]; if (!it) return; const stk = Math.max(it.stock, 0);
+    Confirm.modal(`재고 수정 · ${esc(it.p.name)}`, `
+      <label>현재 재고</label><b>${fmtN(stk)}</b>
+      <label>실제 수량</label><input type="text" data-num id="esQty" value="${stk}" style="width:140px">
+      <label>사유</label><select id="esWhy"><option>재고조사</option><option>샘플·증정</option><option>불량</option><option>착오 납품</option><option>기타</option></select>
+      <label>일자</label><span id="esDate"></span>
+      <label>소비기한</label><span id="esExp"></span>
+      <div class="hint" style="grid-column:1/-1">늘릴 때는 소비기한을 적어 주세요. 차이만큼 재고조정 행이 재고수불대장에 추가됩니다.</div>`, () => Estate.saveEdit(k));
+    DF.mount($('esDate'), 'es-date', D.today()); DF.mount($('esExp'), 'es-exp', '', 'future');
+  },
+  async saveEdit(k) {
+    const it = Estate.items[k]; if (!it) return; const cur = Math.max(it.stock, 0), qty = num($('esQty').value), why = $('esWhy').value, date = DF.get(document.querySelector('.es-date')) || D.today(), exp = DF.get(document.querySelector('.es-exp'));
+    if (qty === null || qty === undefined || isNaN(qty) || qty < 0) return toast('실제 수량을 입력하세요');
+    const diff = qty - cur; if (!diff) return toast('현재 재고와 같습니다');
+    if (await Logi.post([Ledger.adjOp(it.p, date > D.today() ? D.today() : date, diff > 0, Math.abs(diff), why, exp)], `재고를 ${fmtN(cur)}개 → ${fmtN(qty)}개로 수정했습니다 (${why})`)) { Confirm.closeModal(); Estate.render(); }
+  },
   // 소비기한 수정: 그 재고가 들어온 입고 줄의 소비기한을 바꾸고, 같은 소비기한으로 잡혀 있던 출고 배분(출고 탭)도 함께 옮긴다
   async editExpiry(r, val) {
     const o = r.o, old = o.expiry || '', sy = o.synth;   // 입고일이 나뉜 줄의 둘째 이후 입고분은 분할 정보(inLots)에서 해당 칸만 고친다
@@ -4518,7 +4570,7 @@ const Estate = {
       DF.mount($('estateDate'), 'estate-date', D.today()); $('estateDate').addEventListener('datechange', () => Estate.render());
     }
     MS.setup(document.querySelector('[data-ms=estcat]'), '구분', [...new Set(LedgerData.standard().map(p => p.sheet))], Estate.sel, Estate.render);
-    const { items, day, past } = Estate.build(); Estate.refs = [];
+    const { items, day, past } = Estate.build(); Estate.refs = []; Estate.items = [];
     $('estateNote').textContent = past ? `${D.short(day)} 마감 기준 재고입니다 (입출고 기록으로 되돌려 계산한 값이며, 출고예정은 표시하지 않습니다. 소비기한은 이 화면에서 고칠 수 있습니다)` : '';
     let html = '', last = null; const cnt = {};
     items.forEach(it => { cnt[it.p.sheet] = (cnt[it.p.sheet] || 0) + it.rows.length + 1; });
@@ -4531,8 +4583,9 @@ const Estate = {
         html += `<td>${r.o ? DF.html('es-exp', r.expiry, 'future') : (r.expiry ? D.short(r.expiry) : '-')}</td><td class="${Estate.dlClass(r.deadline, day)}">${r.deadline || '-'}</td><td class="num">${r.stock ? fmtN(r.stock) : ''}</td>
           <td>${r.ships.map(x => `<div>${D.short(x.date)}</div>`).join('')}</td><td class="num">${r.ships.map(x => `<div title="${esc(x.unit || '')}">${fmtN(x.qty)}</div>`).join('')}</td></tr>`;
       });
-      html += `<tr class="sub"><td colspan="2" style="text-align:center">소계 (${past ? D.short(day) : '오늘'} 기준)</td><td class="num">${fmtN(Math.max(it.stock, 0))}</td><td></td><td class="num">${it.planned ? fmtN(it.planned) : ''}</td></tr>`;
+      html += `<tr class="sub"><td colspan="2" style="text-align:center">소계 (${past ? D.short(day) : '오늘'} 기준)${past ? '' : ` <button type="button" class="btn sm light" data-es="${Estate.items.push(it) - 1}" title="실제 재고 수량과 사유를 입력해 재고를 바로잡습니다">수정</button>`}</td><td class="num">${fmtN(Math.max(it.stock, 0))}</td><td></td><td class="num">${it.planned ? fmtN(it.planned) : ''}</td></tr>`;
     });
+    $('estateBody').onclick = e => { const b = e.target.closest('[data-es]'); if (b) Estate.openEdit(+b.dataset.es); };
     $('estateBody').innerHTML = html || '<tr><td colspan="8" class="empty">표시할 품목이 없습니다</td></tr>';
   },
   async exportExcel() {
