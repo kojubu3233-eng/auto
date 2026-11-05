@@ -198,7 +198,7 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
 #finTable{table-layout:fixed;width:auto}#finTable th,#finTable td.n{text-align:center}#finTable td.g{vertical-align:middle}#finTable td{text-align:right;padding:7px 10px}#finTable td.n{font-weight:700;background:var(--surface-alt);white-space:nowrap}
 #finTable td.cur,#finTable th.cur{background:#EAF0FB}#finTable tr.hl td{font-weight:800;border-top:3px solid #5F584A}#finTable tr.b td{font-weight:700}#finTable tr.m td{color:var(--muted)}#finTable td.neg{color:var(--danger)}
 @media (max-width:760px){.fin-kpis,.fin-kpis.fin-4{grid-template-columns:1fr 1fr}.fin-k .v{font-size:20px}}
-#estateTable .sub td{background:var(--surface-alt);font-weight:700}
+#estateTable .grp{width:64px;white-space:normal;word-break:keep-all;font-size:12px}
 #estateTable .dl-over{color:#c0392b;font-weight:600}.dl-soon{color:#b45309;font-weight:600}
 .alert-lines { display:flex; flex-direction:column; gap:4px; font-size:13px; } .alert-lines:empty { display:none; }
 .reco { border-top:1px solid var(--border); padding-top:12px; } .reco-title { font-weight:700; margin:8px 0; } .stat-box.warn .b-val { color:var(--warn); } .stat-box.danger .b-val { color:var(--danger); } .tag.danger { background:var(--danger-soft); color:var(--danger); }
@@ -840,7 +840,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
     <div data-subpane="estate" class="hidden">
       <div>
         <div class="row between mb12">
-          <div class="row"><h2>재산대장</h2><label class="row muted"><input type="checkbox" id="estateHideZero" checked> 재고·출고예정 없는 품목 숨기기</label></div>
+          <div class="row"><h2>재산대장</h2><label class="row muted"><input type="checkbox" id="estateHideZero" checked> 재고·출고예정 없는 품목 숨기기</label><button type="button" class="btn sm" id="estateEditBtn">선택 품목 재고 수정</button></div>
           <button class="btn light" onclick="Estate.exportExcel()">엑셀 다운로드</button>
         </div>
         <div class="controls mb8">
@@ -851,8 +851,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
         </div>
 
         <div class="table-wrap" style="max-height:640px"><table id="estateTable"><thead>
-          <tr><th rowspan="2">구분</th><th rowspan="2">품명</th><th rowspan="2">제품 소비기한<br>(개월)</th><th rowspan="2">소비기한</th><th rowspan="2">납품기한</th><th rowspan="2">재고</th><th colspan="2">출고예정</th></tr>
-          <tr><th style="top:33px">출고일</th><th style="top:33px">수량</th></tr>
+          <tr><th style="width:64px">구분</th><th>품명</th><th>납품기한</th><th>재고</th><th>재고계</th><th>소비기한</th></tr>
         </thead><tbody id="estateBody"></tbody></table></div>
       </div>
     </div>
@@ -4571,20 +4570,22 @@ const Estate = {
     const { items, day, past } = Estate.build(); Estate.refs = []; Estate.items = [];
     $('estateNote').textContent = past ? `${D.short(day)} 마감 기준 재고입니다 (입출고 기록으로 되돌려 계산한 값이며, 출고예정은 표시하지 않습니다. 소비기한은 이 화면에서 고칠 수 있습니다)` : '';
     let html = '', last = null; const cnt = {};
-    items.forEach(it => { cnt[it.p.sheet] = (cnt[it.p.sheet] || 0) + it.rows.length + 1; });
+    items.forEach(it => { cnt[it.p.sheet] = (cnt[it.p.sheet] || 0) + it.rows.length; });
     items.forEach(it => {
-      const n = it.rows.length + 1;
+      const n = it.rows.length;
       it.rows.forEach((r, i) => {
         html += r.o ? `<tr data-k="${Estate.refs.push(r) - 1}">` : '<tr>';
         if (it.p.sheet !== last) { html += `<td class="grp" rowspan="${cnt[it.p.sheet]}">${esc(it.p.sheet)}</td>`; last = it.p.sheet; }
-        if (i === 0) html += `<td rowspan="${n}" class="pname" style="text-align:left;font-weight:600">${esc(it.p.name)}</td><td rowspan="${n}">${it.p.product?.shelfMonths || '-'}</td>`;
-        html += `<td>${r.o ? DF.html('es-exp', r.expiry, 'future') : (r.expiry ? D.short(r.expiry) : '-')}</td><td class="${Estate.dlClass(r.deadline, day)}">${r.deadline || '-'}</td><td class="num">${r.stock ? fmtN(r.stock) : ''}</td>
-          <td>${r.ships.map(x => `<div>${D.short(x.date)}</div>`).join('')}</td><td class="num">${r.ships.map(x => `<div title="${esc(x.unit || '')}">${fmtN(x.qty)}</div>`).join('')}</td></tr>`;
+        if (i === 0) html += `<td rowspan="${n}" class="pname" style="text-align:left;font-weight:600">${past ? '' : `<input type="checkbox" class="es-chk" data-es="${Estate.items.push(it) - 1}"> `}${esc(it.p.name)}</td>`;
+        html += `<td class="${Estate.dlClass(r.deadline, day)}">${r.deadline || '-'}</td><td class="num">${r.stock ? fmtN(r.stock) : ''}</td>`;
+        if (i === 0) html += `<td rowspan="${n}" class="num"><b>${fmtN(Math.max(it.stock, 0))}</b></td>`;
+        html += `<td>${r.o ? DF.html('es-exp', r.expiry, 'future') : (r.expiry ? D.short(r.expiry) : '-')}</td></tr>`;
       });
-      html += `<tr class="sub"><td colspan="2" style="text-align:center">소계 (${past ? D.short(day) : '오늘'} 기준)${past ? '' : ` <button type="button" class="btn sm light" data-es="${Estate.items.push(it) - 1}" title="실제 재고 수량과 사유를 입력해 재고를 바로잡습니다">수정</button>`}</td><td class="num">${fmtN(Math.max(it.stock, 0))}</td><td></td><td class="num">${it.planned ? fmtN(it.planned) : ''}</td></tr>`;
     });
-    $('estateBody').onclick = e => { const b = e.target.closest('[data-es]'); if (b) Estate.openEdit(+b.dataset.es); };
-    $('estateBody').innerHTML = html || '<tr><td colspan="8" class="empty">표시할 품목이 없습니다</td></tr>';
+    $('estateBody').onclick = e => { const c = e.target.closest('.es-chk'); if (!c) return; document.querySelectorAll('#estateBody .es-chk').forEach(x => { if (x !== c) x.checked = false; }); $('estateEditBtn').classList.toggle('hidden', !c.checked); $('estateEditBtn').dataset.es = c.dataset.es; };
+    $('estateEditBtn').classList.add('hidden');
+    $('estateEditBtn').onclick = () => Estate.openEdit(+$('estateEditBtn').dataset.es);
+    $('estateBody').innerHTML = html || '<tr><td colspan="6" class="empty">표시할 품목이 없습니다</td></tr>';
   },
   async exportExcel() {
     const { day, items } = Estate.build(); if (!items.length) return toast('내보낼 내용이 없습니다');
