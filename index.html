@@ -580,6 +580,31 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 .alert-row { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:13px; flex-wrap:wrap; }
 .alert-row .grow { flex:1; min-width:200px; }
 .alert-row.warn b { color:var(--danger); }
+
+/* 휴대폰 화면 개선: 화면 폭 맞춤, 누르기 쉬운 크기, 입력 화면 하단 저장 바, 월별 손익표는 표만 옆으로 넘김 */
+.banner .btn, .alert-bar .btn { flex-shrink:0; white-space:nowrap; }
+@media (max-width:760px) {
+  .home-grid > *, .panel { min-width:0; }
+  .btn { min-height:44px; } .btn.sm { min-height:36px; }
+  .hint { font-size:12px; }
+  .header { flex-wrap:nowrap; } .header > .row { flex-wrap:nowrap; } .header .edit-legend { display:none; }
+  .panel > .row.between > .row { flex-wrap:nowrap; overflow-x:auto; max-width:100%; padding-bottom:2px; scrollbar-width:none; }
+  .panel > .row.between > .row::-webkit-scrollbar { display:none; }
+  .panel > .row.between > .row > * { flex-shrink:0; white-space:nowrap; }
+  .m-actbar .btn.danger { flex:0 0 32%; }
+  .fin-panel .hint { font-size:11.5px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  #finTable { width:auto !important; font-size:12px; }
+  #finTable col:nth-child(1) { width:30px !important; } #finTable col:nth-child(2) { width:78px !important; } #finTable col:nth-child(n+3) { width:84px !important; }
+  #finTable td, #finTable th { padding:6px 5px; } #finTable td:not(.n) { white-space:nowrap; }
+  #finTable td.n { white-space:normal; word-break:keep-all; line-height:1.25; font-size:11.5px; }
+  #finTable td.g { writing-mode:vertical-rl; letter-spacing:2px; padding:4px 2px; }
+  #finTable thead th:first-child { position:sticky; left:0; z-index:4; }
+  #finTable td.g { position:sticky; left:0; z-index:3; }
+  #finTable td.n:not(.g) { position:sticky; left:30px; z-index:3; }
+  #finTable td.n[colspan] { left:0; }
+  #finTable td.n::after { content:""; position:absolute; top:0; right:-1px; bottom:0; width:1px; background:var(--border); }
+  .home-grid .panel { padding:12px; }
+}
 </style>
 </head>
 <body>
@@ -641,7 +666,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
 <!-- 예정량 입력 -->
 <section id="tab-predict" class="hidden">
   <div class="panel">
-    <div class="row between mb12"><h2>예정량 입력</h2><div class="row"><label class="row muted"><input type="checkbox" id="alsoLedger" checked> 재고수불대장에 출고 예정 등록</label><button class="btn light" onclick="Predict.addRow()">+ 행 추가</button><button class="btn light" onclick="Predict.removePicked()">선택 행 삭제</button><button class="btn light" onclick="Predict.clearAll()">전체 지우기</button><button class="btn light" onclick="Predict.exportExcel()">엑셀 다운로드</button><button class="btn ok" onclick="Predict.save()">예정량 저장</button></div></div>
+    <div class="row between mb12"><h2>예정량 입력</h2><div class="row"><label class="row muted"><input type="checkbox" id="alsoLedger" checked> 재고수불대장에 출고 예정 등록</label><button class="btn light" onclick="Predict.addRow()">+ 행 추가</button><button class="btn light m-nobar" onclick="Predict.removePicked()">선택 행 삭제</button><button class="btn light" onclick="Predict.clearAll()">전체 지우기</button><button class="btn light" onclick="Predict.exportExcel()">엑셀 다운로드</button><button class="btn ok m-nobar" onclick="Predict.save()">예정량 저장</button></div></div>
     <div class="hint mb8">엑셀에서 복사한 표를 품명 칸에 붙여넣을 수 있습니다</div>
     <div class="controls">
       <div class="radio-group">
@@ -679,6 +704,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
         <tbody id="predictBody"></tbody>
       </table>
     </div>
+    <div class="m-actbar m-only-bar"><button class="btn danger" onclick="Predict.removePicked()">선택 삭제</button><button class="btn ok" onclick="Predict.save()">예정량 저장</button></div>
   </div>
 </section>
 
@@ -691,7 +717,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
   <div class="panel" id="confirmMain">
     <div class="row between mb12">
       <h2>확정량 입력</h2>
-      <div class="row"><button class="btn light" onclick="Sync.run()" title="자동화시스템 시트와 재고수불대장을 비교해 빠진 출고 줄을 채우고, 확정량 차이를 맞춥니다">재고수불대장 맞추기</button><button class="btn light" onclick="Confirm.openAdd()">+ 행 추가 (급발주 등)</button><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn danger" onclick="Confirm.removeSelected()">선택 삭제</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
+      <div class="row"><button class="btn light" onclick="Sync.run()" title="자동화시스템 시트와 재고수불대장을 비교해 빠진 출고 줄을 채우고, 확정량 차이를 맞춥니다">재고수불대장 맞추기</button><button class="btn light" onclick="Confirm.openAdd()">+ 행 추가 (급발주 등)</button><button class="btn light" onclick="Confirm.exportExcel()">엑셀 다운로드</button><button class="btn danger m-nobar" onclick="Confirm.removeSelected()">선택 삭제</button><button class="btn ok m-nobar" onclick="Confirm.save()">확정량 저장</button></div>
     </div>
     <div id="closeBar" class="banner hidden"></div>
     <div class="buckets mb12" id="confirmStats"></div>
@@ -715,6 +741,7 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
       </table>
     </div>
     <div class="row mt8"><span class="muted" id="confirmSummary"></span></div>
+    <div class="m-actbar m-only-bar"><button class="btn danger" onclick="Confirm.removeSelected()">선택 삭제</button><button class="btn ok" onclick="Confirm.save()">확정량 저장</button></div>
   </div>
   <div class="panel hidden" id="confirmZone">
     <div class="row between mb12"><h2>권역별 출고</h2><div class="row"><button class="btn light" onclick="Zone.exportInvoice()">거래명세서 (물류비)</button><button class="btn light" onclick="Zone.exportExcel()">엑셀 다운로드 (물류사 전달용)</button></div></div>
