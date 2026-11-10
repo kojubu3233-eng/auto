@@ -116,9 +116,8 @@ tr.picked td { background:#FFFBEB !important; }
 .empty { padding:14px; color:var(--muted-2); font-size:12px; text-align:center; }
 .tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px; font-weight:700; }
 .tag.dec { background:#E9E7E1; color:var(--ink); } .tag.plan { background:var(--danger-soft); color:var(--plan); } .tag.conf { background:#E8EEFB; color:var(--conf); } .tag.done { background:var(--ok-soft); color:var(--ok); }
-.tag.carry { background:#EEE; color:#000; } .prod-box.due-box.soon { border-color:var(--warn); } .prod-box.due-box.past { border-color:var(--danger); } .prod-box.due-box.on { box-shadow:0 0 0 2px var(--ink) inset; }
+.tag.carry { background:#EEE; color:#000; }
 .tag.warn { background:var(--warn-soft); color:var(--warn); }
-tr.row-grey td { background:#F1F1EF !important; color:#9A9A94 !important; } tr.row-grey .tag { opacity:.6; }
 td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex;align-items:center;gap:3px;font-size:12px;white-space:nowrap;cursor:pointer;margin-left:4px}
 .reco-sel{font-size:13px;margin:6px 0 8px}.reco-sel .neg{color:#c0392b}
 .reco-rec{padding:10px 12px;border:1px solid var(--line,#ddd);border-radius:8px;margin-bottom:10px;background:#f6faf6}
@@ -171,7 +170,6 @@ td.warn-cell { color:var(--warn); font-weight:700; } .dec-cb{display:inline-flex
   #confirmBody td.c-plan{color:#111}
   #confirmBody input.c-confEa,#confirmBody input.c-confKg,#confirmBody td.o-sales{color:#DC2626;font-weight:800}
   #ldBody td:nth-child(4){font-weight:800}
-  #ldBody tr.row-grey td{background:#EEEDEA}
   .list-row{padding:10px 12px;border-bottom:1px solid #CFC9BA;font-size:14px}
   .list-row .l-name{font-size:14.5px}
   .list-row .l-sub{font-size:12.5px}
@@ -790,12 +788,6 @@ td input[type=text]:not([readonly]):focus, td input[type=number]:not([readonly])
     <div id="ledgerYearBanner" class="banner hidden"></div>
     <div class="row mb12"><span class="ac-wrap"><input type="text" id="ledgerSearch" autocomplete="off" placeholder="전체 품명 검색" style="width:200px"><span class="ac-list"></span></span><button class="btn hidden" id="ledgerBack" onclick="Ledger.goSheets()">← 대분류로 돌아가기</button><button class="btn light sm" onclick="Ledger.exportStock()">재고현황 엑셀</button><h2 id="ledgerCrumb"></h2></div>
     <div class="prod-grid" id="ledgerProducts"></div>
-  </div>
-  <div class="panel hidden" id="ledgerDue">
-    <div class="row between mb12"><h2 id="ldDueTitle"></h2>
-      <div class="row"><span id="ldDueCfg" class="row"><label class="lbl muted">임박 기준</label><input type="text" data-num id="ldDueDays" min="1" max="365" style="width:70px"><span class="muted">일</span><button class="btn sm" onclick="Ledger.saveDueDays()">저장</button></span><button class="btn light sm" onclick="Ledger.closeDue()">닫기</button></div></div>
-    <div class="table-wrap" style="max-height:480px"><table><thead><tr><th>대분류</th><th>품명</th><th>입고일</th><th>소비기한</th><th>납품기한</th><th>상태</th><th>잔량</th></tr></thead><tbody id="ldDueBody"></tbody></table></div>
-
   </div>
   <div class="panel hidden" id="ledgerDetail">
     <div class="row between mb12">
@@ -3068,19 +3060,13 @@ const Ledger = {
     const to = DF.mount($('ledgerTo'), 'l-to', '');
     to.placeholder = '이후 전체';
     [from, to].forEach(i => i.addEventListener('datechange', () => { Ledger.renderList(); if (Ledger.key) Ledger.renderDetail(); }));
-    $('ledgerSearch').addEventListener('input', debounce(() => { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.closeDue(true); Ledger.renderList(); }, 150));
+    $('ledgerSearch').addEventListener('input', debounce(() => { Ledger.key = null; $('ledgerDetail').classList.add('hidden'); Ledger.renderList(); }, 150));
     $('ledgerProducts').addEventListener('click', e => {
       const b = e.target.closest('.prod-box'); if (!b) return;
-      if (b.dataset.due) return Ledger.openDue(b.dataset.due);
-      if (b.dataset.sheet !== undefined) { Ledger.sheet = b.dataset.sheet; $('ledgerSearch').value = ''; Ledger.closeDue(true); Ledger.close(); }
+      if (b.dataset.sheet !== undefined) { Ledger.sheet = b.dataset.sheet; $('ledgerSearch').value = ''; Ledger.close(); }
       else Ledger.openProduct(b.dataset.key);
     });
     $('ledgerYear').addEventListener('change', e => Ledger.setYear(e.target.value));
-    $('ldDueBody').addEventListener('click', e => {
-      const tr = e.target.closest('tr[data-key]'); if (!tr) return;
-      const p = Ledger.d().byKey.get(tr.dataset.key); if (!p) return;
-      Ledger.closeDue(true); Ledger.sheet = p.sheet; Ledger.key = null; Ledger.openProduct(p.key);
-    });
     DF.mount($('ldAddDate'), 'ld-add-date', '');
     DF.mount($('ldAddExp'), 'ld-add-exp', '', 'future');
     $('ldAddDate').querySelector('input').placeholder = '일자';
@@ -3107,14 +3093,14 @@ const Ledger = {
     });
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape' || App.tab !== 'ledger' || e.target.classList?.contains('dinput')) return;
-      if (Ledger.editing) { Ledger.editing = null; Ledger.renderDetail(); } else if (Ledger.key) Ledger.close(); else if (Ledger.due) Ledger.closeDue();
+      if (Ledger.editing) { Ledger.editing = null; Ledger.renderDetail(); } else if (Ledger.key) Ledger.close();
     });
   },
   setPeriod(from, to) { DF.set(document.querySelector('.l-from'), from, true); DF.set(document.querySelector('.l-to'), to, true); },
   allPeriod() { DF.set(document.querySelector('.l-from'), ''); DF.set(document.querySelector('.l-to'), ''); },
   resetPeriod() { DF.set(document.querySelector('.l-from'), D.addMonths(D.today(), -3)); DF.set(document.querySelector('.l-to'), ''); },
   period() { return { from: DF.get(document.querySelector('.l-from')), to: DF.get(document.querySelector('.l-to')) }; },
-  goSheets() { Ledger.sheet = ''; $('ledgerSearch').value = ''; Ledger.closeDue(true); Ledger.close(); },
+  goSheets() { Ledger.sheet = ''; $('ledgerSearch').value = ''; Ledger.close(); },
 
   /* --- 연도 선택 --- */
   renderYears() {
@@ -3140,8 +3126,8 @@ const Ledger = {
     }
     Ledger.year = toCurrent ? null : y;
     if (toCurrent) Ledger.archive = null;
-    Ledger.key = null; Ledger.sheet = ''; Ledger.due = null; Ledger.editing = null;
-    $('ledgerSearch').value = ''; $('ledgerDetail').classList.add('hidden'); $('ledgerDue').classList.add('hidden');
+    Ledger.key = null; Ledger.sheet = ''; Ledger.editing = null;
+    $('ledgerSearch').value = ''; $('ledgerDetail').classList.add('hidden');
     Ledger.setPeriod('', '');
     Ledger.render();
   },
@@ -3149,50 +3135,7 @@ const Ledger = {
   render() {
     Ledger.renderYears();
     Ledger.renderList();
-    if (Ledger.due) Ledger.renderDue();
     if (Ledger.key) { if (Ledger.d().byKey.has(Ledger.key)) Ledger.renderDetail(); else Ledger.close(); }
-  },
-
-  /* --- 납품기한 임박·경과 --- */
-  dueLots() {
-    const t = D.today(), days = dueDays(), soon = [], past = [];
-    Ledger.d().standard().forEach(p => p.lots.forEach(l => {
-      if (!l.deadline) return;
-      const left = D.diff(l.deadline, t), x = { p, l, left };
-      if (left < 0) past.push(x); else if (left <= days) soon.push(x);
-    }));
-    const by = (a, b) => a.left - b.left;
-    return { soon: soon.sort(by), past: past.sort(by) };
-  },
-  openDue(kind) {
-    if (Ledger.due === kind) return Ledger.closeDue();
-    Ledger.due = kind; Ledger.key = null; $('ledgerDetail').classList.add('hidden');
-    Ledger.renderDue(); $('ledgerDue').classList.remove('hidden'); Ledger.renderList();
-    $('ledgerDue').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  },
-  closeDue(silent) {
-    Ledger.due = null; $('ledgerDue').classList.add('hidden');
-    if (!silent) Ledger.renderList();
-  },
-  renderDue() {
-    const kind = Ledger.due, list = Ledger.dueLots()[kind], days = dueDays();
-    const qty = list.reduce((s, x) => s + x.l.remain, 0);
-    $('ldDueTitle').textContent = (kind === 'soon' ? `납품기한 임박 (${days}일 이내)` : '납품기한 초과') + ` · ${list.length}건 · ${fmtN(qty)}개`;
-    $('ldDueCfg').classList.toggle('hidden', kind !== 'soon');
-    $('ldDueDays').value = days;
-    $('ldDueBody').innerHTML = list.map(({ p, l, left }) => `<tr class="editable" data-key="${esc(p.key)}"><td>${esc(p.sheet)}</td><td style="text-align:left;font-weight:600">${esc(p.name)}</td><td>${l.inDate ? D.short(l.inDate) : '-'}</td><td>${D.short(l.expiry)}</td><td>${D.short(l.deadline)}</td>
-      <td><span class="tag ${left < 0 ? 'danger' : 'warn'}">${left < 0 ? -left + '일 초과' : left + '일 남음'}</span></td><td class="num">${fmtN(l.remain)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">해당하는 재고가 없습니다</td></tr>';
-  },
-  async saveDueDays() {
-    const n = Math.round(Number($('ldDueDays').value));
-    if (!(n >= 1 && n <= 365)) return toast('임박 기준은 1~365일 사이로 입력하세요');
-    try {
-      const r = await Api.post('ledger', { action: 'saveSettings', dueSoonDays: n });
-      App.settings = r.settings || { dueSoonDays: n };
-      App.rendered.home = false;
-      Ledger.render();
-      toast(`납품기한 임박 기준을 ${n}일로 저장했습니다`);
-    } catch (e) { toast('저장 실패: ' + e.message, 5000); }
   },
 
   renderList() {
@@ -3202,10 +3145,8 @@ const Ledger = {
     $('ledgerBack').classList.toggle('hidden', showSheets);
     $('ledgerCrumb').textContent = kw ? '검색 결과' : Ledger.sheet;
     if (showSheets) {
-      const due = Ledger.dueLots(), sum = a => a.reduce((s, x) => s + x.l.remain, 0);
-      const dueBoxes = `<button class="prod-box cat-box due-box soon ${Ledger.due === 'soon' ? 'on' : ''}" data-due="soon"><div class="p-name">납품기한 임박</div><div class="p-stock">${fmtN(sum(due.soon))}개</div><div class="p-sub">${days}일 이내 · ${due.soon.length}건</div></button>`;
       const sheets = data.raw.sheets.map(s => s.sheet);
-      $('ledgerProducts').innerHTML = dueBoxes + sheets.map(s => {
+      $('ledgerProducts').innerHTML = sheets.map(s => {
         const ps = data.products.filter(p => p.sheet === s);
         const warn = ps.filter(p => p.nextDeadline && D.diff(p.nextDeadline, t) <= days).length;
         const planIn = ps.filter(p => p.planIn).length, planOut = ps.filter(p => p.planOut).length;
@@ -3264,6 +3205,7 @@ const Ledger = {
       const d = dateOf(o);
       if (from && d && d < from) { if (o.stock !== '') carry = o.stock; return; }
       if (to && d && d > to) return;
+      if (isExp(o)) return;   // 납품기한 초과(시트에서 뺀 건·초과출고)는 재고수불대장에 보이지 않고 홈·물류관리에서만 본다
       shown.push({ o, run: o.stock, counted: o.stock !== '' });
     });
     const ph = window.matchMedia('(max-width:760px)').matches;   // 휴대폰: 날짜를 짧게 (년도는 '2026년' 구분 줄에 나온다)
@@ -3279,7 +3221,7 @@ const Ledger = {
       const { o, run, counted } = item;
       const { soon } = Ledger.lotInfo(p, o, today, days);
       const gone = !!o.inQty && ACTUAL_IN.has(o.inSt) && !(p.lots || []).some(l => l.row === o);   // 입고 후 재고가 모두 나간 줄
-      const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + (p.expired.has(o) ? ' row-grey' : '');
+      const cls = (o.isOut && !o.isIn ? STATUS_CLASS[o.status] || '' : '') + '';
       const inNote = o.note ? `<div class="hint">${esc(o.note)}</div>` : '';
       const html = `<tr class="${cls}" data-i="${i}" style="cursor:pointer"><td>${esc(o.company || p.company)}</td><td style="text-align:left">${esc(o.name)}</td><td>${md(o.inDate)}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${md(l.d)}</div>`).join('') : ''}${inNote}</td><td class="num ${o.inQty && PLAN_IN.has(o.inSt) ? 'c-plan' : ''}">${o.inQty ? fmtN(o.inQty) : ''}${o.lotsArr ? o.lotsArr.slice(1).map(l => `<div>${fmtN(l.q)}</div>`).join('') : ''}</td>
         <td class="lexp-wrap">${!o.inQty ? '' : (gone ? `<span class="lexp-gone lexp-click" title="재고가 모두 나간 건입니다. 누르면 소비기한을 수정할 수 있습니다">${o.expiry ? xs(o.expiry) : '미입력'}</span>` : o.expiry ? `<span class="lexp-view">${xs(o.expiry)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')) + (o.lotsArr ? o.lotsArr.slice(1).map((l, k) => `<div class="lexp-lot" data-k="${k}">${l.e ? `<span class="lexp-view">${xs(l.e)} <button class="btn light lexp-edit" style="padding:0 6px;font-size:11px" title="물류에서 잘못 입력한 경우에만 수정">수정</button></span>` : DF.html('lexp', '', 'future')}</div>`).join('') : '')}</td><td>${md(o.outDate)}</td><td class="num">${o.outTotal ? fmtN(o.outTotal) : ''}</td><td class="num">${o.outMain ? fmtN(o.outMain) : ''}</td><td class="num">${o.outSample ? fmtN(o.outSample) : ''}</td>
@@ -4792,7 +4734,6 @@ const RowEdit = {
 };
 
 Busy.wrap(Ledger, 'saveOps', '재고수불대장 저장 중입니다');
-Busy.wrap(Ledger, 'saveDueDays', '저장 중입니다');
 Busy.wrap(Logi, 'saveOutGroup', '출고처리 중입니다');
 Busy.wrap(Logi, 'cancelOut', '출고처리 취소 중입니다');
 Busy.wrap(Logi, 'bulkOut', '일괄 출고처리 중입니다');
