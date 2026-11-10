@@ -395,16 +395,16 @@ tr.edit-row td { background:var(--row-editing) !important; }
   .m-wk { display:none; }
   [data-subpane="in"] .table-wrap, [data-subpane="out"] .table-wrap { margin:0 -10px; border:0; }
   #inPlanBody td, #outPlanBody td { font-size:12px; padding:0; min-width:0; }
-  #inPlanBody td[data-label]::before, #outPlanBody td[data-label]::before { display:none; }
+  #inPlanBody td[data-label]::before { display:none; }
   #inPlanBody .dpick, #outPlanBody .dpick { display:none; }
   #inPlanBody input[type=text], #outPlanBody input[type=text], #outPlanBody select { min-height:30px; padding:0 3px; font-size:12.5px; }
   #inPlanBody .dfield, #outPlanBody .dfield { width:100%; }
   #inPlanBody input.num, #outPlanBody input.num { text-align:right; }
   #inPlanBody input[type=checkbox], #outPlanBody input[type=checkbox], [data-subpane="in"] thead input[type=checkbox] { width:16px; height:16px; }
-  [data-subpane="in"] .m-card thead tr, [data-subpane="out"] .m-card thead tr { display:grid; gap:2px 3px; padding:5px 4px; background:var(--surface-alt); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
-  [data-subpane="in"] .m-card thead th, [data-subpane="out"] .m-card thead th { display:none; padding:0; font-size:11px; font-weight:600; color:var(--muted); text-align:center; white-space:nowrap; line-height:1.1; }
+  [data-subpane="in"] .m-card thead tr { display:grid; gap:2px 3px; padding:5px 4px; background:var(--surface-alt); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
+  [data-subpane="in"] .m-card thead th { display:none; padding:0; font-size:11px; font-weight:600; color:var(--muted); text-align:center; white-space:nowrap; line-height:1.1; }
   [data-subpane="in"] .m-card thead th:nth-child(6), [data-subpane="in"] .m-card thead th:nth-child(7) { white-space:normal; font-size:10.5px; }
-  [data-subpane="in"] .m-card thead th::after, [data-subpane="out"] .m-card thead th::after { content:none; }
+  [data-subpane="in"] .m-card thead th::after { content:none; }
 
   /* 입고: 1건 = 1줄 (품명 · 입고일 · 예정 · 입고수량 · 소비기한 · 납품기한 · 한 줄 추가) */
   [data-subpane="in"] .m-card thead tr, #inPlanBody tr.plan-main, #inPlanBody tr.plan-extra { grid-template-columns:16px minmax(0,1fr) 48px 32px 40px 46px 38px 18px; }
@@ -431,43 +431,49 @@ tr.edit-row td { background:var(--row-editing) !important; }
   #inPlanBody tr.plan-extra td:nth-child(6) { grid-column:6; } #inPlanBody tr.plan-extra td:nth-child(7) { grid-column:7; font-size:11px; } #inPlanBody tr.plan-extra td:nth-child(8) { grid-column:8; }
   #inPlanBody tr.plan-extra { background:var(--surface-alt); }
 
-  /* 출고: 납품 1건 = 2줄 (납품일·부대·품명·수량·본품·샘플 / 소비기한·출고수량·출고일·상태), 소비기한 추가 시 아래 줄이 더해짐 */
-  [data-subpane="out"] .m-card thead tr, #outPlanBody tr.out-line { grid-template-columns:22px minmax(0,1fr) 54px 40px 46px 42px; }
-  [data-subpane="out"] .m-led thead { display:block; }
-  [data-subpane="out"] .m-card thead th:nth-child(-n+11) { display:block; }
-  [data-subpane="out"] .m-card thead th:nth-child(1) { grid-column:1 / 3; grid-row:1; text-align:left; } [data-subpane="out"] .m-card thead th:nth-child(2) { grid-column:3 / 7; grid-row:1; text-align:left; }
-  [data-subpane="out"] .m-card thead th:nth-child(3) { grid-column:2; grid-row:2; text-align:left; } [data-subpane="out"] .m-card thead th:nth-child(11) { grid-column:3; grid-row:2; font-size:0; } [data-subpane="out"] .m-card thead th:nth-child(11)::after { content:"현재고"; font-size:11px; }
-  [data-subpane="out"] .m-card thead th:nth-child(4) { grid-column:4; grid-row:2; } [data-subpane="out"] .m-card thead th:nth-child(5) { grid-column:5; grid-row:2; } [data-subpane="out"] .m-card thead th:nth-child(6) { grid-column:6; grid-row:2; }
-  [data-subpane="out"] .m-card thead th:nth-child(10) { grid-column:1; grid-row:3; font-size:0; } [data-subpane="out"] .m-card thead th:nth-child(7) { grid-column:2 / 4; grid-row:3; text-align:left; }
-  [data-subpane="out"] .m-card thead th:nth-child(8) { grid-column:4 / 6; grid-row:3; } [data-subpane="out"] .m-card thead th:nth-child(9) { grid-column:6; grid-row:3; }
-  #outPlanBody tr.out-line { display:grid; gap:4px 3px; align-items:center; margin:0; padding:6px 4px; border:0; border-radius:0; background:var(--surface); }
-  #outPlanBody tr.out-grp { border-top:2px solid var(--border-strong); padding-top:8px; }
-  #outPlanBody tr.out-line:not(.out-grp) { padding-top:0; }
-  #outPlanBody tr.out-line td { grid-column:auto; }
-  #outPlanBody tr.out-line:not(.out-grp) td { grid-row:1; }
-  #outPlanBody tr.out-grp td:nth-child(1) { grid-column:1 / 3; grid-row:1; flex-direction:row; align-items:center; gap:6px; font-size:14px; font-weight:600; white-space:nowrap; }
-  #outPlanBody tr.out-grp td:nth-child(2) { grid-column:3 / 7; grid-row:1; display:flex !important; justify-content:flex-start !important; font-size:15px; font-weight:600; text-align:left !important; white-space:nowrap; overflow:hidden; }
+  /* 출고: 납품 1건 = 촘촘한 카드 (납품일·품명·부대·보유고 한 줄 / 수량·본품·샘플 / 소비기한·출고수량·출고일 줄 / 버튼) */
+  [data-subpane="out"] .m-card thead { display:none; }
+  #outPlanBody tr.out-line { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:4px 4px; align-items:center; margin:0; padding:6px 8px; border:0; border-radius:0; background:var(--surface); }
+  #outPlanBody tr.out-grp { border:1px solid var(--border) !important; border-bottom:0 !important; border-radius:10px 10px 0 0; padding-top:8px; }
+  #outPlanBody tr.out-line:not(.out-grp) { background:var(--surface-alt); border-left:1px solid var(--border); border-right:1px solid var(--border); padding-top:0; }
+  #outPlanBody tr.out-line td { grid-column:1 / -1; display:flex; flex-direction:row; align-items:center; gap:4px; }
+  #outPlanBody tr.out-line td input[type=text], #outPlanBody tr.out-line td select, #outPlanBody tr.out-line td .dfield input.dinput { min-height:34px; height:34px; font-size:13px; }
+  #outPlanBody tr.out-line td select { width:100%; padding:0 2px; }
+  #outPlanBody tr.out-line .dfield { flex:1; min-width:0; }
+  #outPlanBody tr.out-line .btn.sm { min-height:34px; padding:0 10px; font-size:13px; }
+  #outPlanBody tr.out-line .tag { font-size:10px; padding:1px 4px; }
+  #outPlanBody input.ogk { width:20px; height:20px; min-height:0 !important; margin:0; }
+  /* 1줄: [체크] 납품일 · 품명 · 부대 · 보유고 */
+  #outPlanBody tr.out-grp td:nth-child(1) { grid-column:1 / 4; grid-row:1; font-size:13px; font-weight:700; white-space:nowrap; }
   #outPlanBody tr.out-grp td:nth-child(3) { display:contents; }
-  #outPlanBody tr.out-grp td:nth-child(3) > .m-nm, #outPlanBody tr.out-grp td:nth-child(3) > .stock-now, #outPlanBody tr.out-grp td:nth-child(3) > .hint { grid-row:2; align-self:center; }
-  #outPlanBody tr.out-grp td:nth-child(3) > .m-nm { grid-column:2; font-size:13px; font-weight:600; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .m-nm { grid-column:4 / 8; grid-row:1; white-space:normal; font-size:13.5px; font-weight:700; line-height:1.2; }
+  #outPlanBody tr.out-grp td:nth-child(2) { grid-column:8 / 10; grid-row:1; font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .stock-now { grid-column:10 / 13; grid-row:1; margin:0; font-size:12.5px; font-weight:700; color:var(--accent); text-align:right; white-space:nowrap; }
+  #outPlanBody tr.out-grp td:nth-child(3) .sn-l { font-size:10.5px; font-weight:500; color:var(--muted); }
   #outPlanBody tr.out-grp td:nth-child(3) > .hint { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(3) > .stock-now { grid-column:3; margin:0; font-size:12px; font-weight:600; color:var(--accent); text-align:right; white-space:nowrap; }
-  #outPlanBody tr.out-grp td:nth-child(3) .sn-l { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(3) > .tag { grid-column:3 / 7; grid-row:1; justify-self:end; font-size:10px; }
-  #outPlanBody tr.out-grp td:nth-child(4) { grid-column:4; grid-row:2; align-self:center; font-size:13px; font-weight:600; text-align:right !important; }
-  #outPlanBody tr.out-grp td:nth-child(5) { grid-column:5; grid-row:2; } #outPlanBody tr.out-grp td:nth-child(6) { grid-column:6; grid-row:2; }
-  #outPlanBody tr.out-grp td:nth-child(10) { grid-column:1; grid-row:3; } #outPlanBody tr.out-grp td:nth-child(7) { grid-column:2 / 4; grid-row:3; }
-  #outPlanBody tr.out-grp td:nth-child(8) { grid-column:4 / 6; grid-row:3; } #outPlanBody tr.out-grp td:nth-child(9) { grid-column:6; grid-row:3; }
-  #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { grid-column:1; } #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { grid-column:2 / 4; }
-  #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { grid-column:4 / 6; } #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { grid-column:6; }
-  #outPlanBody tr.out-line td:nth-child(10) , #outPlanBody tr.out-line:not(.out-grp) td:nth-child(4) { flex-direction:row; justify-content:center; align-items:center; }
-  #outPlanBody tr.out-line td select { font-size:11.5px; padding:0 1px; }
-  #outPlanBody tr.out-line td:nth-child(9) input.dinput, #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) input.dinput { font-size:11.5px; padding:0 2px; }
-  #outPlanBody tr.out-line .tag.plan { display:none; }
-  #outPlanBody tr.out-line .tag { font-size:10px; padding:1px 3px; }
-  #outPlanBody tr.out-line td .btn.sm { padding:0; width:28px; height:28px; min-height:0; }
-  #outPlanBody tr.out-act { margin:0; padding:2px 4px 8px; background:var(--surface) !important; border:0; border-bottom:1px solid var(--border); }
-  #outPlanBody tr.out-act .btn { min-height:34px; font-size:13px; }
+  #outPlanBody tr.out-grp td:nth-child(3) > .tag { grid-column:1 / -1; grid-row:2; justify-self:start; }
+  /* 2줄: 수량(계) · 본품 · 샘플 */
+  #outPlanBody tr.out-grp td:nth-child(4) { grid-column:1 / 5; grid-row:3; font-size:13px; }
+  #outPlanBody tr.out-grp td:nth-child(5), #outPlanBody tr.out-grp td:nth-child(6) { grid-row:3; font-size:12.5px; }
+  #outPlanBody tr.out-grp td:nth-child(5) { grid-column:5 / 9; } #outPlanBody tr.out-grp td:nth-child(6) { grid-column:9 / 13; }
+  #outPlanBody tr.out-grp td:nth-child(4)::before { content:"수량"; } #outPlanBody tr.out-grp td:nth-child(5)::before { content:"본품"; } #outPlanBody tr.out-grp td:nth-child(6)::before { content:"샘플"; }
+  #outPlanBody tr.out-grp td:nth-child(5) input, #outPlanBody tr.out-grp td:nth-child(6) input { width:100% !important; flex:1; min-width:0; text-align:right; }
+  /* 소비기한 줄: 소비기한(잔량) · 출고수량 · 출고일 · ✕ (추가한 줄도 같은 모양) */
+  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(1) { grid-column:1 / 7; }
+  #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(2) { grid-column:7 / 9; }
+  #outPlanBody tr.out-grp td:nth-child(9), #outPlanBody tr.out-line:not(.out-grp) td:nth-child(3) { grid-column:9 / 13; }
+  #outPlanBody tr.out-grp td:nth-child(7), #outPlanBody tr.out-grp td:nth-child(8), #outPlanBody tr.out-grp td:nth-child(9) { grid-row:4; }
+  #outPlanBody tr.out-line td input.oq { width:100% !important; text-align:right; }
+  #outPlanBody tr.out-line td::before { font-size:10.5px; font-weight:600; color:var(--muted-2); text-align:left; }
+  #outPlanBody tr.out-grp td:nth-child(1)::before, #outPlanBody tr.out-grp td:nth-child(2)::before, #outPlanBody tr.out-grp td:nth-child(3)::before, #outPlanBody tr.out-grp td.m-tail::before, #outPlanBody tr.out-grp td:nth-child(7)::before, #outPlanBody tr.out-grp td:nth-child(8)::before, #outPlanBody tr.out-grp td:nth-child(9)::before { content:none; }
+  #outPlanBody tr.out-line td .dfield .dpick { display:none; }
+  #outPlanBody tr.out-line td .dfield input.dinput { width:100%; }
+  #outPlanBody tr.out-line td > .btn[data-act=delline] { flex:0 0 28px; padding:0; min-height:34px; }
+  #outPlanBody tr.out-grp td.m-tail { display:none !important; }
+  /* 버튼: 카드 맨 아래 */
+  #outPlanBody tr.out-act { display:block !important; margin:0 !important; padding:6px 8px 8px; background:var(--surface) !important; border:1px solid var(--border); border-top:0; border-radius:0 0 10px 10px; }
+  #outPlanBody tr.out-act td { display:flex; flex-direction:row; gap:6px; padding:0; }
+  #outPlanBody tr.out-act .btn { flex:1; min-height:38px; font-size:13.5px; font-weight:600; }
   #outPlanBody tr.out-line.dirty, #outPlanBody tr.out-line.dirty td { background:var(--row-editing) !important; }
 
   /* 재고수불대장 상세: 카드 대신 PC와 같은 표 (한 화면 폭에 맞춰 열을 줄이고 글자를 작게) */
@@ -519,30 +525,6 @@ tr.edit-row td { background:var(--row-editing) !important; }
   #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(7)::before { content:"예정"; }
   #confirmTable tbody tr[data-id]:not(.m-open):not(.editing) > td:nth-child(9)::before { content:"확정"; }
   #confirmTable tbody tr.m-open { border:2px solid var(--accent); }
-  /* 물류관리 출고 머리: [체크] 납품일 · 부대 를 한 줄로 */
-  #outPlanBody tr.out-grp td:nth-child(1), #outPlanBody tr.out-grp td:nth-child(2) { align-self:center; }
-  #outPlanBody tr.out-grp td:nth-child(1) { flex-direction:row; align-items:center; gap:6px; }
-  #outPlanBody tr.out-grp td:nth-child(1)::before, #outPlanBody tr.out-grp td:nth-child(2)::before { display:none; }
-  #outPlanBody tr.out-grp td:nth-child(1) { min-width:0; overflow:hidden; } #outPlanBody tr.out-grp td:nth-child(1) .dfield { width:auto; flex:1; min-width:0; } #outPlanBody tr.out-grp td:nth-child(2) { text-align:right !important; }
-
-  /* 출고 줄 형식: 카드 테두리·여백 없이 줄로 이어 붙이고, 처리·추가 버튼은 첫 줄 오른쪽에 작게 */
-  #outPlanBody tr.out-line { padding:5px 4px 3px; gap:3px; align-items:center; grid-auto-rows:auto; }
-  #outPlanBody tr.out-grp { border-top:1px solid var(--border-heavy) !important; grid-template-rows:24px 28px 28px; padding:5px 4px 4px; gap:2px 3px; }
-  #outPlanBody tr.out-line td input[type=text], #outPlanBody tr.out-line td select, #outPlanBody tr.out-line td .dfield input.dinput { min-height:26px !important; height:26px !important; padding-top:0 !important; padding-bottom:0 !important; font-size:12.5px; }
-  #outPlanBody tr.out-line td .dfield .dpick { display:none; }
-  #outPlanBody tr.m-dfirst::before { display:none !important; } #outPlanBody tr.m-dfirst { margin-top:0 !important; }
-  #outPlanBody tr.out-grp td:nth-child(1) { font-size:13px; }
-  #outPlanBody tr.out-grp td:nth-child(2) { grid-column:3 / 5; justify-content:flex-start !important; text-align:left !important; font-size:12.5px; }
-  #outPlanBody tr.out-grp td:nth-child(3) > .m-nm { font-size:13px; line-height:1.25; min-height:0; }
-  #outPlanBody input.ogk { width:20px; height:20px; min-height:0 !important; margin:0; }
-  #outPlanBody tr.out-act { display:none !important; }
-  #outPlanBody tr.out-grp td.m-tail { display:flex !important; grid-column:5 / 7; grid-row:1; flex-direction:row; justify-content:flex-end; align-items:center; gap:4px; padding:0; }
-  #outPlanBody tr.out-grp td.m-tail br, #outPlanBody tr.out-grp td.m-tail .hint { display:none; }
-  #outPlanBody tr.out-grp td.m-tail .btn { font-size:0 !important; padding:0 !important; min-width:0; min-height:24px; height:24px; margin:0 !important; }
-  #outPlanBody tr.out-grp td.m-tail .btn::before { font-size:12px; font-weight:600; }
-  #outPlanBody tr.out-grp td.m-tail .btn[data-act=save] { width:46px; } #outPlanBody tr.out-grp td.m-tail .btn[data-act=save]::before { content:"처리"; }
-  #outPlanBody tr.out-grp td.m-tail .btn[data-act=cancel] { width:46px; } #outPlanBody tr.out-grp td.m-tail .btn[data-act=cancel]::before { content:"취소"; }
-  #outPlanBody tr.out-grp td.m-tail .btn[data-act=addline] { width:30px; } #outPlanBody tr.out-grp td.m-tail .btn[data-act=addline]::before { content:"＋"; font-size:15px; }
 
   /* 원가관리 머리: 제목·버튼 한 줄, 요약 글은 아래 줄 (좌우가 잘리지 않게) */
   #tab-cost .panel > .row.between { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px 8px; align-items:center; }
