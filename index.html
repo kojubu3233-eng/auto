@@ -13,7 +13,7 @@
   --border:#E6E3DE; --border-soft:#EFEDE9; --border-strong:#D6D2CB; --border-heavy:#A8A29A; --border-control:#A8A29A;
   --brand:#FF6700; --brand-hover:#E55C00; --brand-soft:#FFF1E6;
   --accent:var(--brand); --accent-soft:rgba(255,103,0,.09); --accent-soft-2:rgba(255,103,0,.20);
-  --edit:#B9B4AC; --edit-soft:#FFFFFF;
+  --edit:#E2BF9F; --edit-soft:#FFF3E8;
   --ok:#3F7A50; --ok-soft:#EEF5EF; --ok-line:#CFDFD2;
   --warn:#946200; --warn-soft:#FFF6E0; --warn-line:#EBD6A8;
   --danger:#B3261E; --danger-soft:#FCEFEC; --danger-line:#EEC9C3;
@@ -666,7 +666,7 @@ input[type=checkbox], input[type=radio] { accent-color:#111; }
 .header h1 { display:flex; align-items:center; gap:10px; font-size:18px; letter-spacing:-.3px; color:var(--chrome-ink); }
 .brand-mark { width:30px; height:30px; border-radius:9px; background:var(--brand); display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(255,255,255,.12); }
 .brand-mark svg { width:18px; height:18px; }
-.header .edit-legend { color:var(--chrome-muted); } .header .edit-swatch { border-color:#8A8A8A; background:transparent; }
+.header .edit-legend { color:var(--chrome-muted); } .header .edit-swatch { border-color:#E2BF9F; background:#FFF3E8; }
 #syncState { font-size:12px; padding:3px 10px; border-radius:999px; background:var(--chrome-2); border:1px solid var(--chrome-line); color:var(--chrome-muted); } #syncState:empty { display:none; }
 .header .btn.light { background:var(--chrome-2); color:var(--chrome-ink); border-color:var(--chrome-line); box-shadow:none; } .header .btn.light:hover { background:var(--chrome-2); }
 .header .tab-bar { flex-basis:100%; margin:4px -20px 0; padding:0 12px; border-bottom:0; border-top:1px solid var(--chrome-line); gap:2px; }
@@ -758,7 +758,7 @@ input:focus, select:focus { border-color:#111 !important; box-shadow:0 0 0 2px r
 <body>
 <div class="panel header">
   <h1><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8-5 8 5v10H4z"/><path d="M9 19v-5h6v5"/></svg></span>자동화시스템</h1>
-  <div class="row"><span class="edit-legend"><i class="edit-swatch"></i>진한 테두리 칸 = 입력·수정하는 칸</span><span id="syncState" class="muted"></span><button class="btn light sm" onclick="App.reload(true)">새로고침</button></div>
+  <div class="row"><span class="edit-legend"><i class="edit-swatch"></i>연한 주황 칸 = 입력·수정하는 칸</span><span id="syncState" class="muted"></span><button class="btn light sm" onclick="App.reload(true)">새로고침</button></div>
   <nav class="tab-bar" id="tabBar">
   <button class="tab-btn active" data-tab="home">홈</button>
   <button class="tab-btn" data-tab="predict">예정량 입력</button>
