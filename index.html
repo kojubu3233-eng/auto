@@ -195,6 +195,11 @@ td.warn-cell { color:var(--warn); font-weight:600; } .dec-cb{display:inline-flex
   #predictTable tbody input[type=text],#predictTable tbody select{height:34px;box-sizing:border-box}
   #predictTable .meal-col .meal-list,#predictTable .meal-col .g-addmeal{display:inline-block;vertical-align:middle}
   #predictTable .meal-col{white-space:nowrap}
+  #predictTable tbody td{vertical-align:top}
+  #predictTable .mealx,#predictTable .basex,#predictTable .hcx{display:flex;align-items:center;gap:2px;min-height:34px;margin-bottom:3px}
+  #predictTable .meal-col .meal-list{display:block}
+  #predictTable .base-list input,#predictTable .hc-list input{width:100%;min-width:0}
+  #predictTable td .g-addbase,#predictTable td .g-addmeal{white-space:nowrap}
   .lexp-click{cursor:pointer;color:var(--muted-2);text-decoration:underline dotted;text-underline-offset:3px}
 }
 .fin-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.fin-kpis.fin-4{grid-template-columns:repeat(4,1fr)}
@@ -2311,7 +2316,7 @@ const Predict = {
     document.addEventListener('visibilitychange', () => { if (document.hidden) Predict.saveDraft(true); });
     window.addEventListener('pagehide', () => Predict.saveDraft(true));
     document.querySelectorAll('input[name=dateBasis]').forEach(r => r.addEventListener('change', () => { $('dateHead').textContent = Predict.basis() === 'delivery' ? '납품일' : '급식일'; Predict.applyBasis(); Predict.calcAll(); Predict.saveDraft(); }));
-    body.addEventListener('click', e => { const b = e.target.closest('.g-addmeal'); if (b) return Predict.addMealDate(b.closest('tr')); const x = e.target.closest('.g-delmeal'); if (x) { const tr = x.closest('tr'); x.closest('.mealx').remove(); Predict.queue(tr); Predict.saveDraft(); } });
+    body.addEventListener('click', e => { const b = e.target.closest('.g-addmeal'); if (b) return Predict.addMealDate(b.closest('tr')); const x = e.target.closest('.g-delmeal'); if (x) { const tr = x.closest('tr'); x.closest('.mealx').remove(); Predict.queue(tr); Predict.saveDraft(); return; } const ab = e.target.closest('.g-addbase'); if (ab) return Predict.addBaseEntry(ab.closest('tr')); const xb = e.target.closest('.g-delbase'); if (xb) { const tr = xb.closest('tr'), bx = xb.closest('.basex'), i = [...tr.querySelectorAll('.basex')].indexOf(bx); bx.remove(); const hx = tr.querySelectorAll('.hcx')[i]; if (hx) hx.remove(); Predict.queue(tr); Predict.saveDraft(); } });
     $('predictAll').addEventListener('change', e => body.querySelectorAll('.pick').forEach(c => { c.checked = e.target.checked; c.closest('tr').classList.toggle('picked', c.checked); }));
     AC.bind($('pickedUnit'), AC.units);
     AC.bind($('plgUnit'), AC.units, PlanLog.show); AC.bind($('plgName'), AC.products, PlanLog.show); DF.mount($('plgDate'), 'plg-date', '');
@@ -2336,8 +2341,8 @@ const Predict = {
       <td class="ac-wrap"><input type="text" class="g-unit" value="${esc(lastUnit)}" autocomplete="off" placeholder="부대"><span class="ac-list"></span></td>
       <td class="ac-wrap"><input type="text" class="g-name" autocomplete="off" placeholder="품명"><span class="ac-list"></span></td>
       <td><input type="text" class="g-cat" placeholder="자동"></td>
-      <td class="person-only ${person ? '' : 'hidden'}"><input type="text" data-num class="g-base" placeholder="g"></td>
-      <td class="person-only ${person ? '' : 'hidden'}"><input type="text" data-num class="g-hc num" placeholder="인원"></td>
+      <td class="person-only ${person ? '' : 'hidden'}"><div class="base-list"><span class="basex"><input type="text" data-num class="g-base" placeholder="g"></span></div><button type="button" class="btn sm light g-addbase ${Predict.basis() === 'delivery' ? '' : 'hidden'}" style="white-space:nowrap" title="같은 납품일·품목에 기준량이 다른 급식일을 하나 더 적습니다 (기준량이 다르면 확정량 입력에 따로 한 줄씩 생깁니다)">+ 기준량</button></td>
+      <td class="person-only ${person ? '' : 'hidden'}"><div class="hc-list"><span class="hcx"><input type="text" data-num class="g-hc num" placeholder="인원"></span></div></td>
       <td class="total-only ${person ? 'hidden' : ''}"><input type="text" data-num class="g-total num"></td>
       <td><select class="g-utype"><option value="kg">kg</option><option value="ea">ea</option></select></td>
       <td><input type="text" data-num class="g-spec num" value="1" step="any"></td>
@@ -2359,20 +2364,29 @@ const Predict = {
     sp.innerHTML = DF.html('g-meal', '') + '<button type="button" class="btn sm light g-delmeal" title="이 급식일 삭제">✕</button>'; list.appendChild(sp);
     sp.querySelector('.g-meal').focus(); Predict.queue(tr); Predict.saveDraft();
   },
+  // 기준량을 하나 더 적는다 (기준량·급식인원·급식일은 같은 순서끼리 짝: 1번째 기준량=1번째 급식일). 기준량이 서로 다르면 확정량 입력에 따로 한 줄씩 생긴다
+  addBaseEntry(tr, silent) {
+    const bl = tr.querySelector('.base-list'), hl = tr.querySelector('.hc-list'), b = document.createElement('span'), h = document.createElement('span'); b.className = 'basex'; h.className = 'hcx';
+    b.innerHTML = `<input type="text" data-num class="g-base" placeholder="${tr.querySelector('.g-utype').value === 'kg' ? 'g' : 'ea'}"><button type="button" class="btn sm light g-delbase" title="이 기준량 삭제">✕</button>`; bl.appendChild(b);
+    h.innerHTML = '<input type="text" data-num class="g-hc num" placeholder="인원">'; hl.appendChild(h);
+    if (silent) return;
+    if (Predict.basis() === 'delivery' && tr.querySelectorAll('.g-meal').length < bl.children.length) Predict.addMealDate(tr);
+    b.querySelector('.g-base').focus(); Predict.queue(tr); Predict.saveDraft();
+  },
   // 시트 급식일 칸에 넣을 글자: 하나면 날짜 그대로, 여러 날이면 '7일,8일' (달이 다르면 '10월 31일,11월 1일')
   mealCell(list) {
     if (list.length < 2) return list[0] || '';
     const ym = list[0].slice(0, 7), same = list.every(x => x.slice(0, 7) === ym);
     return list.map(x => same ? `${+x.slice(8)}일` : `${+x.slice(5, 7)}월 ${+x.slice(8)}일`).join(',');
   },
-  applyBasis() { const d = Predict.basis() === 'delivery'; document.querySelectorAll('#predictTable .meal-col').forEach(el => el.classList.toggle('hidden', !d)); },
+  applyBasis() { const d = Predict.basis() === 'delivery'; document.querySelectorAll('#predictTable .meal-col').forEach(el => el.classList.toggle('hidden', !d)); document.querySelectorAll('#predictTable .g-addbase').forEach(el => el.classList.toggle('hidden', !d)); },
   // 샘플 기본값: 국·탕류는 0, 그 외 1kg 이하 제품은 1, 1kg 초과는 0 (출고 입력 시 직접 바꿀 수 있음)
   sample(lp, name) {
     const p = Names.product(name) || lp.product;
     if (/국.?탕/.test(lp.sheet) || /국.?탕/.test((p && p.category) || '')) return 0;
     return p && Number(p.pack) <= 1 ? 1 : 0;
   },
-  baseHint(tr) { tr.querySelector('.g-base').placeholder = tr.querySelector('.g-utype').value === 'kg' ? 'g' : 'ea'; },
+  baseHint(tr) { const ph = tr.querySelector('.g-utype').value === 'kg' ? 'g' : 'ea'; tr.querySelectorAll('.g-base').forEach(e => { e.placeholder = ph; }); },
   onUnit(tr) {
     const inp = tr.querySelector('.g-unit'); inp.value = Names.matchUnit(inp.value);
     const known = Names.unitMap.has(inp.value) || Hist.units().includes(inp.value);
@@ -2408,40 +2422,54 @@ const Predict = {
     const q = c => tr.querySelector('.' + c);
     const date = DF.get(q('g-date'));
     q('g-badge').innerHTML = Holidays.badge(date);
-    const unit = normUnit(q('g-unit').value), name = q('g-name').value.trim();
-    const mealsIn = Predict.basis() === 'delivery' ? Predict.meals(tr) : [], mealAuto = Predict.basis() === 'delivery' && date ? Names.counterpart(unit, date, 'delivery') : '';
+    const unit = normUnit(q('g-unit').value), name = q('g-name').value.trim(), delivery = Predict.basis() === 'delivery';
+    const mealsIn = delivery ? Predict.meals(tr) : [], mealAuto = delivery && date ? Names.counterpart(unit, date, 'delivery') : '';
     q('g-mealauto').textContent = mealsIn.length ? '' : (mealAuto ? '자동 ' + D.short(mealAuto) : '');
-    const utype = q('g-utype').value, spec = num(q('g-spec').value) || 1;
-    let req, needHc = false, hcNote = '';
-    const set = (cls, v) => { const el = q(cls); el.textContent = v === null ? '-' : fmtN(v, 1); el.title = ''; };
-    if (Predict.mode() === 'person') {
-      const hcIn = q('g-hc');
-      const mealList = Predict.basis() === 'meal' ? [date] : (mealsIn.length ? mealsIn : [mealAuto || date]);
-      const hcs = mealList.map(m => Names.headcount(unit, m)), auto = hcs.some(Boolean) ? hcs.reduce((a, b) => a + (b || 0), 0) : null;   // 급식일이 여러 날이면 날짜별 급식인원을 합산
+    const utype = q('g-utype').value, spec = num(q('g-spec').value) || 1, div = utype === 'ea' ? 1 : spec, pack = Names.product(name)?.pack, os = q('o-simple');
+    const setOs = (txt, title) => { os.textContent = txt; os.title = title || ''; };
+    const fin = (req, g) => ({ ...g, total: Math.round(req * 100) / 100, simple: Math.round(req / div), simpleD: Math.round(req / div * 10) / 10, simpleKg: utype === 'kg' ? Math.round(req) : (pack ? Math.round(req * pack) : null) });
+    delete tr.dataset.ready; tr._groups = [];
+    tr.querySelectorAll('.g-base').forEach(e => e.classList.remove('invalid'));
+    if (Predict.mode() !== 'person') {   // 총소요량을 직접 입력하는 방식
+      tr.querySelectorAll('.g-hc').forEach(e => e.classList.remove('invalid'));
+      const req = num(q('g-total').value) || 0;
+      if (!name || req <= 0) return setOs('-');
+      tr._groups = [fin(req, { base: null, hc: null, meals: mealsIn })];
+    } else {
+      // 기준량 × 급식인원: 기준량을 여러 개 적으면(급식일과 같은 수) 짝지어 계산하고, 기준량이 같은 것끼리는 한 건으로 합친다
+      const baseEls = [...tr.querySelectorAll('.g-base')], hcEls = [...tr.querySelectorAll('.g-hc')], k = baseEls.length, split = k > 1;
+      const mealAll = delivery ? (mealsIn.length ? mealsIn : [mealAuto || date]) : [date];
       const kindOf = m => ({ WORK: '평일', SAT: '토요일', HOLI: D.isIso(m) && D.toDate(m).getDay() === 0 ? '일요일' : '공휴일' }[Holidays.kind(m)] || '');
-      const autoNote = auto ? `급식일 ${mealList.map((m, i) => `${D.short(m)} ${kindOf(m)}${hcs[i] ? ' ' + fmtN(hcs[i]) + '명' : ''}`).join(' + ')} = ${fmtN(auto)}명 (${unit} 부대별정보)` : `${unit || '부대'}의 식수인원이 부대별정보에 없습니다. 직접 입력하세요`;
-      if (hcIn.dataset.manual !== '1') hcIn.value = auto ?? '';
-      const hc = num(hcIn.value) || 0;
-      hcIn.title = hcIn.dataset.manual === '1' ? `직접 입력값 (자동값: ${auto ? fmtN(auto) + '명' : '없음'}). 지우면 자동값으로 돌아갑니다` : autoNote;
-      hcNote = hc ? `급식인원 ${fmtN(hc)}명${hcIn.dataset.manual === '1' ? '(직접 입력)' : ''}` : '';
-      tr.dataset.hc = hc;
-      const base = num(q('g-base').value) || 0;
-      needHc = base > 0 && !hc;
-      req = base * hc / (utype === 'kg' ? 1000 : 1);
-      q('g-total').value = req ? Math.round(req * 100) / 100 : '';
-    } else req = num(q('g-total').value) || 0;
-    delete tr.dataset.ready;
+      const ent = baseEls.map((bEl, i) => {
+        const hcIn = hcEls[i], ml = split ? [mealsIn[i]].filter(Boolean) : mealAll, hcs = ml.map(m => Names.headcount(unit, m)), auto = hcs.some(Boolean) ? hcs.reduce((a, b) => a + (b || 0), 0) : null;   // 급식일이 여러 날이면 날짜별 급식인원을 합산
+        const autoNote = auto ? `급식일 ${ml.map((m, j) => `${D.short(m)} ${kindOf(m)}${hcs[j] ? ' ' + fmtN(hcs[j]) + '명' : ''}`).join(' + ')} = ${fmtN(auto)}명 (${unit} 부대별정보)` : `${unit || '부대'}의 식수인원이 부대별정보에 없습니다. 직접 입력하세요`;
+        if (hcIn.dataset.manual !== '1') hcIn.value = auto ?? '';
+        const hc = num(hcIn.value) || 0;
+        hcIn.title = hcIn.dataset.manual === '1' ? `직접 입력값 (자동값: ${auto ? fmtN(auto) + '명' : '없음'}). 지우면 자동값으로 돌아갑니다` : autoNote;
+        const base = num(bEl.value) || 0;
+        hcIn.classList.toggle('invalid', base > 0 && !hc);
+        return { base, hc, hcIn, manual: hcIn.dataset.manual === '1', meals: split ? ml : mealsIn };
+      });
+      if (split && (!delivery || mealsIn.length !== k)) {
+        baseEls.forEach(e => e.classList.add('invalid'));
+        return setOs('개수 확인', delivery ? `기준량 ${k}개 ↔ 급식일 ${mealsIn.length}개: 기준량을 둘 이상 적으면 급식일도 같은 수로 적어 순서대로 짝을 맞추세요 (1번째 기준량=1번째 급식일)` : '급식일 기준에서는 기준량을 하나만 적을 수 있습니다');
+      }
+      if (split && ent.some(e => !(e.base > 0))) { baseEls.forEach((e, i) => e.classList.toggle('invalid', !(ent[i].base > 0))); return setOs('기준량 입력'); }
+      const need = ent.find(e => e.base > 0 && !e.hc);
+      if (need) return setOs('인원 입력', need.hcIn.title);
+      const gm = new Map();
+      ent.forEach(e => { if (!(e.base > 0)) return; const g = gm.get(e.base) || { base: e.base, hc: 0, req: 0, meals: [], manual: false }; g.hc += e.hc; g.req += e.base * e.hc / (utype === 'kg' ? 1000 : 1); g.meals.push(...e.meals); g.manual = g.manual || e.manual; gm.set(e.base, g); });
+      const gs = [...gm.values()], all = gs.reduce((a, g) => a + g.req, 0);
+      q('g-total').value = all ? Math.round(all * 100) / 100 : '';
+      if (!name || all <= 0) return setOs('-');
+      tr._groups = gs.map(g => ({ ...fin(g.req, { base: g.base, hc: g.hc, meals: [...new Set(g.meals)] }), manual: g.manual }));
+    }
+    const gs = tr._groups; tr.dataset.ready = '1';
+    const kgTxt = g => g.simpleKg === null ? '-' : fmtN(g.simpleKg) + '<span class="u">kg</span>';
+    os.innerHTML = gs.map(g => `<div class="s-ea">${fmtN(g.simple)}<span class="u">ea</span></div><div class="s-kg">${kgTxt(g)}</div>`).join('');
+    if (gs.length > 1) { os.title = gs.map(g => `${fmtN(g.base)}${utype === 'kg' ? 'g' : '개'} × ${fmtN(g.hc)}명 = ${fmtN(g.simple)}ea`).join('\n') + '\n(기준량이 달라 확정량 입력에 따로 저장됩니다)'; return; }
+    const g = gs[0], req = g.total, hcNote = g.hc ? `급식인원 ${fmtN(g.hc)}명${g.manual ? '(직접 입력)' : ''}` : '';
     q('g-total').title = hcNote;
-    q('g-hc').classList.toggle('invalid', needHc);
-    if (needHc) { q('o-simple').textContent = '인원 입력'; q('o-simple').title = q('g-hc').title; return; }
-    if (!name || req <= 0) { set('o-simple', null); return; }
-    const div = utype === 'ea' ? 1 : spec;
-    const simple = Math.round(req / div);
-    const pack = Names.product(name)?.pack;
-    const simpleKg = utype === 'kg' ? Math.round(req) : (pack ? Math.round(req * pack) : null);
-    tr.dataset.simple = simple; tr.dataset.simpleD = Math.round(req / div * 10) / 10; tr.dataset.simpleKg = simpleKg ?? ''; tr.dataset.ready = '1';
-    const os = q('o-simple');
-    os.innerHTML = `<div class="s-ea">${fmtN(simple)}<span class="u">ea</span></div><div class="s-kg">${simpleKg === null ? '-' : fmtN(simpleKg) + '<span class="u">kg</span>'}</div>`;
     os.title = `${utype === 'kg' ? `총소요량 ${fmtN(req, 2)}kg ÷ 포장규격 ${spec}kg` : `총소요량 ${fmtN(req)}ea`} (반올림)` + (hcNote ? ' · ' + hcNote : '');
   },
   // 기준량 × 급식인원으로 계산해 입력한 건은 그 값을 '산출근거' 칸(비고와 별도)에 남겨 확정량 입력의 예정량에 마우스를 올리면 보이게 한다
@@ -2457,15 +2485,16 @@ const Predict = {
     const eaF = `ROUND(${r.base}*${r.hc}${isKg ? '/1000' : ''}${div !== 1 ? '/' + div : ''})`;
     return [`=${eaF}`, mul === 1 ? `=${eaF}` : `=ROUND(${eaF}*${mul},2)`];
   },
+  // 한 줄이 여러 건이 될 수 있다 (기준량이 다르면 건마다 따로). 반환: 건 목록
   rowData(tr) {
     const q = c => tr.querySelector('.' + c);
-    const name = q('g-name').value.trim(); if (!name || tr.dataset.ready !== '1') return null;
-    const qty = num(tr.dataset.simple);
-    return {
-      tr, date: DF.get(q('g-date')), meals: Predict.basis() === 'delivery' ? Predict.meals(tr) : [], unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
-      total: num(q('g-total').value), base: Predict.mode() === 'person' ? num(q('g-base').value) : null, hc: Predict.mode() === 'person' ? num(tr.dataset.hc) : null, utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
-      simple: num(tr.dataset.simpleD), simpleKg: num(tr.dataset.simpleKg), qty
-    };
+    const name = q('g-name').value.trim(); if (!name || tr.dataset.ready !== '1') return [];
+    const person = Predict.mode() === 'person';
+    return (tr._groups || []).map((g, gi) => ({
+      tr, gi, date: DF.get(q('g-date')), meals: g.meals, unit: normUnit(q('g-unit').value), name, cat: q('g-cat').value.trim(),
+      total: g.total, base: person ? g.base : null, hc: person ? g.hc : null, utype: q('g-utype').value, spec: num(q('g-spec').value) || 1,
+      simple: g.simpleD, simpleKg: g.simpleKg, qty: g.simple
+    }));
   },
   // 입력한 내용 전체 지우기 (임시저장도 함께 삭제)
   clearAll() {
@@ -2481,9 +2510,9 @@ const Predict = {
       const q = (tr, c) => tr.querySelector('.' + c);
       const rows = [...document.querySelectorAll('#predictBody tr')].map(tr => ({
         date: DF.get(q(tr, 'g-date')), meals: Predict.meals(tr), unit: q(tr, 'g-unit').value, name: q(tr, 'g-name').value, cat: q(tr, 'g-cat').value, catAuto: q(tr, 'g-cat').dataset.auto === '1',
-        base: q(tr, 'g-base').value, hc: q(tr, 'g-hc').value, hcManual: q(tr, 'g-hc').dataset.manual === '1', total: q(tr, 'g-total').value, utype: q(tr, 'g-utype').value, spec: q(tr, 'g-spec').value
+        bases: [...tr.querySelectorAll('.g-base')].map(e => e.value), hcs: [...tr.querySelectorAll('.g-hc')].map(e => e.value), hcManuals: [...tr.querySelectorAll('.g-hc')].map(e => e.dataset.manual === '1'), total: q(tr, 'g-total').value, utype: q(tr, 'g-utype').value, spec: q(tr, 'g-spec').value
       }));
-      const empty = rows.every(r => !r.name.trim() && !r.total && !r.base && !r.hc);
+      const empty = rows.every(r => !r.name.trim() && !r.total && !r.bases.some(Boolean) && !r.hcs.some(Boolean));
       Store.set('predictDraft', empty ? null : { mode: Predict.mode(), basis: Predict.basis(), rows });
     };
     now ? run() : (Predict.draftTimer = setTimeout(run, 400));
@@ -2498,7 +2527,8 @@ const Predict = {
       const tr = Predict.addRow(true), q = c => tr.querySelector('.' + c);
       DF.set(q('g-date'), r.date, true); (r.meals || []).forEach((m, k) => { if (k) Predict.addMealDate(tr); DF.set(tr.querySelectorAll('.g-meal')[k], m, true); }); q('g-unit').value = r.unit || ''; q('g-name').value = r.name || '';
       q('g-cat').value = r.cat || ''; if (r.catAuto) q('g-cat').dataset.auto = '1';
-      q('g-base').value = r.base || ''; q('g-hc').value = r.hc || ''; if (r.hcManual) { q('g-hc').dataset.manual = '1'; q('g-hc').classList.add('manual'); }
+      const bs = r.bases || [r.base || ''], hs = r.hcs || [r.hc || ''], hm = r.hcManuals || [!!r.hcManual];   // 예전 임시저장(기준량 1개)도 읽는다
+      bs.forEach((b, k) => { if (k) Predict.addBaseEntry(tr, true); tr.querySelectorAll('.g-base')[k].value = b || ''; const h = tr.querySelectorAll('.g-hc')[k]; h.value = hs[k] || ''; if (hm[k]) { h.dataset.manual = '1'; h.classList.add('manual'); } });
       q('g-total').value = r.total || ''; q('g-utype').value = r.utype || 'kg'; q('g-spec').value = r.spec || 1;
       Predict.baseHint(tr);
     });
@@ -2544,7 +2574,7 @@ const Predict = {
     Predict.saveDraft();
   },
   async save() {
-    const rows = [...document.querySelectorAll('#predictBody tr')].map(Predict.rowData).filter(Boolean);
+    const rows = [...document.querySelectorAll('#predictBody tr')].flatMap(tr => Predict.rowData(tr));
     if (!rows.length) return toast('저장할 행이 없습니다. 품명과 소요량을 입력하세요');
     const bad = rows.filter(r => !r.date || !r.unit || !(r.qty > 0));
     if (bad.length) { bad.forEach(r => r.tr.querySelector('.g-name').classList.add('invalid')); return toast(`날짜·부대·수량이 빠진 행이 ${bad.length}개 있습니다`); }
@@ -2555,7 +2585,7 @@ const Predict = {
       const p = Names.product(r.name);
       const kg = r.utype === 'kg' ? Math.round(r.qty * r.spec * 100) / 100 : (p && p.pack ? Math.round(r.qty * p.pack * 100) / 100 : r.qty);
       // 행마다 저장용 ID를 한 번만 만들어 둔다 → 실패 후 다시 저장해도 중복되지 않는다
-      const id = r.tr.dataset.sid || (r.tr.dataset.sid = `WEB${stamp}${D.pad(i + 1)}`);
+      const sk = r.gi ? 'sid' + r.gi : 'sid', id = r.tr.dataset[sk] || (r.tr.dataset[sk] = `WEB${stamp}${D.pad(i + 1)}`);
       return { r, id, del, meal, mealCell, kg, pack: p && p.pack };
     });
     // 같은 값의 건이 이미 저장돼 있으면 확인창에서 알려 준다 (막지는 않는다: 한 건을 똑같은 수량으로 여러 줄 쪼개는 경우가 있음)
@@ -2601,7 +2631,7 @@ const Predict = {
     Predict.saveDraft(true);
   },
   async exportExcel() {
-    const rows = [...document.querySelectorAll('#predictBody tr')].map(Predict.rowData).filter(Boolean);
+    const rows = [...document.querySelectorAll('#predictBody tr')].flatMap(tr => Predict.rowData(tr));
     if (!rows.length) return toast('내보낼 행이 없습니다');
     const basis = Predict.basis();
     await simpleSheet(`예정량_${D.today()}.xlsx`, '예정량',
