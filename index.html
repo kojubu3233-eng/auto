@@ -74,7 +74,7 @@ td { padding:4px; border:1px solid var(--border); background:var(--surface); ver
 .grid td { padding:2px; }
 .grid input, .grid select { width:100%; border:none; border-radius:0; background:transparent; }
 .num { text-align:right; font-variant-numeric:tabular-nums; }
-.c-plan { color:var(--plan); } .c-conf { color:var(--conf); } .c-done { color:var(--ink); } .z-out { color:var(--plan); font-weight:600; }
+.c-plan { color:var(--plan); } .c-conf { color:var(--conf); } .c-done { color:var(--ink); } .z-out { color:var(--plan); font-weight:600; } #zoneBody td.z-empty { background:var(--warn-soft); }
 
 .res-simple { color:var(--ink); background:var(--surface-alt) !important; line-height:1.3; }
 .res-simple .s-ea { font-size:15px; font-weight:600; } .res-simple .s-kg { font-size:13px; color:var(--muted); font-weight:600; }
@@ -3087,7 +3087,7 @@ const Zone = {
       const r = x.r, first = r.delDate !== prev; prev = r.delDate;
       const unitNo = x.wh === '미지정' ? ' style="color:var(--warn)"' : '';
       return `<tr${first ? ' class="day-first"' : ''}><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
-        <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 2)}</td><td class="num z-out">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num z-out">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 2)}</td>
+        <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 2)}</td><td class="num z-out${r.confEa === null || r.confEa === undefined ? ' z-empty' : ''}">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num z-out${r.confKg === null || r.confKg === undefined ? ' z-empty' : ''}">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 2)}</td>
         <td>${esc(mealTxt(r))}</td><td>${esc(r.unit)}</td><td${unitNo}>${esc(x.reg)}</td><td style="text-align:left">${esc(x.note)}</td></tr>`;
     }).join('') || '<tr><td colspan="13" class="empty">해당 조건의 출고 건이 없습니다</td></tr>';
     const miss = all.filter(x => x.wh === '미지정'); const un = new Set(miss.map(x => x.r.unit));
