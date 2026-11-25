@@ -59,7 +59,8 @@ input.g-hc.manual { color:var(--warn); font-weight:600; }
 tr.editing td { background:var(--row-editing); }
 #zoneTable tr.day-first td { border-top:2px solid var(--border); }
 input.dirty { background:var(--changed) !important; border-color:var(--changed-line) !important; }
-#confirmBody input.c-empty { background:var(--warn-soft); border-color:var(--warn-line); }   /* 확정량 입력: 비어 있는 칸은 노란색 */
+#confirmBody input.c-confEa:not(.c-empty):not(.dirty), #confirmBody input.c-confKg:not(.c-empty):not(.dirty) { background:#fff; }   /* 확정량 입력: 입력된 칸은 흰색, 비어 있는 칸은 진한 노란색 */
+#confirmBody input.c-empty { background:#FFE680; border:1px solid #D9A400; }
 input.invalid { border-color:var(--danger) !important; }
 
 .tab-bar { display:flex; gap:6px; margin-bottom:15px; flex-wrap:wrap; border-bottom:1px solid var(--border); padding:6px 4px 0; }
