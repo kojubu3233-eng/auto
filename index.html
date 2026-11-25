@@ -59,6 +59,7 @@ input.g-hc.manual { color:var(--warn); font-weight:600; }
 tr.editing td { background:var(--row-editing); }
 #zoneTable tr.day-first td { border-top:2px solid var(--border); }
 input.dirty { background:var(--changed) !important; border-color:var(--changed-line) !important; }
+#confirmBody input.c-empty { background:var(--warn-soft); border-color:var(--warn-line); }   /* 확정량 입력: 비어 있는 칸은 노란색 */
 input.invalid { border-color:var(--danger) !important; }
 
 .tab-bar { display:flex; gap:6px; margin-bottom:15px; flex-wrap:wrap; border-bottom:1px solid var(--border); padding:6px 4px 0; }
@@ -2761,7 +2762,7 @@ const Confirm = {
   },
   renderRows() {
     const list = Confirm.filtered(); Confirm.rows = list.slice(0, 400);
-    const cell = (r, k, cls) => { const d = Confirm.dirty.get(r.id); const v = d && k in d ? d[k] : r[k]; return `<input type="text" data-num step="any" class="num c-${k} ${cls}${d && k in d ? ' dirty' : ''}" data-id="${esc(r.id)}" value="${v ?? ''}" style="width:76px">`; };
+    const cell = (r, k, cls) => { const d = Confirm.dirty.get(r.id); const v = d && k in d ? d[k] : r[k]; return `<input type="text" data-num step="any" class="num c-${k} ${cls}${d && k in d ? ' dirty' : ''}${v === null || v === undefined || v === '' ? ' c-empty' : ''}" data-id="${esc(r.id)}" value="${v ?? ''}" style="width:76px">`; };
     $('confirmBody').innerHTML = Confirm.rows.map(r => {
       const pr = Confirm.price(r), cost = Confirm.cost(r), cEa = Confirm.dirty.get(r.id)?.confEa ?? r.confEa;
       const confCls = r.confEa !== null || r.confKg !== null ? 'c-conf' : '';
@@ -2801,6 +2802,7 @@ const Confirm = {
     }
     if (t.classList.contains('c-confEa')) d.eaManual = true;
     t.classList.add('dirty'); Confirm.dirty.set(id, d);
+    tr.querySelectorAll('.c-confEa,.c-confKg').forEach(i => i.classList.toggle('c-empty', i.value.trim() === ''));   // 비어 있는 확정량 칸은 노란색
     const pr = Confirm.price(r); tr.querySelector('.o-sales').textContent = fmtN(pr && d.confEa !== null ? pr * d.confEa : null);
   },
   async save() {
