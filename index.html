@@ -2960,16 +2960,17 @@ const Confirm = {
     Confirm.addCore({ del, unit, name, cat: $('cfCat').value.trim(), qty, lp, status: '출고확정' });
   },
   // 예정 없던 납품을 확정량 입력(자동화시스템 시트)과 재고수불대장에 함께 넣는다. 확정량 입력 [+ 행 추가]와 재고수불대장 팝업이 함께 쓴다
-  async addCore({ del, unit, name, cat, qty, lp, status }) {
+  async addCore({ del, unit, name, cat, qty, lp, status, note }) {
     const p = Names.product(name); if (!cat) cat = (p && p.category) || '';
     const kg = p && p.pack ? Math.round(qty * p.pack * 100) / 100 : qty;
     const id = `WEB${Date.now()}${Math.floor(Math.random() * 90 + 10)}`;
-    const ledgerOps = lp ? [{ op: 'insert', sheet: lp.sheet, name: lp.name, id, status, sorted: true, fields: { outDate: del, outMain: qty, outSample: Predict.sample(lp, name), unit } }] : [];
+    const ledgerOps = lp ? [{ op: 'insert', sheet: lp.sheet, name: lp.name, id, status, sorted: true, fields: { outDate: del, outMain: qty, outSample: Predict.sample(lp, name), unit, ...(note ? { note } : {}) } }] : [];
     Busy.start('행 추가 중입니다 (구글시트 2곳 동시 반영)');
     try {
       const res = await Api.post('ledger', { action: 'planSave', rows: [{ values: [id, del, cat, name, qty, kg, '', '', '', unit, '', '', '', App.prefs.unitType[name] || 'kg', ''], confEa: qty, confKg: kg }], ledgerOps });   // 예정량을 따로 입력하지 않은 행 추가는 예정량 = 확정량
+      if (note) await Api.post('ledger', { action: 'confirmSave', updates: [{ id, delDate: del, mealDate: '', unit, name, confQty: qty, confQtyKg: kg, note }], ledgerOps: [] });   // 사유는 확정량 입력 비고에 적는다
       Confirm.closeModal();
-      const rec = { id, src: 'plan', delDate: del, mealDate: '', cat, name, unit, planEa: qty, planKg: kg, confEa: qty, confKg: kg, price: p?.price || null, unitType: App.prefs.unitType[name] || 'kg', simple: null };
+      const rec = { id, src: 'plan', delDate: del, mealDate: '', cat, name, unit, note: note || '', planEa: qty, planKg: kg, confEa: qty, confKg: kg, price: p?.price || null, unitType: App.prefs.unitType[name] || 'kg', simple: null };
       Hist.derive(rec); Hist.records.push(rec); Hist.reindex(); Confirm.render();
       Confirm.sync(res); Logi.stale.add('out'); if (App.tab === 'logistics') Logi.renderOut(true);
       toast(res.ledger.failed ? `행 추가. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '추가했습니다 (확정량 입력·재고수불대장 반영 완료)', 5000);
@@ -3879,7 +3880,7 @@ const Notice = {
         if (!o.isOut || !o.outDate || !recent(o.outDate) || isExp(o)) return;
         const q = o.outMain || o.outTotal || 0; if (!q) return;
         if (o.adj) { adj.push({ key: 'a|' + p.sheet + '|' + o.row, text: `${nm} · ${D.short(o.outDate)} · ${fmtN(q)}개 · ${String(o.unit).replace(/^재고조정\(|\)$/g, '')}`, d: o.outDate }); return; }
-        if (!o.unit || /로스|샘플/.test(o.unit) || !(PEND_OUT.has(o.status) || o.status === '출고완료') || (o.id && Hist.byId.has(o.id))) return;
+        if (!o.unit || !Names.unitMap.has(normUnit(base(o.unit))) || !(PEND_OUT.has(o.status) || o.status === '출고완료') || (o.id && Hist.byId.has(o.id))) return;
         if ((hk.get(o.outDate + '|' + Sync.prodName(nm)) || []).some(u => Sync.unitEq(u, o.unit) || Sync.unitEq(base(u), base(o.unit)))) return;   // '8사단(로스)'처럼 괄호 표기만 다른 줄은 같은 부대로 본다
         nolink.push({ key: 'n|' + p.sheet + '|' + o.row, text: `${nm} · ${D.short(o.outDate)} · ${o.unit} · ${fmtN(q)}개`, d: o.outDate, add: { del: o.outDate, unit: o.unit, name: nm, qty: q, done: o.status === '출고완료' } });
       });
@@ -4473,24 +4474,30 @@ const Logi = {
     const op = { op: 'insert', sheet: lp.sheet, name: lp.name, company: lp.company, id: 'L' + Date.now().toString(36).toUpperCase(), status: '입고완료', sorted: true, fields };
     if (await Logi.send('in', [op], [{ ts: new Date().toISOString(), kind: 'in', sheet: lp.sheet, name: lp.name, company: lp.company, date: d, qty, unit: '', expiry: exp, status: '입고완료', fields, id: op.id }])) { Confirm.closeModal(); Logi.renderInPlans(); Logi.renderToday(); }
   },
-  // 예정에 없던 출고: 재고수불대장에만 '재고조정(사유)' 출고 줄로 넣는다 (확정량 입력·매출에는 반영하지 않는다)
+  // 예정에 없던 출고: 납품지(부대)를 입력받아 재고수불대장에 넣는다. 부대정보에 있는 납품지면 확정량 입력에도 함께 추가하고, 없는 납품지(아인병원·프레쉬쿡 등)는 추가할지 묻는다. 사유는 재고수불대장 비고·확정량 입력 비고에 적힌다
   openAddOut() {
     Confirm.modal('출고 추가 (예정에 없던 출고)', `
       <label>품명</label><span class="ac-wrap"><input type="text" id="aoName" autocomplete="off" style="width:100%"><span class="ac-list"></span></span>
+      <label>납품지</label><span class="ac-wrap"><input type="text" id="aoUnit" autocomplete="off" placeholder="부대·병원 등 출고처" style="width:100%"><span class="ac-list"></span></span>
       <label>출고일</label><span id="aoDate"></span>
       <label>출고 수량</label><input type="text" data-num id="aoQty" style="width:140px">
-      <label>사유</label><select id="aoWhy"><option>재고조사</option><option>샘플·증정</option><option>불량</option><option>착오 납품</option><option>기타</option></select>
-      <div class="hint" style="grid-column:1/-1">재고수불대장에만 기록되며 확정량 입력·매출에는 들어가지 않습니다.<br>실제 납품이면 확정량 입력 탭의 [+ 행 추가]를 쓰세요.</div>
+      <label>사유</label><select id="aoWhy"><option>납품</option><option>재고조사</option><option>샘플</option><option>불량</option><option>착오 납품</option><option>증정</option><option>기타</option></select>
+      <div class="hint" style="grid-column:1/-1">부대정보에 있는 납품지는 확정량 입력에도 함께 추가됩니다.<br>부대정보에 없는 납품지는 추가 여부를 묻고, 추가하지 않으면 재고수불대장에만 적용됩니다.</div>
 `, Logi.saveAddOut);
     DF.mount($('aoDate'), 'ao-date', D.today());
-    AC.bind($('aoName'), AC.products);
+    AC.bind($('aoName'), AC.products); AC.bind($('aoUnit'), AC.units);
   },
   async saveAddOut() {
-    const name = $('aoName').value.trim(), date = DF.get(document.querySelector('.ao-date')) || D.today(), qty = num($('aoQty').value), why = $('aoWhy').value;
-    if (!name || !(qty > 0)) return toast('품명과 출고 수량을 입력하세요');
+    const name = $('aoName').value.trim(), unit = Names.matchUnit($('aoUnit').value), date = DF.get(document.querySelector('.ao-date')) || D.today(), qty = num($('aoQty').value), why = $('aoWhy').value;
+    if (!name || !unit || !(qty > 0)) return toast('품명·납품지·출고 수량을 입력하세요');
     const lp = LedgerData.forProduct(name).filter(p => p.type === 'standard').sort((a, b) => b.rows.length - a.rows.length)[0];
     if (!lp) return toast(`재고수불대장에서 '${name}' 품목을 찾지 못했습니다. 품명을 확인하세요`);
-    if (await Logi.post([Ledger.adjOp(lp, date > D.today() ? D.today() : date, false, qty, why)], `재고조정(${why}) 출고 ${fmtN(qty)}개를 재고수불대장에 넣었습니다 (확정량·매출 영향 없음)`)) { Confirm.closeModal(); Logi.stale.add('out'); Logi.renderOut(true); Logi.renderToday(); }
+    const status = date <= D.today() ? '출고완료' : '출고확정';
+    const known = Names.unitMap.has(normUnit(unit.replace(/\(.*$/, '').trim()));
+    if (known || confirm(`'${unit}'은(는) 부대정보에 없는 납품지입니다.\n확정량 입력(매출)에도 추가할까요?\n\n[확인] 확정량 입력에도 추가\n[취소] 재고수불대장에만 적용`)) {
+      return Confirm.addCore({ del: date, unit, name: lp.product ? lp.product.name : name, cat: '', qty, lp, status, note: why });
+    }
+    if (await Logi.post([{ op: 'insert', sheet: lp.sheet, name: lp.name, company: lp.company, status, sorted: true, fields: { outDate: date, outMain: qty, unit, note: why } }], `${unit} 출고 ${fmtN(qty)}개를 재고수불대장에만 넣었습니다 (사유: ${why})`)) { Confirm.closeModal(); Logi.stale.add('out'); Logi.renderOut(true); Logi.renderToday(); }
   },
   // 납품기한 초과 탭: 납품기한이 지난 재고를 소비기한별로 보여 주고, 바로 출고처리한다 (그 소비기한 수량만 줄어든다)
   expRows: [],
