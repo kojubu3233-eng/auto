@@ -890,6 +890,7 @@ input:focus, select:focus { border-color:#111 !important; box-shadow:0 0 0 2px r
       <div class="ms-wrap" data-ms="zreg"><button type="button" class="ms-btn">지역 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="zunit"><button type="button" class="ms-btn">부대 전체</button><div class="ms-panel hidden"></div></div>
       <span class="ac-wrap" style="flex:1;min-width:120px"><input type="text" id="zoneName" autocomplete="off" placeholder="품명 검색" style="width:100%"><span class="ac-list"></span></span>
+      <label class="lbl" style="cursor:pointer"><input type="checkbox" id="zoneShowHid"> 숨김 해제</label><span class="muted" id="zoneHidNote"></span>
     </div>
     <div class="sub-tabs" id="zoneWh" style="margin-bottom:10px"></div>
     <div class="zone-total" id="zoneTotal"></div>
@@ -3051,6 +3052,7 @@ const Zone = {
     DF.mount($('zFrom'), 'z-from', ''); DF.mount($('zTo'), 'z-to', '');
     ['zFrom', 'zTo'].forEach(id => $(id).addEventListener('datechange', () => { Zone.sel.del.clear(); Zone.render(); }));
     $('zoneName').addEventListener('input', debounce(() => Zone.render(), 200));
+    $('zoneShowHid').addEventListener('change', () => Zone.render());
     $('zoneWh').addEventListener('click', e => { const b = e.target.closest('[data-wh]'); if (b) { Zone.wh = b.dataset.wh; Zone.render(); } });
   },
   show(on) {
@@ -3071,12 +3073,12 @@ const Zone = {
     const i = Zone.info(r), p = Names.product(r.name);
     return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
   },
-  // 비고에 용차·직접납품·직납이 있는 건은 물류사 배송이 아니므로 권역별 출고 전체(화면·엑셀·거래명세서)에서 뺀다
+  // 비고에 용차·직접납품·직납이 있는 건은 물류사 배송이 아니므로 기본은 숨기고, '숨김 해제'를 체크하면 보인다 (거래명세서에는 항상 빠진다)
   skipNote: /용차|직접\s*납품|직납/,
-  base() { const m = $('zoneMonth').value, f = DF.get(document.querySelector('.z-from')), t = DF.get(document.querySelector('.z-to')); return Hist.records.filter(r => r.delDate && !Zone.skipNote.test(r.note || '') && ((f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m)))).map(Zone.rec); },
+  base() { const m = $('zoneMonth').value, f = DF.get(document.querySelector('.z-from')), t = DF.get(document.querySelector('.z-to')); return Hist.records.filter(r => r.delDate && ((f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m)))).map(Zone.rec); },
   filtered(all) {
-    const kw = Names.norm($('zoneName').value), s = Zone.sel;
-    return all.filter(x => (!Zone.wh || x.wh === Zone.wh) && (!s.del.size || s.del.has(x.r.delDate)) && (!s.reg.size || s.reg.has(x.reg)) && (!s.unit.size || s.unit.has(x.r.unit)) && (!kw || Names.norm(x.r.name).includes(kw)))
+    const kw = Names.norm($('zoneName').value), s = Zone.sel, showHid = $('zoneShowHid').checked;
+    return all.filter(x => (showHid || !Zone.skipNote.test(x.r.note || '')) && (!Zone.wh || x.wh === Zone.wh) && (!s.del.size || s.del.has(x.r.delDate)) && (!s.reg.size || s.reg.has(x.reg)) && (!s.unit.size || s.unit.has(x.r.unit)) && (!kw || Names.norm(x.r.name).includes(kw)))
       .sort((a, b) => String(a.r.delDate).localeCompare(String(b.r.delDate)) || a.wh.localeCompare(b.wh, 'ko') || a.reg.localeCompare(b.reg, 'ko', { numeric: true }) || String(a.r.unit).localeCompare(String(b.r.unit), 'ko') || String(a.r.name).localeCompare(String(b.r.name), 'ko'));
   },
   sums(list) { return list.reduce((a, x) => { a.n++; a.plan += x.r.planKg || 0; a.conf += x.r.confKg || 0; return a; }, { n: 0, plan: 0, conf: 0 }); },
@@ -3089,7 +3091,8 @@ const Zone = {
     MS.setup(document.querySelector('[data-ms=zdel]'), '납품일', uniq(x => x.r.delDate).sort(), Zone.sel.del, Zone.render);
     MS.setup(document.querySelector('[data-ms=zreg]'), '지역', uniq(x => x.reg).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })), Zone.sel.reg, Zone.render);
     MS.setup(document.querySelector('[data-ms=zunit]'), '부대', uniq(x => x.r.unit).sort((a, b) => a.localeCompare(b, 'ko')), Zone.sel.unit, Zone.render);
-    const list = Zone.filtered(all), shown = list.slice(0, 800);
+    const list = Zone.filtered(all), shown = list.slice(0, 800), hidN = all.filter(x => Zone.skipNote.test(x.r.note || '')).length;
+    $('zoneHidNote').textContent = hidN ? (($('zoneShowHid').checked ? '용차·직접납품·직납 ' : '숨겨진 용차·직접납품·직납 ') + hidN + '건') : '';
     // 지금 걸린 조건(납품일·지역·창고·부대·품명)에 해당하는 건의 합계: 출고 kg은 소수 둘째 자리까지
     const tot = list.reduce((a, x) => { const c = x.r.confKg; a.plan += x.r.planKg || 0; a.planEa += x.r.planEa || 0; if (c !== null && c !== undefined) { a.kg += c; a.done++; } if (x.r.confEa !== null && x.r.confEa !== undefined) a.ea += x.r.confEa; return a; }, { plan: 0, planEa: 0, kg: 0, ea: 0, done: 0 }), k2 = v => v.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     $('zoneTotal').innerHTML = `<span>출고 합계 <b>${k2(tot.kg)} kg</b></span><span>출고량 <b>${fmtN(tot.ea)}</b>개</span><span class="muted">계획 ${k2(tot.plan)} kg · ${fmtN(tot.planEa)}개</span><span class="muted">${list.length.toLocaleString()}건 중 확정 ${tot.done.toLocaleString()}건</span>`;
@@ -3097,7 +3100,7 @@ const Zone = {
     $('zoneBody').innerHTML = shown.map(x => {
       const r = x.r, first = r.delDate !== prev; prev = r.delDate;
       const unitNo = x.wh === '미지정' ? ' style="color:var(--warn)"' : '';
-      return `<tr${first ? ' class="day-first"' : ''}><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
+      return `<tr class="${first ? 'day-first' : ''}${Zone.skipNote.test(r.note || '') ? ' muted' : ''}"><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
         <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 2)}</td><td class="num z-out${r.confEa === null || r.confEa === undefined ? ' z-empty' : ''}">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num z-out${r.confKg === null || r.confKg === undefined ? ' z-empty' : ''}">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 2)}</td>
         <td>${esc(mealTxt(r))}</td><td>${esc(r.unit)}</td><td${unitNo}>${esc(x.reg)}</td><td style="text-align:left">${esc(x.note)}</td></tr>`;
     }).join('') || '<tr><td colspan="13" class="empty">해당 조건의 출고 건이 없습니다</td></tr>';
@@ -3109,7 +3112,7 @@ const Zone = {
   fee: { gen: 300, tofu: 350, oil: 900 },
   supplier: { regNo: '5 6 0 - 3 1 - 0 0 5 4 4 ', name: 'J.I.B물류', ceo: '백종인', addr: '경기도 양주시 옥정서로 130 902동 1402호', kind: '운수업', item: '화물운송', tel: '010-6345-8712', buyer: '㈜코주부씨엔에프' },
   async exportInvoice() {
-    const all = Zone.filtered(Zone.base()), key = u => String(u).replace(/\(.*\)/, '').trim(), list = all.filter(x => Zone.map.has(normUnit(key(x.r.unit))) );
+    const all = Zone.filtered(Zone.base()), key = u => String(u).replace(/\(.*\)/, '').trim(), list = all.filter(x => Zone.map.has(normUnit(key(x.r.unit))) && !Zone.skipNote.test(x.r.note || ''));
     if (!list.length) return toast('내보낼 데이터가 없습니다');
     const skipped = all.length - list.length;
     await loadExcel();
