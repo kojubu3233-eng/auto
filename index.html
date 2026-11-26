@@ -4481,23 +4481,22 @@ const Logi = {
       <label>납품지</label><span class="ac-wrap"><input type="text" id="aoUnit" autocomplete="off" placeholder="부대·병원 등 출고처" style="width:100%"><span class="ac-list"></span></span>
       <label>출고일</label><span id="aoDate"></span>
       <label>출고 수량</label><input type="text" data-num id="aoQty" style="width:140px">
-      <label>사유</label><select id="aoWhy"><option>납품</option><option>재고조사</option><option>샘플</option><option>불량</option><option>착오 납품</option><option>증정</option><option>기타</option></select>
       <div class="hint" style="grid-column:1/-1">부대정보에 있는 납품지는 확정량 입력에도 함께 추가됩니다.<br>부대정보에 없는 납품지는 추가 여부를 묻고, 추가하지 않으면 재고수불대장에만 적용됩니다.</div>
 `, Logi.saveAddOut);
     DF.mount($('aoDate'), 'ao-date', D.today());
     AC.bind($('aoName'), AC.products); AC.bind($('aoUnit'), AC.units);
   },
   async saveAddOut() {
-    const name = $('aoName').value.trim(), unit = Names.matchUnit($('aoUnit').value), date = DF.get(document.querySelector('.ao-date')) || D.today(), qty = num($('aoQty').value), why = $('aoWhy').value;
+    const name = $('aoName').value.trim(), unit = Names.matchUnit($('aoUnit').value), date = DF.get(document.querySelector('.ao-date')) || D.today(), qty = num($('aoQty').value);
     if (!name || !unit || !(qty > 0)) return toast('품명·납품지·출고 수량을 입력하세요');
     const lp = LedgerData.forProduct(name).filter(p => p.type === 'standard').sort((a, b) => b.rows.length - a.rows.length)[0];
     if (!lp) return toast(`재고수불대장에서 '${name}' 품목을 찾지 못했습니다. 품명을 확인하세요`);
     const status = date <= D.today() ? '출고완료' : '출고확정';
     const known = Names.unitMap.has(normUnit(unit.replace(/\(.*$/, '').trim()));
     if (known || confirm(`'${unit}'은(는) 부대정보에 없는 납품지입니다.\n확정량 입력(매출)에도 추가할까요?\n\n[확인] 확정량 입력에도 추가\n[취소] 재고수불대장에만 적용`)) {
-      return Confirm.addCore({ del: date, unit, name: lp.product ? lp.product.name : name, cat: '', qty, lp, status, note: why });
+      return Confirm.addCore({ del: date, unit, name: lp.product ? lp.product.name : name, cat: '', qty, lp, status });
     }
-    if (await Logi.post([{ op: 'insert', sheet: lp.sheet, name: lp.name, company: lp.company, status, sorted: true, fields: { outDate: date, outMain: qty, unit, note: why } }], `${unit} 출고 ${fmtN(qty)}개를 재고수불대장에만 넣었습니다 (사유: ${why})`)) { Confirm.closeModal(); Logi.stale.add('out'); Logi.renderOut(true); Logi.renderToday(); }
+    if (await Logi.post([{ op: 'insert', sheet: lp.sheet, name: lp.name, company: lp.company, status, sorted: true, fields: { outDate: date, outMain: qty, unit } }], `${unit} 출고 ${fmtN(qty)}개를 재고수불대장에만 넣었습니다`)) { Confirm.closeModal(); Logi.stale.add('out'); Logi.renderOut(true); Logi.renderToday(); }
   },
   // 납품기한 초과 탭: 납품기한이 지난 재고를 소비기한별로 보여 주고, 바로 출고처리한다 (그 소비기한 수량만 줄어든다)
   expRows: [],
