@@ -866,7 +866,6 @@ input:focus, select:focus { border-color:#111 !important; box-shadow:0 0 0 2px r
       <div class="ms-wrap" data-ms="cat"><button type="button" class="ms-btn">구분 전체</button><div class="ms-panel hidden"></div></div>
       <div class="ms-wrap" data-ms="unit"><button type="button" class="ms-btn">부대 전체</button><div class="ms-panel hidden"></div></div>
       <span class="ac-wrap" style="flex:1;min-width:120px"><input type="text" id="confirmName" autocomplete="off" placeholder="품명 검색" style="width:100%"><span class="ac-list"></span></span>
-      <label class="row muted" title="예정량 없이 [+ 행 추가]·출고 추가로 들어온 건만 모아 봅니다. 납품이 아닌 건은 체크해서 삭제하세요"><input type="checkbox" id="confirmNoPlan"> 예정 없이 추가된 건만</label>
       <span class="hint">확정량(개)이나 (kg) 하나만 입력하면 나머지는 포장단위로 계산됩니다</span>
     </div>
     <div class="table-wrap" style="max-height:600px">
@@ -2674,7 +2673,6 @@ const Confirm = {
     DF.mount($('cfFrom'), 'cf-from', ''); DF.mount($('cfTo'), 'cf-to', '');
     ['cfFrom', 'cfTo'].forEach(id => $(id).addEventListener('datechange', () => { Confirm.sel.del.clear(); Confirm.render(); }));
     $('confirmName').addEventListener('input', debounce(() => Confirm.renderRows(), 200));
-    $('confirmNoPlan').addEventListener('change', () => Confirm.renderRows());
     document.querySelectorAll('#confirmTable th[data-sort]').forEach(th => th.style.cursor = 'pointer');
     $('confirmTable').querySelector('thead').addEventListener('click', e => {
       const k = e.target.closest('th')?.dataset.sort; if (!k) return;
@@ -2745,7 +2743,7 @@ const Confirm = {
   },
   filtered() {
     const kw = Names.norm($('confirmName').value), s = Confirm.sel;
-    const list = Confirm.monthRecs().filter(r => (!s.del.size || s.del.has(r.delDate)) && (!s.cat.size || s.cat.has(r.cat)) && (!s.unit.size || s.unit.has(r.unit)) && (!kw || Names.norm(r.name).includes(kw)) && (!$('confirmNoPlan').checked || (/^WEB/.test(r.id) && r.planEa == null)));
+    const list = Confirm.monthRecs().filter(r => (!s.del.size || s.del.has(r.delDate)) && (!s.cat.size || s.cat.has(r.cat)) && (!s.unit.size || s.unit.has(r.unit)) && (!kw || Names.norm(r.name).includes(kw)));
     const { key, dir } = Confirm.sort;
     return list.sort((a, b) => { const x = a[key] ?? '', y = b[key] ?? ''; return (typeof x === 'number' || typeof y === 'number' ? (Number(x) - Number(y)) : String(x).localeCompare(String(y))) * dir || String(a.unit).localeCompare(String(b.unit)); });
   },
