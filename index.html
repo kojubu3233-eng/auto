@@ -3071,7 +3071,9 @@ const Zone = {
     const i = Zone.info(r), p = Names.product(r.name);
     return { r, wh: i.wh || '미지정', reg: i.reg || '미지정', store: (p && p.storage) || '', unit: String(Confirm.unitLabel(r)).replace(/\(.*\)/, ''), note: r.note || '' };
   },
-  base() { const m = $('zoneMonth').value, f = DF.get(document.querySelector('.z-from')), t = DF.get(document.querySelector('.z-to')); return Hist.records.filter(r => r.delDate && ((f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m)))).map(Zone.rec); },
+  // 비고에 용차·직접납품·직납이 있는 건은 물류사 배송이 아니므로 권역별 출고 전체(화면·엑셀·거래명세서)에서 뺀다
+  skipNote: /용차|직접\s*납품|직납/,
+  base() { const m = $('zoneMonth').value, f = DF.get(document.querySelector('.z-from')), t = DF.get(document.querySelector('.z-to')); return Hist.records.filter(r => r.delDate && !Zone.skipNote.test(r.note || '') && ((f || t) ? inRange(String(r.delDate), f, t) : (!m || String(r.delDate).startsWith(m)))).map(Zone.rec); },
   filtered(all) {
     const kw = Names.norm($('zoneName').value), s = Zone.sel;
     return all.filter(x => (!Zone.wh || x.wh === Zone.wh) && (!s.del.size || s.del.has(x.r.delDate)) && (!s.reg.size || s.reg.has(x.reg)) && (!s.unit.size || s.unit.has(x.r.unit)) && (!kw || Names.norm(x.r.name).includes(kw)))
@@ -3103,11 +3105,11 @@ const Zone = {
     $('zoneSummary').textContent = `${list.length.toLocaleString()}건${list.length > 800 ? ' (화면에는 800건까지 표시, 엑셀에는 전부 담깁니다)' : ''}${Confirm.dirty.size ? ` · 확정량 미저장 ${Confirm.dirty.size}건은 저장 후 반영됩니다` : ''}${un.size ? ` · 지역·창고 미지정 부대: ${[...un].slice(0, 5).join(', ')}${un.size > 5 ? ' 외' : ''} (부대별정보 시트 D·E열에 입력)` : ''}`;
   },
   // 물류사 거래명세서(월 물류비): 부대별 출고 kg × 단가(일반 300원, 두부 350원) + 식용유는 캔 수 × 900원 + 세액 10%. 양식은 JIB 거래명세서와 같다
-  // 부대별정보에 없는 곳(아인병원·프레쉬쿡 등)과 비고에 '용차'가 있는 건은 넣지 않고, '7급양대(품평회)'처럼 괄호가 붙은 이름은 본 부대에 합친다
+  // 부대별정보에 없는 곳(아인병원·프레쉬쿡 등)은 넣지 않고, '7급양대(품평회)'처럼 괄호가 붙은 이름은 본 부대에 합친다
   fee: { gen: 300, tofu: 350, oil: 900 },
   supplier: { regNo: '5 6 0 - 3 1 - 0 0 5 4 4 ', name: 'J.I.B물류', ceo: '백종인', addr: '경기도 양주시 옥정서로 130 902동 1402호', kind: '운수업', item: '화물운송', tel: '010-6345-8712', buyer: '㈜코주부씨엔에프' },
   async exportInvoice() {
-    const all = Zone.filtered(Zone.base()), key = u => String(u).replace(/\(.*\)/, '').trim(), list = all.filter(x => Zone.map.has(normUnit(key(x.r.unit))) && !/용차/.test(x.r.note || ''));
+    const all = Zone.filtered(Zone.base()), key = u => String(u).replace(/\(.*\)/, '').trim(), list = all.filter(x => Zone.map.has(normUnit(key(x.r.unit))) );
     if (!list.length) return toast('내보낼 데이터가 없습니다');
     const skipped = all.length - list.length;
     await loadExcel();
@@ -3180,7 +3182,7 @@ const Zone = {
     for (let c = 0; c < NC; c++) { const k = cell(0, c); k.border = { ...k.border, bottom: med }; const z = cell(tot + 2, c); z.border = { ...z.border, bottom: med }; }
     ws.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 } };
     await downloadWorkbook(wb, `JIB물류비_거래명세서_${ym}.xlsx`);
-    if (skipped) toast(`거래명세서에서 ${skipped}건 제외 (부대별정보에 없는 곳, 비고에 용차배송이 있는 건)`, 6000);
+    if (skipped) toast(`거래명세서에서 ${skipped}건 제외 (부대별정보에 없는 곳)`, 6000);
   },
   async exportExcel() {
     const list = Zone.filtered(Zone.base()); if (!list.length) return toast('내보낼 데이터가 없습니다');
