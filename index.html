@@ -58,6 +58,7 @@ input[readonly] { color:var(--muted); background:var(--surface-alt) !important; 
 input.g-hc.manual { color:var(--warn); font-weight:600; }
 tr.editing td { background:var(--row-editing); }
 #zoneTable tr.day-first td { border-top:2px solid var(--border); }
+#zoneTable tr.zone-skip td { background:var(--conf-soft); }
 input.dirty { background:var(--changed) !important; border-color:var(--changed-line) !important; }
 #confirmBody input.c-confEa:not(.c-empty):not(.dirty), #confirmBody input.c-confKg:not(.c-empty):not(.dirty) { background:#fff; }   /* 확정량 입력: 입력된 칸은 흰색, 비어 있는 칸은 진한 노란색 */
 #confirmBody input.c-empty { background:#FFE680; border:1px solid #D9A400; }
@@ -3092,7 +3093,7 @@ const Zone = {
     MS.setup(document.querySelector('[data-ms=zreg]'), '지역', uniq(x => x.reg).sort((a, b) => a.localeCompare(b, 'ko', { numeric: true })), Zone.sel.reg, Zone.render);
     MS.setup(document.querySelector('[data-ms=zunit]'), '부대', uniq(x => x.r.unit).sort((a, b) => a.localeCompare(b, 'ko')), Zone.sel.unit, Zone.render);
     const list = Zone.filtered(all), shown = list.slice(0, 800), hidN = all.filter(x => Zone.skipNote.test(x.r.note || '')).length;
-    $('zoneHidNote').textContent = hidN ? (($('zoneShowHid').checked ? '용차·직접납품·직납 ' : '숨겨진 용차·직접납품·직납 ') + hidN + '건') : '';
+    $('zoneHidNote').textContent = hidN ? (($('zoneShowHid').checked ? '파란 줄 = 용차·직접납품·직납 ' : '숨겨진 용차·직접납품·직납 ') + hidN + '건') : '';
     // 지금 걸린 조건(납품일·지역·창고·부대·품명)에 해당하는 건의 합계: 출고 kg은 소수 둘째 자리까지
     const tot = list.reduce((a, x) => { const c = x.r.confKg; a.plan += x.r.planKg || 0; a.planEa += x.r.planEa || 0; if (c !== null && c !== undefined) { a.kg += c; a.done++; } if (x.r.confEa !== null && x.r.confEa !== undefined) a.ea += x.r.confEa; return a; }, { plan: 0, planEa: 0, kg: 0, ea: 0, done: 0 }), k2 = v => v.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     $('zoneTotal').innerHTML = `<span>출고 합계 <b>${k2(tot.kg)} kg</b></span><span>출고량 <b>${fmtN(tot.ea)}</b>개</span><span class="muted">계획 ${k2(tot.plan)} kg · ${fmtN(tot.planEa)}개</span><span class="muted">${list.length.toLocaleString()}건 중 확정 ${tot.done.toLocaleString()}건</span>`;
@@ -3100,7 +3101,7 @@ const Zone = {
     $('zoneBody').innerHTML = shown.map(x => {
       const r = x.r, first = r.delDate !== prev; prev = r.delDate;
       const unitNo = x.wh === '미지정' ? ' style="color:var(--warn)"' : '';
-      return `<tr class="${first ? 'day-first' : ''}${Zone.skipNote.test(r.note || '') ? ' muted' : ''}"><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
+      return `<tr class="${first ? 'day-first' : ''}${Zone.skipNote.test(r.note || '') ? ' zone-skip' : ''}"><td>${D.short(r.delDate)}</td><td${unitNo}>${esc(x.wh)}</td><td style="text-align:left;font-weight:600">${esc(r.name)}</td><td>${esc(x.store)}</td><td>${esc(x.unit)}</td>
         <td class="num">${fmtN(r.planEa)}</td><td class="num">${fmtN(r.planKg, 2)}</td><td class="num z-out${r.confEa === null || r.confEa === undefined ? ' z-empty' : ''}">${r.confEa === null || r.confEa === undefined ? '' : fmtN(r.confEa)}</td><td class="num z-out${r.confKg === null || r.confKg === undefined ? ' z-empty' : ''}">${r.confKg === null || r.confKg === undefined ? '' : fmtN(r.confKg, 2)}</td>
         <td>${esc(mealTxt(r))}</td><td>${esc(r.unit)}</td><td${unitNo}>${esc(x.reg)}</td><td style="text-align:left">${esc(x.note)}</td></tr>`;
     }).join('') || '<tr><td colspan="13" class="empty">해당 조건의 출고 건이 없습니다</td></tr>';
