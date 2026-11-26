@@ -3879,7 +3879,7 @@ const Notice = {
         if (!o.isOut || !o.outDate || !recent(o.outDate) || isExp(o)) return;
         const q = o.outMain || o.outTotal || 0; if (!q) return;
         if (o.adj) { adj.push({ key: 'a|' + p.sheet + '|' + o.row, text: `${nm} · ${D.short(o.outDate)} · ${fmtN(q)}개 · ${String(o.unit).replace(/^재고조정\(|\)$/g, '')}`, d: o.outDate }); return; }
-        if (!o.unit || !(PEND_OUT.has(o.status) || o.status === '출고완료') || (o.id && Hist.byId.has(o.id))) return;
+        if (!o.unit || /로스|샘플/.test(o.unit) || !(PEND_OUT.has(o.status) || o.status === '출고완료') || (o.id && Hist.byId.has(o.id))) return;
         if ((hk.get(o.outDate + '|' + Sync.prodName(nm)) || []).some(u => Sync.unitEq(u, o.unit) || Sync.unitEq(base(u), base(o.unit)))) return;   // '8사단(로스)'처럼 괄호 표기만 다른 줄은 같은 부대로 본다
         nolink.push({ key: 'n|' + p.sheet + '|' + o.row, text: `${nm} · ${D.short(o.outDate)} · ${o.unit} · ${fmtN(q)}개`, d: o.outDate, add: { del: o.outDate, unit: o.unit, name: nm, qty: q, done: o.status === '출고완료' } });
       });
