@@ -2754,13 +2754,13 @@ const Confirm = {
   // 단가: 단가이력 탭(가격이 바뀐 제품만 적음)에서 납품일에 맞는 줄 → 없으면 시트에 저장된 단가 → 품목정보 단가
   price(r) { return Sell.of(r.name, r.delDate) ?? r.price ?? Names.product(r.name)?.price ?? null; },
   cost(r) { return Cost.of(r.name, r.delDate); },
-  // 예정매출 계산용 예정량: 소숫점 첫째 자리까지 (단순산술값 → 기준량×급식인원 기록 순으로 구하고, 예정(개)와 크게 다르면 예정(개)를 쓴다)
+  // 예정매출 계산용 예정량: 소숫점 둘째 자리까지 (단순산술값 → 기준량×급식인원 기록 순으로 구하고, 예정(개)와 크게 다르면 예정(개)를 쓴다)
   planQty(r) {
     const ea = r.planEa; if (ea === null || ea === undefined) return null;
     let x = null;
     if (r.simple && !Number.isInteger(r.simple)) x = r.simple;
     else { const m = /^([\d,.]+)\s*g\s*×\s*([\d,]+)\s*명/.exec(r.basis || ''), pk = Confirm.pack(r); if (m && pk) x = num(m[1]) * num(m[2]) / 1000 / pk; }
-    return x !== null && Math.abs(x - ea) <= 0.5 ? Math.round(x * 10) / 10 : ea;
+    return x !== null && Math.abs(x - ea) <= 0.5 ? Math.round(x * 100) / 100 : ea;
   },
   renderRows() {
     const list = Confirm.filtered(); Confirm.rows = list.slice(0, 400);
@@ -2967,9 +2967,9 @@ const Confirm = {
     const ledgerOps = lp ? [{ op: 'insert', sheet: lp.sheet, name: lp.name, id, status, sorted: true, fields: { outDate: del, outMain: qty, outSample: Predict.sample(lp, name), unit } }] : [];
     Busy.start('행 추가 중입니다 (구글시트 2곳 동시 반영)');
     try {
-      const res = await Api.post('ledger', { action: 'planSave', rows: [{ values: [id, del, cat, name, '', '', '', '', '', unit, '', '', '', App.prefs.unitType[name] || 'kg', ''], confEa: qty, confKg: kg }], ledgerOps });
+      const res = await Api.post('ledger', { action: 'planSave', rows: [{ values: [id, del, cat, name, qty, kg, '', '', '', unit, '', '', '', App.prefs.unitType[name] || 'kg', ''], confEa: qty, confKg: kg }], ledgerOps });   // 예정량을 따로 입력하지 않은 행 추가는 예정량 = 확정량
       Confirm.closeModal();
-      const rec = { id, src: 'plan', delDate: del, mealDate: '', cat, name, unit, planEa: null, planKg: null, confEa: qty, confKg: kg, price: p?.price || null, unitType: App.prefs.unitType[name] || 'kg', simple: null };
+      const rec = { id, src: 'plan', delDate: del, mealDate: '', cat, name, unit, planEa: qty, planKg: kg, confEa: qty, confKg: kg, price: p?.price || null, unitType: App.prefs.unitType[name] || 'kg', simple: null };
       Hist.derive(rec); Hist.records.push(rec); Hist.reindex(); Confirm.render();
       Confirm.sync(res); Logi.stale.add('out'); if (App.tab === 'logistics') Logi.renderOut(true);
       toast(res.ledger.failed ? `행 추가. 재고수불대장 반영 실패: ${res.ledger.reasons.join(' / ')}` : '추가했습니다 (확정량 입력·재고수불대장 반영 완료)', 5000);
